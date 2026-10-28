@@ -62,8 +62,7 @@ uint32_t SwPadRead(int idx) {
 
   held = 0;
   if (idx != 0) { return held; } /* pad 1 only for now */
-  if (!pad_mappings_set)
-    PadResetBindings();
+  if (!pad_mappings_set) { PadResetBindings(); }
   count = pad_mapping_count;
   for (i=0;i<count;i++) {
     code = pad_mappings[i].code;
@@ -79,11 +78,9 @@ uint32_t SwPadRead(int idx) {
 static char *PadTrim(char *str) {
   char *end;
 
-  while (isspace((unsigned char)*str))
-    str++;
+  while (isspace((unsigned char)*str)) { str++; }
   end = str + strlen(str);
-  while (end > str && isspace((unsigned char)end[-1]))
-    end--;
+  while (end > str && isspace((unsigned char)end[-1])) { end--; }
   *end = 0;
   return str;
 }
@@ -101,19 +98,15 @@ int PadParseBinding(const char *line, uint32_t *bits, SDL_Scancode *code) {
 
   snprintf(buf, sizeof(buf), "%s", line);
   name = PadTrim(buf);
-  if (*name == 0 || *name == '#')
-    return 0;
+  if (*name == 0 || *name == '#') { return 0; }
   sep = strchr(name, '=');
-  if (!sep)
-    return -1;
+  if (!sep) { return -1; }
   *sep = 0;
   name = PadTrim(name);
   key = PadTrim(sep+1);
-  if (*name == 0 || *key == 0)
-    return -1;
+  if (*name == 0 || *key == 0) { return -1; }
   scancode = SDL_GetScancodeFromName(key);
-  if (scancode == SDL_SCANCODE_UNKNOWN)
-    return -1;
+  if (scancode == SDL_SCANCODE_UNKNOWN) { return -1; }
   count = sizeof(pad_button_names)/sizeof(pad_button_names[0]);
   for (i=0;i<count;i++) {
     if (SDL_strcasecmp(name, pad_button_names[i].name) == 0) {
@@ -158,10 +151,8 @@ int PadLoadConfig(const char *path) {
   int res, line_num, applied, max;
 
   file = fopen(path, "rb");
-  if (!file)
-    return -1;
-  if (!pad_mappings_set)
-    PadResetBindings();
+  if (!file) { return -1; }
+  if (!pad_mappings_set) { PadResetBindings(); }
   max = sizeof(pad_mappings)/sizeof(sw_pad_mapping);
   rebound = 0;
   applied = 0;
@@ -172,8 +163,7 @@ int PadLoadConfig(const char *path) {
         path, line_num);
       continue;
     }
-    if (res == 0)
-      continue;
+    if (res == 0) { continue; }
     if (!(rebound & bits)) {
       PadUnbind(bits);
       rebound |= bits;
