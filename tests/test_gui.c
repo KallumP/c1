@@ -98,3 +98,28 @@ UTEST(gui, insert_node_at_front) {
   ASSERT_TRUE(to_insert->parent == parent);
   GuiItemFree(parent, 1);
 }
+
+UTEST(gui, insert_node_after_sibling_of_other_parent_appends) {
+  gui_item *parent1, *parent2, *child1, *child2, *to_insert;
+
+  parent1 = GuiGroupNew();
+  parent2 = GuiGroupNew();
+  child1 = GuiGroupNew();
+  child2 = GuiGroupNew();
+  to_insert = GuiGroupNew();
+  GuiAddChild(parent1, child1);
+  GuiAddChild(parent2, child2);
+  /* child2 is not one of parent1's children */
+  GuiInsertNode(parent1, child2, to_insert);
+  ASSERT_TRUE(parent1->child == child1);
+  ASSERT_TRUE(child1->next == to_insert);
+  ASSERT_TRUE(to_insert->next == 0);
+  ASSERT_TRUE(to_insert->parent == parent1);
+  ASSERT_TRUE(parent1->tail_child == to_insert);
+  /* parent2's children are untouched */
+  ASSERT_TRUE(parent2->child == child2);
+  ASSERT_TRUE(child2->next == 0);
+  ASSERT_TRUE(parent2->tail_child == child2);
+  GuiItemFree(parent1, 1);
+  GuiItemFree(parent2, 1);
+}
