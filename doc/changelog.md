@@ -21,6 +21,7 @@
 - README controls list did not match the actual key bindings
 - game freezes while the in-game GUI shows the object tree: removing a node only moved its first child to the parent, leaving the rest pointing at the freed node
 - game freezes while the in-game GUI shows the object tree: a node inserted after a sibling under a different parent was linked into that parent's children, corrupting the tree; it is now added last under its own parent
+- level loading screen never appeared on pc: the image was not converted from its palette and the frame was never shown. It is now drawn and kept up for at least 2 seconds, since levels load from disk much faster than from the ps1 cd
 
 ## 2022-12-28
 
