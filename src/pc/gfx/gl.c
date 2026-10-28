@@ -219,6 +219,24 @@ void GLDrawImage(dim2 *dim, uint8_t *buf, pnt2 *loc) {
   glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+/*
+ * clear the screen, draw an rgba image centered and show it immediately.
+ * used for the level loading screen, which is drawn outside the frame loop
+ * (so this doesn't use GLClear, which reads the current zone)
+ */
+void GLShowImage(dim2 *dim, uint8_t *buf) {
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glFrustum(screen.x, screen.x+screen.w, screen.y, screen.y+screen.h,
+            1.0, 100000.0);
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  GLDrawImage(dim, buf, 0);
+  if (callbacks.post_update)
+    (*callbacks.post_update)();
+}
+
 void GLDrawPrims(void *data, int count) {
   poly3i *poly;
   int i, ii, texid, flags;

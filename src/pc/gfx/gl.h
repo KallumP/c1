@@ -38,6 +38,7 @@ extern void GLResetPrims(gl_context *gc);
 extern void GLDrawRect(int x, int y, int w, int h, int r, int g, int b);
 extern void GLDrawOverlay(int brightness);
 extern void GLDrawImage(dim2 *dim, uint8_t *buf, pnt2 *loc);
+extern void GLShowImage(dim2 *dim, uint8_t *buf);
 extern void **GLGetPrimsTail();
 extern void GLResetOT(void *ot, int len);
 extern void GLClear();
