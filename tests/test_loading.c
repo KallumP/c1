@@ -56,3 +56,25 @@ UTEST(loading, rejects_empty_image) {
   ASSERT_EQ(0, LoadingImageConvert(image_data, sizeof(image_data), 0, 144, rgba, 512*240));
   ASSERT_EQ(0, LoadingImageConvert(image_data, sizeof(image_data), 432, 0, rgba, 512*240));
 }
+
+UTEST(loading, remaining_is_full_time_when_just_shown) {
+  ASSERT_EQ(2000u, LoadingRemaining(1000, 1000));
+}
+
+UTEST(loading, remaining_counts_down) {
+  ASSERT_EQ(500u, LoadingRemaining(1000, 2500));
+}
+
+UTEST(loading, remaining_is_zero_once_minimum_has_passed) {
+  ASSERT_EQ(0u, LoadingRemaining(1000, 3000));
+  ASSERT_EQ(0u, LoadingRemaining(1000, 9999));
+}
+
+UTEST(loading, remaining_handles_tick_counter_wrapping) {
+  /* 512ms have passed across the wrap */
+  ASSERT_EQ(1488u, LoadingRemaining(0xFFFFFF00u, 0x100u));
+}
+
+UTEST(loading, wait_returns_at_once_when_nothing_was_shown) {
+  LoadingWait();
+}
