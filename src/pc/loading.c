@@ -11,7 +11,9 @@ static int loading_shown = 0;
 
 /*
  * convert a level loading image (a 256 entry ps1 5551 palette followed by
- * w x h 8-bit palette indices) to rgba.
+ * w x h 8-bit palette indices) to rgba. these are the last 512 + w*h bytes
+ * of image_data; for the 432x144 level images that leaves 0xF8 other bytes
+ * at the start, so the image can't be read from image_data[0].
  * returns 0 if the image is empty or doesn't fit in image_data or dst.
  */
 int LoadingImageConvert(uint8_t *image_data, size_t image_size,
@@ -24,8 +26,8 @@ int LoadingImageConvert(uint8_t *image_data, size_t image_size,
   if (w > dst_count || h > dst_count / w) { return 0; } /* w*h > dst_count */
   count = (size_t)w * h;
   if (count > image_size - 512) { return 0; }
-  palette = (uint16_t*)image_data;
-  src = &image_data[512];
+  palette = (uint16_t*)&image_data[image_size - (512 + count)];
+  src = (uint8_t*)&palette[256];
   for (i=0;i<count;i++)
     dst[i] = pixel_5551_8888(palette[src[i]], 1);
   return 1;
