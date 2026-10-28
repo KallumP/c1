@@ -160,6 +160,20 @@ void GuiInsertChild(gui_item *item, gui_item *prev, gui_item *child) {
                    (tree_node_t*)child);
 }
 
+/* remove an item, moving its children to its parent, and free it */
+void GuiRemoveNode(gui_item *item) {
+  gui_item *parent, *child;
+
+  parent = item->parent;
+  /* GuiRemoveChild clears child->next, so take the first child each time */
+  while ((child = item->child)) {
+    GuiRemoveChild(item, child);
+    GuiAddChild(parent, child);
+  }
+  GuiRemoveChild(item->parent, item);
+  GuiItemFree(item, 0);
+}
+
 void GuiAddLabel(gui_item *item, char *str) {
   if (item->label) { free(item->label); }
   item->label = (gui_text*)malloc(sizeof(gui_text)+def_text.maxlen);
@@ -369,7 +383,7 @@ static void GuiTreeSync(gui_item *item) {
   gui_tree_sync *sync;
   list_t *deltas;
   tree_delta_t *delta;
-  gui_item *nitem, *child, *parent, *prev;
+  gui_item *nitem, *parent, *prev;
   gui_item *l, *r;
 
   tree = item->tr;
@@ -392,13 +406,7 @@ static void GuiTreeSync(gui_item *item) {
     case 2: // remove
       nitem = GuiTreeNode(item, delta->value);
       if (!nitem) { break; }
-      parent = nitem->parent;
-      for_each_child(nitem, child) {
-        GuiRemoveChild(child->parent, child);
-        GuiAddChild(parent, child);
-      }
-      GuiRemoveChild(nitem->parent, nitem);
-      GuiItemFree(nitem, 0);
+      GuiRemoveNode(nitem);
       break;
     case 3: // move
       nitem = GuiTreeNode(item, delta->value);
