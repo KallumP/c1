@@ -160,6 +160,20 @@ void GuiInsertChild(gui_item *item, gui_item *prev, gui_item *child) {
                    (tree_node_t*)child);
 }
 
+/*
+ * insert an item into parent's children, after prev (or first if prev is 0).
+ * if prev isn't one of parent's children (the gui tree has drifted from the
+ * data tree), the item is added last instead; inserting after prev would link
+ * it into another parent's children, which corrupts the tree.
+ */
+void GuiInsertNode(gui_item *parent, gui_item *prev, gui_item *item) {
+  if (prev && prev->parent != parent) {
+    GuiAddChild(parent, item);
+    return;
+  }
+  GuiInsertChild(parent, prev, item);
+}
+
 /* remove an item, moving its children to its parent, and free it */
 void GuiRemoveNode(gui_item *item) {
   gui_item *parent, *child;
@@ -401,7 +415,7 @@ static void GuiTreeSync(gui_item *item) {
       nitem = sync->map(delta->value, 0);
       parent = GuiTreeNode(item, delta->parent);
       prev = GuiTreeNode(item, delta->prev);
-      GuiInsertChild(parent, prev, nitem);
+      GuiInsertNode(parent, prev, nitem);
       break;
     case 2: // remove
       nitem = GuiTreeNode(item, delta->value);
@@ -414,7 +428,7 @@ static void GuiTreeSync(gui_item *item) {
       GuiRemoveChild(nitem->parent, nitem);
       parent = GuiTreeNode(item, delta->parent);
       prev = GuiTreeNode(item, delta->prev);
-      GuiInsertChild(parent, prev, nitem);
+      GuiInsertNode(parent, prev, nitem);
       break;
     case 4: // swap
       l = GuiTreeNode(item, delta->v1);

@@ -9,5 +9,6 @@ imgui.ini
 controls.cfg
 !README.MD
 
-# claude code plans
+# claude code plans and project skills
 .claude/plans/
+.claude/skills/
