@@ -65,3 +65,36 @@ UTEST(gui, remove_node_moves_every_child_to_parent) {
   ASSERT_TRUE(child3->parent == parent);
   GuiItemFree(parent, 1);
 }
+
+UTEST(gui, insert_node_after_sibling) {
+  gui_item *parent, *child1, *child2, *to_insert;
+
+  parent = GuiGroupNew();
+  child1 = GuiGroupNew();
+  child2 = GuiGroupNew();
+  to_insert = GuiGroupNew();
+  GuiAddChild(parent, child1);
+  GuiAddChild(parent, child2);
+  GuiInsertNode(parent, child1, to_insert);
+  ASSERT_TRUE(parent->child == child1);
+  ASSERT_TRUE(child1->next == to_insert);
+  ASSERT_TRUE(to_insert->next == child2);
+  ASSERT_TRUE(to_insert->prev == child1);
+  ASSERT_TRUE(to_insert->parent == parent);
+  GuiItemFree(parent, 1);
+}
+
+UTEST(gui, insert_node_at_front) {
+  gui_item *parent, *child1, *to_insert;
+
+  parent = GuiGroupNew();
+  child1 = GuiGroupNew();
+  to_insert = GuiGroupNew();
+  GuiAddChild(parent, child1);
+  GuiInsertNode(parent, 0, to_insert);
+  ASSERT_TRUE(parent->child == to_insert);
+  ASSERT_TRUE(to_insert->next == child1);
+  ASSERT_TRUE(child1->prev == to_insert);
+  ASSERT_TRUE(to_insert->parent == parent);
+  GuiItemFree(parent, 1);
+}
