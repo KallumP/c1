@@ -41,6 +41,7 @@ extern gfx_context_db context;
 #else
 #include "pc/gfx/gl.h"
 #include "pc/gfx/tex.h"
+#include "pc/loading.h"
 extern gl_context context;
 #endif
 
@@ -313,14 +314,13 @@ int TitleLoading(lid_t lid, uint8_t *image_data, nsd *nsd) {
     GpuSwapBuffers();
   }
 #else
-  palette = (uint16_t*)&image_data[0];
-  src = (uint16_t*)&image_data[512]; /* skip palette */
-  dst = (uint16_t*)image_cvt;
-  rect.x = context.draw_clip.x - (w/2) - 256;
-  rect.y = context.draw_clip.y - (h/2) + 108;
-  rect.w = w; rect.h = h;
-  //TextureCopy((uint8_t*)src, (uint8_t*)dst, &rect.dim, 0, 0, 0, palette, 2, 2, 3);
-  GLDrawImage(&rect.dim, (uint8_t*)image_cvt, &rect.loc);
+  /* convert the paletted image and show it now, rather than on the next frame */
+  dim.w = w; dim.h = h;
+  if (LoadingImageConvert(image_data, sizeof(ns.ldat->image_data), w, h,
+                          image_cvt, sizeof(image_cvt)/sizeof(image_cvt[0]))) {
+    GLShowImage(&dim, (uint8_t*)image_cvt);
+    LoadingShown();
+  }
 #endif
   ns.draw_skip_counter = 2;
   free(buf);

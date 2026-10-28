@@ -2,6 +2,9 @@
 #include "geom.h"
 #include "title.h"
 #include "formats/zdat.h"
+#ifndef PSX
+#include "pc/loading.h"
+#endif
 
 /* .rdata */
 #ifdef CFLAGS_ORIG_IMPL
@@ -1550,6 +1553,10 @@ void NSInit(ns_struct *nss, uint32_t lid) {
     if (subsys[i].init2)
       (*subsys[i].init2)();
   }
+#ifndef PSX
+  /* keep the loading screen up as long as the cd load would have */
+  LoadingWait();
+#endif
 }
 
 //----- (80016420) --------------------------------------------------------

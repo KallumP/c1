@@ -1,0 +1,87 @@
+#include <string.h>
+#include "utest.h"
+#include "pc/loading.h"
+
+#define IMAGE_SIZE 0xF5F8 /* size of nsd_ldat.image_data */
+
+static uint8_t image_data[IMAGE_SIZE];
+static uint32_t rgba[512*240];
+
+/*
+ * the palette and pixels are the last 512 + w*h bytes of image_data
+ * (for the 432x144 level images that leaves 248 other bytes in front)
+ */
+static uint16_t *palette_for(uint32_t w, uint32_t h) {
+  return (uint16_t*)&image_data[IMAGE_SIZE - (512 + w*h)];
+}
+
+/* set palette entry idx to an opaque ps1 5551 colour */
+static void set_colour(uint16_t *palette, int idx, int r, int g, int b) {
+  palette[idx] = (uint16_t)(0x8000 | r | (g << 5) | (b << 10));
+}
+
+UTEST(loading, converts_palette_indices_to_rgba) {
+  uint16_t *palette;
+  uint8_t *pixels;
+
+  memset(image_data, 0, sizeof(image_data));
+  palette = palette_for(2, 2);
+  set_colour(palette, 1, 31, 0, 0);  /* red */
+  set_colour(palette, 2, 0, 31, 0);  /* green */
+  set_colour(palette, 3, 0, 0, 31);  /* blue */
+  set_colour(palette, 4, 31, 31, 31);  /* white */
+  pixels = (uint8_t*)&palette[256];
+  pixels[0] = 1; pixels[1] = 2;
+  pixels[2] = 3; pixels[3] = 4;
+  ASSERT_EQ(1, LoadingImageConvert(image_data, sizeof(image_data), 2, 2, rgba, 512*240));
+  /* rgba is stored as bytes r, g, b, a */
+  ASSERT_EQ(0xFF0000FFu, rgba[0]);
+  ASSERT_EQ(0xFF00FF00u, rgba[1]);
+  ASSERT_EQ(0xFFFF0000u, rgba[2]);
+  ASSERT_EQ(0xFFFFFFFFu, rgba[3]);
+}
+
+UTEST(loading, accepts_full_size_level_image) {
+  memset(image_data, 0, sizeof(image_data));
+  ASSERT_EQ(1, LoadingImageConvert(image_data, sizeof(image_data), 432, 144, rgba, 512*240));
+}
+
+UTEST(loading, rejects_image_larger_than_its_data) {
+  memset(image_data, 0, sizeof(image_data));
+  /* the garbage header in s0000004.nsd */
+  ASSERT_EQ(0, LoadingImageConvert(image_data, sizeof(image_data), 47, 671097453, rgba, 512*240));
+  ASSERT_EQ(0, LoadingImageConvert(image_data, sizeof(image_data), 512, 240, rgba, 512*240));
+}
+
+UTEST(loading, rejects_image_larger_than_destination) {
+  memset(image_data, 0, sizeof(image_data));
+  ASSERT_EQ(0, LoadingImageConvert(image_data, sizeof(image_data), 432, 144, rgba, 100));
+}
+
+UTEST(loading, rejects_empty_image) {
+  memset(image_data, 0, sizeof(image_data));
+  ASSERT_EQ(0, LoadingImageConvert(image_data, sizeof(image_data), 0, 144, rgba, 512*240));
+  ASSERT_EQ(0, LoadingImageConvert(image_data, sizeof(image_data), 432, 0, rgba, 512*240));
+}
+
+UTEST(loading, remaining_is_full_time_when_just_shown) {
+  ASSERT_EQ(2000u, LoadingRemaining(1000, 1000));
+}
+
+UTEST(loading, remaining_counts_down) {
+  ASSERT_EQ(500u, LoadingRemaining(1000, 2500));
+}
+
+UTEST(loading, remaining_is_zero_once_minimum_has_passed) {
+  ASSERT_EQ(0u, LoadingRemaining(1000, 3000));
+  ASSERT_EQ(0u, LoadingRemaining(1000, 9999));
+}
+
+UTEST(loading, remaining_handles_tick_counter_wrapping) {
+  /* 512ms have passed across the wrap */
+  ASSERT_EQ(1488u, LoadingRemaining(0xFFFFFF00u, 0x100u));
+}
+
+UTEST(loading, wait_returns_at_once_when_nothing_was_shown) {
+  LoadingWait();
+}
