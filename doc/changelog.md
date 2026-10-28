@@ -11,6 +11,7 @@
 - key bindings are loaded from `controls.cfg` at startup, so they can be changed without recompiling; a button can have several keys. `controls.cfg` is ignored by git; `controls.example.cfg` lists the defaults to copy from
 - Shift, Ctrl, Alt and other keys that could not be bound before can now be used (keys are tracked by SDL scancode)
 - unit tests (`make test`) using utest.h
+- game settings are loaded from `settings.cfg` at startup (ignored by git; `settings.example.cfg` lists the defaults): `loading_screen` turns the level loading screen on or off, and `loading_screen_min_ms` sets how long it stays up (default 2000)
 
 ### Fixed
 

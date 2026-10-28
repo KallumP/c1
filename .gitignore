@@ -7,6 +7,7 @@ build/
 streams/*
 imgui.ini
 controls.cfg
+settings.cfg
 !README.MD
 
 # claude code plans and project skills

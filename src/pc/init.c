@@ -12,6 +12,7 @@
 #include "pad.h"
 #include "pc/gfx/gl.h"
 #include "pc/time.h"
+#include "pc/settings.h"
 
 #define WINDOW_WIDTH  1024
 #define WINDOW_HEIGHT 768
@@ -131,6 +132,7 @@ int init() {
   FindDataDir();
   PadInit(2); /* initialize 2 joypad structs */
   PadLoadBindings("controls.cfg"); /* keeps the default bindings if missing */
+  SettingsLoad("settings.cfg"); /* keeps the default settings if missing */
   SetTicksElapsed(0);
   SDLInit();
   callbacks.pre_update = SDLUpdate;

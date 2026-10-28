@@ -3,6 +3,7 @@
  */
 #include <SDL2/SDL.h>
 #include "loading.h"
+#include "settings.h"
 #include "gfx/pixel.h"
 #include "time.h"
 
@@ -34,15 +35,16 @@ int LoadingImageConvert(uint8_t *image_data, size_t image_size,
 }
 
 /*
- * the time in ms the loading screen has left to be shown, given when it was
- * shown and the time now (from SDL_GetTicks; unsigned, so wrapping is fine)
+ * the time in ms the loading screen has left to be shown for min_ms, given
+ * when it was shown and the time now (from SDL_GetTicks; unsigned, so
+ * wrapping is fine)
  */
-uint32_t LoadingRemaining(uint32_t shown_at, uint32_t now) {
+uint32_t LoadingRemaining(uint32_t shown_at, uint32_t now, uint32_t min_ms) {
   uint32_t elapsed;
 
   elapsed = now - shown_at;
-  if (elapsed >= LOADING_MIN_MS) { return 0; }
-  return LOADING_MIN_MS - elapsed;
+  if (elapsed >= min_ms) { return 0; }
+  return min_ms - elapsed;
 }
 
 /* record that the loading screen has just been shown */
@@ -52,8 +54,9 @@ void LoadingShown() {
 }
 
 /*
- * wait until the loading screen has been shown for LOADING_MIN_MS, since
- * levels load from disk far faster than from the ps1 cd. window events are
+ * wait until the loading screen has been shown for loading_screen_min_ms
+ * (settings.cfg), since levels load from disk far faster than from the ps1
+ * cd. window events are
  * pumped so the os doesn't flag the game as not responding, and the game
  * clock is paused so the wait doesn't count as one long frame
  */
@@ -64,7 +67,8 @@ void LoadingWait() {
   if (!loading_shown) { return; }
   loading_shown = 0;
   ticks = GetTicksElapsed();
-  while ((left = LoadingRemaining(loading_shown_at, SDL_GetTicks()))) {
+  while ((left = LoadingRemaining(loading_shown_at, SDL_GetTicks(),
+                                 game_settings.loading_screen_min_ms))) {
     SDL_PumpEvents();
     SDL_Delay(left < 10 ? left : 10);
   }
