@@ -33,3 +33,27 @@ uint32_t SpeedMeasure(vec *prev, vec *cur, int32_t ticks) {
   dist = SpeedSqrt((uint64_t)(dx*dx) + (uint64_t)(dz*dz));
   return (uint32_t)((dist * 1024) / ((uint64_t)ticks * 4096));
 }
+
+/*
+ * track obj's position from frame to frame and return its speed this frame
+ * (see SpeedMeasure). tracking restarts, returning 0, when obj changes or is
+ * 0 (e.g. not in play), and when it jumps further than SPEED_TELEPORT allows
+ * (e.g. respawning at a checkpoint).
+ */
+uint32_t SpeedTrack(speed_tracker *t, void *obj, vec *trans, int32_t ticks) {
+  uint32_t speed;
+
+  if (!obj) {
+    t->obj = 0;
+    return 0;
+  }
+  if (obj != t->obj) {
+    t->obj = obj;
+    t->prev = *trans;
+    return 0;
+  }
+  speed = SpeedMeasure(&t->prev, trans, ticks);
+  t->prev = *trans;
+  if (speed > SPEED_TELEPORT) { return 0; }
+  return speed;
+}

@@ -774,10 +774,33 @@ void GuiItem(gui_item *item) {
 void GuiIgInit() {
 }
 
-void GuiIgDraw(gui_item *item) {
+/* draw item and then overlay (if any) in one imgui frame */
+void GuiIgDraw(gui_item *item, void (*overlay)()) {
   igNewFrame();
   GuiItem(item);
+  if (overlay)
+    (*overlay)();
   igRender();
+}
+
+/* draw text in a small, see-through, borderless box in the top right corner */
+void GuiIgCornerText(const char *text) {
+  ImGuiIO *io;
+  ImVec2 pos, pivot;
+
+  io = igGetIO();
+  pos.x = io->DisplaySize.x - 10;
+  pos.y = 10;
+  pivot.x = 1; /* anchor the box's top right corner */
+  pivot.y = 0;
+  igSetNextWindowPos(pos, ImGuiCond_Always, pivot);
+  igSetNextWindowBgAlpha(0.35f);
+  igBegin("##corner_text", 0, ImGuiWindowFlags_NoDecoration
+    | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings
+    | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav
+    | ImGuiWindowFlags_NoInputs);
+  igTextUnformatted(text, 0);
+  igEnd();
 }
 
 void GuiIgNavEnableKeyboard() {
