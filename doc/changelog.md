@@ -16,6 +16,7 @@
 
 - build fails with GCC 15+ (C23 default); now builds as gnu17
 - crash while loading the soundfont in 32-bit builds with FluidSynth 2.2+ (loader callback signatures did not match)
+- no music on Windows: FluidSynth rejected the generated soundfont ("'pmod' chunk size is not a multiple of 10 bytes") because MinGW's bitfield layout made each SF2 modulator record 14 bytes instead of 10
 - asset files were opened in text mode, which corrupts them on Windows
 - README controls list did not match the actual key bindings
 - game freezes while the in-game GUI shows the object tree: removing a node only moved its first child to the parent, leaving the rest pointing at the freed node
