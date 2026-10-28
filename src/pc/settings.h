@@ -15,5 +15,6 @@ extern pc_settings game_settings;
 
 extern void SettingsReset(pc_settings *s);
 extern int SettingsParseLine(const char *line, pc_settings *s);
+extern int SettingsLoad(const char *path);
 
 #endif /* _PC_SETTINGS_H_ */

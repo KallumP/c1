@@ -75,3 +75,40 @@ UTEST(settings, blank_comment_and_malformed_lines) {
   ASSERT_EQ(-1, SettingsParseLine("loading_screen off", &s));
   ASSERT_EQ(1, s.loading_screen);
 }
+
+#define SETTINGS_TEST_PATH "build/test_settings.cfg"
+
+/* write contents to the test settings file */
+static void write_settings(const char *contents) {
+  FILE *file;
+
+  file = fopen(SETTINGS_TEST_PATH, "wb");
+  fputs(contents, file);
+  fclose(file);
+}
+
+UTEST(settings, load_missing_file_keeps_defaults) {
+  SettingsReset(&game_settings);
+  remove(SETTINGS_TEST_PATH);
+  ASSERT_EQ(-1, SettingsLoad(SETTINGS_TEST_PATH));
+  ASSERT_EQ(1, game_settings.loading_screen);
+  ASSERT_EQ(2000u, game_settings.loading_screen_min_ms);
+}
+
+UTEST(settings, load_applies_each_setting) {
+  SettingsReset(&game_settings);
+  write_settings("# settings\r\nloading_screen = off\r\nloading_screen_min_ms = 750\r\n");
+  ASSERT_EQ(2, SettingsLoad(SETTINGS_TEST_PATH));
+  ASSERT_EQ(0, game_settings.loading_screen);
+  ASSERT_EQ(750u, game_settings.loading_screen_min_ms);
+  SettingsReset(&game_settings);
+}
+
+UTEST(settings, load_skips_invalid_lines) {
+  SettingsReset(&game_settings);
+  write_settings("fullscreen = on\nloading_screen_min_ms = lots\nloading_screen = off\n");
+  ASSERT_EQ(1, SettingsLoad(SETTINGS_TEST_PATH));
+  ASSERT_EQ(0, game_settings.loading_screen);
+  ASSERT_EQ(2000u, game_settings.loading_screen_min_ms);
+  SettingsReset(&game_settings);
+}
