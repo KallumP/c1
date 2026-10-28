@@ -114,13 +114,18 @@ typedef enum {
   _switch        = 3
 } __attribute__((packed)) SFCtrlType;
 
+/*
+ * gcc_struct: the bitfields mix types, and mingw's default (ms) bitfield layout
+ * starts a new storage unit when the type changes, making this 4 bytes rather
+ * than the 2 the sf2 format needs
+ */
 typedef struct {
   SFCtrlPalette index:7;
   uint16_t cc:1;
   uint16_t direction:1;
   uint16_t polarity:1;
   SFCtrlType type:6;
-} __attribute__((packed)) SFModulator;
+} __attribute__((packed, gcc_struct)) SFModulator;
 
 #define setsfm(m,i,c,d,p,t) \
 m.index = i; \
