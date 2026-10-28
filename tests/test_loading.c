@@ -7,23 +7,30 @@
 static uint8_t image_data[IMAGE_SIZE];
 static uint32_t rgba[512*240];
 
-/* set palette entry idx to a ps1 5551 colour */
-static void set_colour(int idx, int r, int g, int b) {
-  uint16_t *palette;
+/*
+ * the palette and pixels are the last 512 + w*h bytes of image_data
+ * (for the 432x144 level images that leaves 248 other bytes in front)
+ */
+static uint16_t *palette_for(uint32_t w, uint32_t h) {
+  return (uint16_t*)&image_data[IMAGE_SIZE - (512 + w*h)];
+}
 
-  palette = (uint16_t*)image_data;
-  palette[idx] = (uint16_t)(r | (g << 5) | (b << 10));
+/* set palette entry idx to an opaque ps1 5551 colour */
+static void set_colour(uint16_t *palette, int idx, int r, int g, int b) {
+  palette[idx] = (uint16_t)(0x8000 | r | (g << 5) | (b << 10));
 }
 
 UTEST(loading, converts_palette_indices_to_rgba) {
+  uint16_t *palette;
   uint8_t *pixels;
 
   memset(image_data, 0, sizeof(image_data));
-  set_colour(1, 31, 0, 0);  /* red */
-  set_colour(2, 0, 31, 0);  /* green */
-  set_colour(3, 0, 0, 31);  /* blue */
-  set_colour(4, 31, 31, 31);  /* white */
-  pixels = &image_data[512];
+  palette = palette_for(2, 2);
+  set_colour(palette, 1, 31, 0, 0);  /* red */
+  set_colour(palette, 2, 0, 31, 0);  /* green */
+  set_colour(palette, 3, 0, 0, 31);  /* blue */
+  set_colour(palette, 4, 31, 31, 31);  /* white */
+  pixels = (uint8_t*)&palette[256];
   pixels[0] = 1; pixels[1] = 2;
   pixels[2] = 3; pixels[3] = 4;
   ASSERT_EQ(1, LoadingImageConvert(image_data, sizeof(image_data), 2, 2, rgba, 512*240));
