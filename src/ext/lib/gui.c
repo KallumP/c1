@@ -160,8 +160,17 @@ void GuiInsertChild(gui_item *item, gui_item *prev, gui_item *child) {
                    (tree_node_t*)child);
 }
 
-/* insert an item into parent's children, after prev (or first if prev is 0) */
+/*
+ * insert an item into parent's children, after prev (or first if prev is 0).
+ * if prev isn't one of parent's children (the gui tree has drifted from the
+ * data tree), the item is added last instead; inserting after prev would link
+ * it into another parent's children, which corrupts the tree.
+ */
 void GuiInsertNode(gui_item *parent, gui_item *prev, gui_item *item) {
+  if (prev && prev->parent != parent) {
+    GuiAddChild(parent, item);
+    return;
+  }
   GuiInsertChild(parent, prev, item);
 }
 
