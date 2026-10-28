@@ -53,3 +53,57 @@ UTEST(speed, large_moves_do_not_overflow) {
   /* sqrt(2)*0x7FFFFFFF / 4 per tick, over 1024 ticks */
   ASSERT_EQ(741455u, SpeedMeasure(&prev, &cur, 1024));
 }
+
+UTEST(speed_track, first_frame_of_an_object_is_zero) {
+  speed_tracker t = { 0 };
+  int crash;
+  vec trans = { .x=UNITS(100), .y=0, .z=0 };
+
+  ASSERT_EQ(0u, SpeedTrack(&t, &crash, &trans, 1024));
+}
+
+UTEST(speed_track, measures_movement_between_frames) {
+  speed_tracker t = { 0 };
+  int crash;
+  vec frame1 = { .x=0, .y=0, .z=0 };
+  vec frame2 = { .x=UNITS(10), .y=0, .z=0 };
+  vec frame3 = { .x=UNITS(30), .y=0, .z=0 };
+
+  SpeedTrack(&t, &crash, &frame1, 1024);
+  ASSERT_EQ(10u, SpeedTrack(&t, &crash, &frame2, 1024));
+  ASSERT_EQ(20u, SpeedTrack(&t, &crash, &frame3, 1024));
+}
+
+UTEST(speed_track, restarts_when_the_object_changes) {
+  speed_tracker t = { 0 };
+  int old_crash, new_crash;
+  vec here = { .x=0, .y=0, .z=0 };
+  vec far_away = { .x=UNITS(100), .y=0, .z=0 };
+
+  SpeedTrack(&t, &old_crash, &here, 1024);
+  ASSERT_EQ(0u, SpeedTrack(&t, &new_crash, &far_away, 1024));
+}
+
+UTEST(speed_track, no_object_is_zero_and_restarts) {
+  speed_tracker t = { 0 };
+  int crash;
+  vec here = { .x=0, .y=0, .z=0 };
+  vec far_away = { .x=UNITS(100), .y=0, .z=0 };
+
+  SpeedTrack(&t, &crash, &here, 1024);
+  ASSERT_EQ(0u, SpeedTrack(&t, 0, 0, 1024));
+  ASSERT_EQ(0u, SpeedTrack(&t, &crash, &far_away, 1024));
+}
+
+UTEST(speed_track, teleport_is_not_counted_as_movement) {
+  speed_tracker t = { 0 };
+  int crash;
+  vec checkpoint = { .x=0, .y=0, .z=0 };
+  vec respawned = { .x=UNITS(SPEED_TELEPORT+1), .y=0, .z=0 };
+  vec moved_on = { .x=UNITS(SPEED_TELEPORT+11), .y=0, .z=0 };
+
+  SpeedTrack(&t, &crash, &checkpoint, 1024);
+  ASSERT_EQ(0u, SpeedTrack(&t, &crash, &respawned, 1024));
+  /* tracking carries on from the new position */
+  ASSERT_EQ(10u, SpeedTrack(&t, &crash, &moved_on, 1024));
+}
