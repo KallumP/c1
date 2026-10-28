@@ -112,3 +112,39 @@ UTEST(settings, load_skips_invalid_lines) {
   ASSERT_EQ(2000u, game_settings.loading_screen_min_ms);
   SettingsReset(&game_settings);
 }
+
+/* the example file documents the defaults, so it must match them */
+UTEST(settings, example_settings_file_matches_defaults) {
+  pc_settings defaults;
+
+  SettingsReset(&defaults);
+  SettingsReset(&game_settings);
+  game_settings.loading_screen = !defaults.loading_screen; /* so a match proves it was read */
+  game_settings.loading_screen_min_ms = defaults.loading_screen_min_ms + 1;
+  /* run from the project root */
+  ASSERT_EQ(2, SettingsLoad("settings.example.cfg"));
+  ASSERT_EQ(defaults.loading_screen, game_settings.loading_screen);
+  ASSERT_EQ(defaults.loading_screen_min_ms, game_settings.loading_screen_min_ms);
+  SettingsReset(&game_settings);
+}
+
+/*
+ * settings.cfg is the player's own (untracked) settings. this only checks
+ * for typos, and passes if there is no settings.cfg.
+ */
+UTEST(settings, local_settings_file_is_valid) {
+  FILE *file;
+  char line[128];
+  pc_settings s;
+  int line_num;
+
+  file = fopen("settings.cfg", "rb");
+  if (!file) { return; }
+  SettingsReset(&s);
+  for (line_num=1;fgets(line, sizeof(line), file);line_num++) {
+    if (SettingsParseLine(line, &s) == -1)
+      fprintf(stderr, "settings.cfg:%d: invalid setting: %s", line_num, line);
+    EXPECT_NE(-1, SettingsParseLine(line, &s));
+  }
+  fclose(file);
+}
