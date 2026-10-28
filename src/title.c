@@ -317,8 +317,10 @@ int TitleLoading(lid_t lid, uint8_t *image_data, nsd *nsd) {
   /* convert the paletted image and show it now, rather than on the next frame */
   dim.w = w; dim.h = h;
   if (LoadingImageConvert(image_data, sizeof(ns.ldat->image_data), w, h,
-                          image_cvt, sizeof(image_cvt)/sizeof(image_cvt[0])))
+                          image_cvt, sizeof(image_cvt)/sizeof(image_cvt[0]))) {
     GLShowImage(&dim, (uint8_t*)image_cvt);
+    LoadingShown();
+  }
 #endif
   ns.draw_skip_counter = 2;
   free(buf);

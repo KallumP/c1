@@ -39,6 +39,7 @@ SRC =	src/ns.c \
 TEST_SRC = $(wildcard tests/*.c) \
 	src/pc/pad.c \
 	src/pc/loading.c \
+	src/pc/time.c \
 	src/ext/lib/gui.c \
 	src/util/tree.c \
 	src/util/list.c
