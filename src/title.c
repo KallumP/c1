@@ -42,6 +42,7 @@ extern gfx_context_db context;
 #include "pc/gfx/gl.h"
 #include "pc/gfx/tex.h"
 #include "pc/loading.h"
+#include "pc/settings.h"
 extern gl_context context;
 #endif
 
@@ -314,9 +315,13 @@ int TitleLoading(lid_t lid, uint8_t *image_data, nsd *nsd) {
     GpuSwapBuffers();
   }
 #else
-  /* convert the paletted image and show it now, rather than on the next frame */
+  /*
+   * convert the paletted image and show it now, rather than on the next
+   * frame, unless turned off in settings.cfg
+   */
   dim.w = w; dim.h = h;
-  if (LoadingImageConvert(image_data, sizeof(ns.ldat->image_data), w, h,
+  if (game_settings.loading_screen
+   && LoadingImageConvert(image_data, sizeof(ns.ldat->image_data), w, h,
                           image_cvt, sizeof(image_cvt)/sizeof(image_cvt[0]))) {
     GLShowImage(&dim, (uint8_t*)image_cvt);
     LoadingShown();
