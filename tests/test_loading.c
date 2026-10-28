@@ -65,21 +65,30 @@ UTEST(loading, rejects_empty_image) {
 }
 
 UTEST(loading, remaining_is_full_time_when_just_shown) {
-  ASSERT_EQ(2000u, LoadingRemaining(1000, 1000));
+  ASSERT_EQ(2000u, LoadingRemaining(1000, 1000, 2000));
 }
 
 UTEST(loading, remaining_counts_down) {
-  ASSERT_EQ(500u, LoadingRemaining(1000, 2500));
+  ASSERT_EQ(500u, LoadingRemaining(1000, 2500, 2000));
 }
 
 UTEST(loading, remaining_is_zero_once_minimum_has_passed) {
-  ASSERT_EQ(0u, LoadingRemaining(1000, 3000));
-  ASSERT_EQ(0u, LoadingRemaining(1000, 9999));
+  ASSERT_EQ(0u, LoadingRemaining(1000, 3000, 2000));
+  ASSERT_EQ(0u, LoadingRemaining(1000, 9999, 2000));
 }
 
 UTEST(loading, remaining_handles_tick_counter_wrapping) {
   /* 512ms have passed across the wrap */
-  ASSERT_EQ(1488u, LoadingRemaining(0xFFFFFF00u, 0x100u));
+  ASSERT_EQ(1488u, LoadingRemaining(0xFFFFFF00u, 0x100u, 2000));
+}
+
+UTEST(loading, remaining_follows_the_minimum_time_setting) {
+  ASSERT_EQ(300u, LoadingRemaining(1000, 1200, 500));
+  ASSERT_EQ(0u, LoadingRemaining(1000, 1600, 500));
+}
+
+UTEST(loading, remaining_is_zero_with_no_minimum_time) {
+  ASSERT_EQ(0u, LoadingRemaining(1000, 1000, 0));
 }
 
 UTEST(loading, wait_returns_at_once_when_nothing_was_shown) {
