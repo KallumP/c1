@@ -1,6 +1,6 @@
-#include <ctype.h>
 #include <SDL2/SDL.h>
 #include "pc/pad.h"
+#include "pc/config.h"
 
 extern uint8_t keys[512]; /* indexed by SDL scancode */
 
@@ -74,37 +74,16 @@ uint32_t SwPadRead(int idx) {
   return (held << 16);
 }
 
-/* strip leading and trailing whitespace from str in place */
-static char *PadTrim(char *str) {
-  char *end;
-
-  while (isspace((unsigned char)*str)) { str++; }
-  end = str + strlen(str);
-  while (end > str && isspace((unsigned char)end[-1])) { end--; }
-  *end = 0;
-  return str;
-}
-
 /*
- * parse one line of a controls file, in the form "button = key name".
- * key names are SDL scancode names (e.g. "Z", "Left Shift", "Keypad 4").
- * returns 1 and sets bits/code for a binding, 0 for a blank or
- * comment line, and -1 for an invalid line.
+ * look up a controls file binding: a button name and an SDL scancode name
+ * (e.g. "Z", "Left Shift", "Keypad 4").
+ * returns 1 and sets bits/code, or -1 if either name is unknown.
  */
-int PadParseBindingLine(const char *line, uint32_t *bits, SDL_Scancode *code) {
-  char buf[128], *name, *key, *sep;
+static int PadParseBinding(const char *name, const char *key,
+  uint32_t *bits, SDL_Scancode *code) {
   SDL_Scancode scancode;
   int i, count;
 
-  snprintf(buf, sizeof(buf), "%s", line);
-  name = PadTrim(buf);
-  if (*name == 0 || *name == '#') { return 0; }
-  sep = strchr(name, '=');
-  if (!sep) { return -1; }
-  *sep = 0;
-  name = PadTrim(name);
-  key = PadTrim(sep+1);
-  if (*name == 0 || *key == 0) { return -1; }
   scancode = SDL_GetScancodeFromName(key);
   if (scancode == SDL_SCANCODE_UNKNOWN) { return -1; }
   count = sizeof(pad_button_names)/sizeof(pad_button_names[0]);
@@ -116,6 +95,20 @@ int PadParseBindingLine(const char *line, uint32_t *bits, SDL_Scancode *code) {
     }
   }
   return -1;
+}
+
+/*
+ * parse one line of a controls file, in the form "button = key name".
+ * returns 1 and sets bits/code for a binding, 0 for a blank or
+ * comment line, and -1 for an invalid line.
+ */
+int PadParseBindingLine(const char *line, uint32_t *bits, SDL_Scancode *code) {
+  char buf[128], *name, *key;
+  int res;
+
+  res = ConfigParseLine(line, buf, sizeof(buf), &name, &key);
+  if (res != 1) { return res; }
+  return PadParseBinding(name, key, bits, code);
 }
 
 /* restore the built-in default bindings */
@@ -138,45 +131,43 @@ static void PadUnbindButton(uint32_t bits) {
 }
 
 /*
- * load key bindings from a controls file. the first line for a button
+ * apply one controls file binding (ConfigLoad handler). data points to the
+ * buttons already rebound by this file: the first line for a button
  * replaces its current keys, and further lines for it add more keys.
+ */
+static int PadApplyBinding(char *name, char *key, const char *path,
+  int line_num, void *data) {
+  uint32_t bits, *rebound;
+  SDL_Scancode code;
+  int max;
+
+  if (PadParseBinding(name, key, &bits, &code) == -1) { return -1; }
+  rebound = (uint32_t*)data;
+  if (!(*rebound & bits)) {
+    PadUnbindButton(bits);
+    *rebound |= bits;
+  }
+  max = sizeof(pad_mappings)/sizeof(sw_pad_mapping);
+  if (pad_mapping_count == max) {
+    fprintf(stderr, "%s:%d: too many bindings, skipping\n", path, line_num);
+    return 0;
+  }
+  pad_mappings[pad_mapping_count].code = code;
+  pad_mappings[pad_mapping_count].bits = bits;
+  pad_mapping_count++;
+  return 1;
+}
+
+/*
+ * load key bindings from a controls file (see PadApplyBinding).
  * invalid lines are reported and skipped.
  * returns the number of bindings applied, or -1 if the file can't be opened.
  */
 int PadLoadBindings(const char *path) {
-  FILE *file;
-  char line[128];
-  uint32_t bits, rebound;
-  SDL_Scancode code;
-  int res, line_num, applied, max;
+  uint32_t rebound;
 
-  file = fopen(path, "rb");
-  if (!file) { return -1; }
   if (!pad_mappings_set) { PadResetBindings(); }
-  max = sizeof(pad_mappings)/sizeof(sw_pad_mapping);
   rebound = 0;
-  applied = 0;
-  for (line_num=1;fgets(line, sizeof(line), file);line_num++) {
-    res = PadParseBindingLine(line, &bits, &code);
-    if (res == -1) {
-      fprintf(stderr, "%s:%d: invalid binding, expected \"button = key name\"\n",
-        path, line_num);
-      continue;
-    }
-    if (res == 0) { continue; }
-    if (!(rebound & bits)) {
-      PadUnbindButton(bits);
-      rebound |= bits;
-    }
-    if (pad_mapping_count == max) {
-      fprintf(stderr, "%s:%d: too many bindings, skipping\n", path, line_num);
-      continue;
-    }
-    pad_mappings[pad_mapping_count].code = code;
-    pad_mappings[pad_mapping_count].bits = bits;
-    pad_mapping_count++;
-    applied++;
-  }
-  fclose(file);
-  return applied;
+  return ConfigLoad(path, "binding", "button = key name", PadApplyBinding,
+    &rebound);
 }
