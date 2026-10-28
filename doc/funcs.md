@@ -208,7 +208,7 @@ These are here for now but will likely moved into code as function comments in t
 - `SwPadRead` - get the buttons held on a joypad, from the keys currently pressed and the current key bindings
 - `PadParseBinding` - parse one `button = key name` line of a controls file into a button and an SDL scancode
 - `PadResetBindings` - restore the built-in default key bindings
-- `PadLoadConfig` - load key bindings from a controls file (`controls.cfg`), skipping and reporting invalid lines
+- `PadLoadBindings` - load key bindings from a controls file (`controls.cfg`), skipping and reporting invalid lines
 
 ## pbak.c
 - `PbakInit` - initialize demo playback

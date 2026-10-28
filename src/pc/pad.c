@@ -143,7 +143,7 @@ static void PadUnbind(uint32_t bits) {
  * invalid lines are reported and skipped.
  * returns the number of bindings applied, or -1 if the file can't be opened.
  */
-int PadLoadConfig(const char *path) {
+int PadLoadBindings(const char *path) {
   FILE *file;
   char line[128];
   uint32_t bits, rebound;
