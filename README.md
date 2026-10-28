@@ -119,6 +119,7 @@ Game settings are read from `settings.cfg` when the game starts, in the same `na
 |---|---|---|---|
 | `loading_screen` | `on`, `off` | `on` | Show each level's loading screen while it loads. |
 | `loading_screen_min_ms` | `0` to `60000` | `2000` | Keep the loading screen up for at least this many milliseconds. Levels load from disk much faster than from the PS1 CD, so without this it would only flash. `0` shows it only for as long as loading takes. |
+| `speed_display` | `on`, `off` | `off` | Show how fast Crash is moving horizontally in the top right corner, in the game's own speed units per second (the scale of its velocity values, where terminal falling speed is 750). It is measured from how far Crash actually moved each frame, so it reads 0 against a wall. |
 
 ## Structure
 Project structure is listed below, including descriptions for each file.
@@ -168,6 +169,7 @@ Note that further documentation can be found in the `doc` directory.
 │   │   │── config.c,h       # "name = value" file parsing shared by controls.cfg and settings.cfg
 │   │   │── settings.c,h     # game settings (settings.cfg loading)
 │   │   │── loading.c,h      # level loading screen image conversion and minimum display time
+│   │   │── speed.c,h        # crash's speed measurement for the speed display
 │   │   └── time.c,h         # tick counter
 │   ├── psx                  # psx-specific code (non-inline)
 │   │   ├── card.c,h         # memory card
@@ -217,6 +219,7 @@ Note that further documentation can be found in the `doc` directory.
 │   ├── test_settings.c      # settings.cfg parsing and loading
 │   ├── test_loading.c       # loading screen image conversion and timing
 │   ├── test_gui.c           # in-game GUI tree node insertion and removal
+│   ├── test_speed.c         # crash's speed measurement and tracking
 │   └── test_sf2.c           # soundfont record struct sizes
 ├── tools                    # helper scripts
 │   └── extract_streams.py   # extracts game assets from a disc image
