@@ -7,13 +7,15 @@
 
 pc_settings game_settings = {
   .loading_screen = 1,
-  .loading_screen_min_ms = 2000
+  .loading_screen_min_ms = 2000,
+  .speed_display = 0
 };
 
 /* restore the default settings */
 void SettingsReset(pc_settings *s) {
   s->loading_screen = 1;
   s->loading_screen_min_ms = 2000;
+  s->speed_display = 0;
 }
 
 /* parse "on"/"off" into flag; returns 0 for any other value */
@@ -44,6 +46,8 @@ static int SettingsApply(const char *name, const char *value, pc_settings *s) {
   if (SDL_strcasecmp(name, "loading_screen_min_ms") == 0)
     return SettingsParseNumber(value, SETTINGS_LOADING_SCREEN_MAX_MS,
       &s->loading_screen_min_ms) ? 1 : -1;
+  if (SDL_strcasecmp(name, "speed_display") == 0)
+    return SettingsParseOnOff(value, &s->speed_display) ? 1 : -1;
   return -1;
 }
 
