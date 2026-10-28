@@ -60,3 +60,18 @@ int SettingsParseLine(const char *line, pc_settings *s) {
   if (res != 1) { return res; }
   return SettingsApply(name, value, s);
 }
+
+/* apply one settings file line to game_settings (ConfigLoad handler) */
+static int SettingsApplyLine(char *name, char *value, const char *path,
+  int line_num, void *data) {
+  return SettingsApply(name, value, &game_settings);
+}
+
+/*
+ * load game_settings from a settings file. settings it doesn't list keep
+ * their defaults, and invalid lines are reported and skipped.
+ * returns the number of settings applied, or -1 if the file can't be opened.
+ */
+int SettingsLoad(const char *path) {
+  return ConfigLoad(path, "setting", "name = value", SettingsApplyLine, 0);
+}
