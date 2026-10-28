@@ -18,6 +18,8 @@
 - crash while loading the soundfont in 32-bit builds with FluidSynth 2.2+ (loader callback signatures did not match)
 - asset files were opened in text mode, which corrupts them on Windows
 - README controls list did not match the actual key bindings
+- game freezes while the in-game GUI shows the object tree: removing a node only moved its first child to the parent, leaving the rest pointing at the freed node
+- game freezes while the in-game GUI shows the object tree: a node inserted after a sibling under a different parent was linked into that parent's children, corrupting the tree; it is now added last under its own parent
 
 ## 2022-12-28
 
