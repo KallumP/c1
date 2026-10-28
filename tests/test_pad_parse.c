@@ -5,7 +5,7 @@
 static int parse(const char *line, uint32_t *bits, SDL_Scancode *code) {
   *bits = 0;
   *code = SDL_SCANCODE_UNKNOWN;
-  return PadParseBinding(line, bits, code);
+  return PadParseBindingLine(line, bits, code);
 }
 
 UTEST(pad_parse, letter_binding) {

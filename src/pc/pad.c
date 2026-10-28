@@ -91,7 +91,7 @@ static char *PadTrim(char *str) {
  * returns 1 and sets bits/code for a binding, 0 for a blank or
  * comment line, and -1 for an invalid line.
  */
-int PadParseBinding(const char *line, uint32_t *bits, SDL_Scancode *code) {
+int PadParseBindingLine(const char *line, uint32_t *bits, SDL_Scancode *code) {
   char buf[128], *name, *key, *sep;
   SDL_Scancode scancode;
   int i, count;
@@ -126,7 +126,7 @@ void PadResetBindings() {
 }
 
 /* remove every key bound to the given button */
-static void PadUnbind(uint32_t bits) {
+static void PadUnbindButton(uint32_t bits) {
   int i, count;
 
   count = 0;
@@ -157,7 +157,7 @@ int PadLoadBindings(const char *path) {
   rebound = 0;
   applied = 0;
   for (line_num=1;fgets(line, sizeof(line), file);line_num++) {
-    res = PadParseBinding(line, &bits, &code);
+    res = PadParseBindingLine(line, &bits, &code);
     if (res == -1) {
       fprintf(stderr, "%s:%d: invalid binding, expected \"button = key name\"\n",
         path, line_num);
@@ -165,7 +165,7 @@ int PadLoadBindings(const char *path) {
     }
     if (res == 0) { continue; }
     if (!(rebound & bits)) {
-      PadUnbind(bits);
+      PadUnbindButton(bits);
       rebound |= bits;
     }
     if (pad_mapping_count == max) {

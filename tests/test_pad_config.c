@@ -125,9 +125,9 @@ UTEST(pad_config, local_controls_file_is_valid) {
   file = fopen("controls.cfg", "rb");
   if (!file) { return; }
   for (line_num=1;fgets(line, sizeof(line), file);line_num++) {
-    if (PadParseBinding(line, &bits, &code) == -1)
+    if (PadParseBindingLine(line, &bits, &code) == -1)
       fprintf(stderr, "controls.cfg:%d: invalid binding: %s", line_num, line);
-    EXPECT_NE(-1, PadParseBinding(line, &bits, &code));
+    EXPECT_NE(-1, PadParseBindingLine(line, &bits, &code));
   }
   fclose(file);
 }
