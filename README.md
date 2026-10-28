@@ -42,7 +42,7 @@ Windows (MSYS2):
 3. Open the **MSYS2 MINGW32** shell, `cd` into the project directory and run `make`. This produces `build/c1.exe` and copies the DLLs it needs next to it (see below).
 4. Run `build/c1.exe`, either from the project directory or by double-clicking it. The game looks for `streams/` in the working directory, then next to the executable, then in the directory above it.
 
-`c1.exe` links dynamically against SDL2, FluidSynth (and its audio codec dependencies) and the GCC runtime. Windows only looks for DLLs next to the executable or on `PATH`, so outside the MINGW32 shell the game fails to start with an error such as *"libfluidsynth-3.dll was not found"*. To avoid this, the Windows build has an extra `dlls` step that runs after linking. It recursively follows `c1.exe`'s imports and copies each one found in the MinGW32 `bin` directory (currently 17 DLLs) into `build/`. To re-copy them on their own, run `make dlls`. The `build` directory is ignored by git, and `make clean` removes it. To run the game on another machine, copy the `build` directory with the `streams` directory beside it (or inside it), and your `controls.cfg` (if you have one) next to `streams`.
+`c1.exe` links dynamically against SDL2, FluidSynth (and its audio codec dependencies) and the GCC runtime. Windows only looks for DLLs next to the executable or on `PATH`, so outside the MINGW32 shell the game fails to start with an error such as *"libfluidsynth-3.dll was not found"*. To avoid this, the Windows build has an extra `dlls` step that runs after linking. It recursively follows `c1.exe`'s imports and copies each one found in the MinGW32 `bin` directory (currently 17 DLLs) into `build/`. To re-copy them on their own, run `make dlls`. The `build` directory is ignored by git, and `make clean` removes it. To run the game on another machine, copy the `build` directory with the `streams` directory beside it (or inside it), and your `controls.cfg` and `settings.cfg` (if you have them) next to `streams`.
 
 #### psx
 (note: psx build currently does not work)
@@ -111,6 +111,15 @@ up       = Keypad 8
 - **Mistakes:** an invalid line (an unknown button or key name, or a line without `=`) is skipped with a warning naming the line, e.g. `controls.cfg:12: invalid binding, expected "button = key name"`. Lines starting with `#` are comments. `make test` also checks your `controls.cfg` for invalid lines.
 - Avoid <kbd>Esc</kbd> and <kbd>Tab</kbd>, which the in-game GUI uses.
 
+## Settings
+
+Game settings are read from `settings.cfg` when the game starts, in the same `name = value` format as `controls.cfg`. To change them, copy [`settings.example.cfg`](settings.example.cfg) to `settings.cfg` next to `streams/` and edit the copy; it is ignored by git. A setting left out of the file, or a missing `settings.cfg`, uses the default below. Invalid lines are skipped with a warning naming the line, and `make test` checks your `settings.cfg` for them.
+
+| Setting | Values | Default | Effect |
+|---|---|---|---|
+| `loading_screen` | `on`, `off` | `on` | Show each level's loading screen while it loads. |
+| `loading_screen_min_ms` | `0` to `60000` | `2000` | Keep the loading screen up for at least this many milliseconds. Levels load from disk much faster than from the PS1 CD, so without this it would only flash. `0` shows it only for as long as loading takes. |
+
 ## Structure
 Project structure is listed below, including descriptions for each file.
 
@@ -143,6 +152,7 @@ Note that further documentation can be found in the `doc` directory.
 │   │   ├── gfx              # pc graphics
 │   │   │   ├── gl.c,h       # OpenGL backend (2D primitive rasterization)
 │   │   │   ├── tex.c,h      # texture cache
+│   │   │   ├── pixel.h      # ps1 5551 to rgba pixel conversion
 │   │   │   └── pcgfx.h      # graphics primitives
 │   │   │── sound            # pc sound
 │   │   │   ├── audio.c,h    # audio/sfx backend
@@ -155,6 +165,9 @@ Note that further documentation can be found in the `doc` directory.
 │   │   │── init.c,h         # pc-specific initialization (incl. SDL)
 │   │   │── math.c,h         # fixed point implementations of math functions
 │   │   │── pad.c,h          # joypad emulation (keyboard bindings, controls.cfg loading)
+│   │   │── config.c,h       # "name = value" file parsing shared by controls.cfg and settings.cfg
+│   │   │── settings.c,h     # game settings (settings.cfg loading)
+│   │   │── loading.c,h      # level loading screen image conversion and minimum display time
 │   │   └── time.c,h         # tick counter
 │   ├── psx                  # psx-specific code (non-inline)
 │   │   ├── card.c,h         # memory card
@@ -199,10 +212,16 @@ Note that further documentation can be found in the `doc` directory.
 │   ├── utest.h              # utest.h test framework (vendored)
 │   ├── test_pad.c           # key state to joypad buttons
 │   ├── test_pad_parse.c     # controls.cfg line parsing
-│   └── test_pad_config.c    # controls.cfg loading
+│   ├── test_pad_config.c    # controls.cfg loading
+│   ├── test_config.c        # shared "name = value" file parsing
+│   ├── test_settings.c      # settings.cfg parsing and loading
+│   ├── test_loading.c       # loading screen image conversion and timing
+│   ├── test_gui.c           # in-game GUI tree node insertion and removal
+│   └── test_sf2.c           # soundfont record struct sizes
 ├── tools                    # helper scripts
 │   └── extract_streams.py   # extracts game assets from a disc image
 ├── controls.example.cfg     # example key bindings (copy to controls.cfg to change the controls)
+├── settings.example.cfg     # example settings (copy to settings.cfg to change the settings)
 ├── Makefile                 # project makefile
 └── README.md                # project overview; this file
 ```
