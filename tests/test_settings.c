@@ -169,3 +169,22 @@ UTEST(settings, speed_display_on_and_off) {
   ASSERT_EQ(-1, SettingsParseLine("speed_display = fast", &s));
   ASSERT_EQ(0, s.speed_display);
 }
+
+UTEST(settings, skip_splash_screens_is_off_by_default) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(0, s.skip_splash_screens);
+}
+
+UTEST(settings, skip_splash_screens_on_and_off) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, SettingsParseLine("skip_splash_screens = on", &s));
+  ASSERT_EQ(1, s.skip_splash_screens);
+  ASSERT_EQ(1, SettingsParseLine("skip_splash_screens = off", &s));
+  ASSERT_EQ(0, s.skip_splash_screens);
+  ASSERT_EQ(-1, SettingsParseLine("skip_splash_screens = yes", &s));
+  ASSERT_EQ(0, s.skip_splash_screens);
+}
