@@ -37,3 +37,17 @@ UTEST(gldepth, depth_mark_does_not_change_blend_mode) {
   ASSERT_EQ(3, GLPrimBlendMode(GL_PRIM_DEPTH | 3));
 }
 
+UTEST(gldepth, marked_opaque_prims_write_depth) {
+  ASSERT_TRUE(GLPrimWritesDepth(GL_PRIM_DEPTH | 0));
+  ASSERT_TRUE(GLPrimWritesDepth(GL_PRIM_DEPTH | 3));
+}
+
+UTEST(gldepth, additive_and_subtractive_prims_do_not_write_depth) {
+  ASSERT_FALSE(GLPrimWritesDepth(GL_PRIM_DEPTH | 1));
+  ASSERT_FALSE(GLPrimWritesDepth(GL_PRIM_DEPTH | 2));
+}
+
+UTEST(gldepth, unmarked_prims_do_not_write_depth) {
+  ASSERT_FALSE(GLPrimWritesDepth(3));
+}
+
