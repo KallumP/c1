@@ -18,10 +18,7 @@ At the moment the game is only partially playable with a number of currently ide
 - [Building](doc/building.md): dependencies, compiling on Linux and Windows, and running the tests
 - [Running](doc/running.md): getting the game files from your disc or a disc image, and starting the game
 - [Controls](doc/controls.md): the default keys and changing them with `controls.cfg`
-
-## Settings
-
-See [`doc/settings.md`](doc/settings.md) for the game settings and how to change them.
+- [Settings](doc/settings.md): game settings in `settings.cfg`, such as the loading screen, speed display and skipping the splash screens
 
 ## Structure
 Project structure is listed below, including descriptions for each file.
