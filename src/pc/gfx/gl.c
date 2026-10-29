@@ -268,7 +268,7 @@ void GLDrawPrims(void *data, int count) {
   glDisable(GL_TEXTURE_2D);
   glEnable(GL_BLEND);
   /*
-   * model tris are depth tested against each other (model_depth_buffer);
+   * model tris are depth tested against each other (fix_model_draw_order);
    * they don't write depth while drawing, see below
    */
   glDisable(GL_DEPTH_TEST);
@@ -310,7 +310,7 @@ void GLDrawPrims(void *data, int count) {
       }
       texid = poly->texid;
     }
-    depth = game_settings.model_depth_buffer && poly->type == 1
+    depth = game_settings.fix_model_draw_order && poly->type == 1
       && GLPrimDepthTested(poly->flags);
     if (depth != depth_on) {
       if (depth) { glEnable(GL_DEPTH_TEST); }

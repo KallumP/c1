@@ -30,7 +30,7 @@ extern page_struct texture_pages[16];
 
 void SDLInit() {
   SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24); /* for model_depth_buffer */
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24); /* for fix_model_draw_order */
   window = SDL_CreateWindow("c1",
     SDL_WINDOWPOS_UNDEFINED,
     SDL_WINDOWPOS_UNDEFINED,
