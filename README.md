@@ -119,7 +119,7 @@ Game settings are read from `settings.cfg` when the game starts, in the same `na
 |---|---|---|---|
 | `loading_screen` | `on`, `off` | `on` | Show each level's loading screen while it loads. |
 | `loading_screen_min_ms` | `0` to `60000` | `2000` | Keep the loading screen up for at least this many milliseconds. Levels load from disk much faster than from the PS1 CD, so without this it would only flash. `0` shows it only for as long as loading takes. |
-| `speed_display` | `on`, `off` | `off` | Show how fast Crash is moving horizontally in the top right corner, in the game's own speed units per second (the scale of its velocity values, where terminal falling speed is 750). It is measured from how far Crash actually moved each frame, so it reads 0 against a wall. |
+| `speed_display` | `on`, `off` | `off` | Show how fast Crash is moving in the top right corner: the horizontal speed, then the signed speed along the x, y (up) and z axes. These are in the game's own speed units per second (the scale of its velocity values, where terminal falling speed is 750), measured from how far Crash actually moved each frame, so they read 0 against a wall. |
 
 ## Structure
 Project structure is listed below, including descriptions for each file.
