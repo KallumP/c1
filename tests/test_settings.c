@@ -193,11 +193,11 @@ UTEST(settings, skip_splash_screens_on_and_off) {
   ASSERT_EQ(0, s.skip_splash_screens);
 }
 
-UTEST(settings, model_depth_buffer_is_on_by_default) {
+UTEST(settings, model_depth_buffer_is_off_by_default) {
   pc_settings s;
 
   SettingsReset(&s);
-  ASSERT_EQ(1, s.model_depth_buffer);
+  ASSERT_EQ(0, s.model_depth_buffer);
 }
 
 UTEST(settings, model_depth_buffer_on_and_off) {
