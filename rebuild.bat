@@ -1,5 +1,5 @@
 @echo off
-rem Rebuild c1 on Windows using MSYS2 MinGW32 (see README.md, "Windows (MSYS2)").
+rem Rebuild c1 on Windows using MSYS2 MinGW32 (see doc/building.md, "Windows (MSYS2)").
 rem
 rem   rebuild.bat          build whatever changed
 rem   rebuild.bat clean    remove all build output first, then build everything

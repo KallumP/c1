@@ -21,3 +21,5 @@ At the moment the game is only partially playable with a number of currently ide
 - [Settings](doc/settings.md): game settings in `settings.cfg`, such as the loading screen, speed display and skipping the splash screens
 - [Structure](doc/structure.md): what each file and directory in the project is for
 - [Contributing](doc/contributing.md): commit messages, pull requests and coding standards
+
+Further documentation, such as the [changelog](doc/changelog.md), known [issues](doc/issues.md) and descriptions of the game's files and functions, is in the [`doc`](doc) directory.
