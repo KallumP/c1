@@ -25,6 +25,7 @@
 - game freezes while the in-game GUI shows the object tree: removing a node only moved its first child to the parent, leaving the rest pointing at the freed node
 - game freezes while the in-game GUI shows the object tree: a node inserted after a sibling under a different parent was linked into that parent's children, corrupting the tree; it is now added last under its own parent
 - level loading screen never appeared on pc: the image was not converted from its palette and the frame was never shown. It is now drawn and kept up for at least 2 seconds, since levels load from disk much faster than from the ps1 cd
+- Crash drawn behind crates he is in front of, especially while jumping: his draw-order bias was dropped in the air (state flags masked with 0x18 instead of the original's 0x10), the object-below-Crash lookup read uninitialised values and treated an object as a floor node, and animated models were sorted by min/max vertex depth instead of the sum like the original
 
 ## 2022-12-28
 
