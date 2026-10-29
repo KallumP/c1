@@ -107,3 +107,67 @@ UTEST(speed_track, teleport_is_not_counted_as_movement) {
   /* tracking carries on from the new position */
   ASSERT_EQ(10u, SpeedTrack(&t, &crash, &moved_on, 1024));
 }
+
+UTEST(speed_axis, positive_movement) {
+  ASSERT_EQ(100, SpeedAxis(0, UNITS(100), 1024));
+}
+
+UTEST(speed_axis, negative_movement_is_negative) {
+  ASSERT_EQ(-100, SpeedAxis(UNITS(100), 0, 1024));
+}
+
+UTEST(speed_axis, divides_by_elapsed_ticks) {
+  ASSERT_EQ(200, SpeedAxis(0, UNITS(100), 512));
+}
+
+UTEST(speed_axis, zero_ticks_is_zero) {
+  ASSERT_EQ(0, SpeedAxis(0, UNITS(100), 0));
+}
+
+UTEST(speed_axis, large_moves_do_not_overflow) {
+  ASSERT_EQ(524287, SpeedAxis(-0x40000000, 0x3FFFFFFF, 1024));
+}
+
+UTEST(speed_track, records_speed_along_each_axis) {
+  speed_tracker t = { 0 };
+  int crash;
+  vec frame1 = { .x=0, .y=0, .z=0 };
+  vec frame2 = { .x=UNITS(30), .y=UNITS(5), .z=UNITS(-40) };
+
+  SpeedTrack(&t, &crash, &frame1, 1024);
+  ASSERT_EQ(50u, SpeedTrack(&t, &crash, &frame2, 1024));
+  ASSERT_EQ(30, t.x);
+  ASSERT_EQ(5, t.y);
+  ASSERT_EQ(-40, t.z);
+}
+
+UTEST(speed_track, axes_are_zero_on_first_frame_and_without_an_object) {
+  speed_tracker t = { 0 };
+  int crash;
+  vec frame1 = { .x=0, .y=0, .z=0 };
+  vec frame2 = { .x=UNITS(30), .y=UNITS(5), .z=UNITS(-40) };
+
+  SpeedTrack(&t, &crash, &frame1, 1024);
+  SpeedTrack(&t, &crash, &frame2, 1024);
+  SpeedTrack(&t, 0, 0, 1024);
+  ASSERT_EQ(0, t.x);
+  ASSERT_EQ(0, t.y);
+  ASSERT_EQ(0, t.z);
+  SpeedTrack(&t, &crash, &frame1, 1024);
+  ASSERT_EQ(0, t.x);
+  ASSERT_EQ(0, t.y);
+  ASSERT_EQ(0, t.z);
+}
+
+UTEST(speed_track, vertical_teleport_is_not_counted_as_movement) {
+  speed_tracker t = { 0 };
+  int crash;
+  vec checkpoint = { .x=0, .y=0, .z=0 };
+  vec respawned_above = { .x=UNITS(10), .y=UNITS(SPEED_TELEPORT+1), .z=0 };
+
+  SpeedTrack(&t, &crash, &checkpoint, 1024);
+  ASSERT_EQ(0u, SpeedTrack(&t, &crash, &respawned_above, 1024));
+  ASSERT_EQ(0, t.x);
+  ASSERT_EQ(0, t.y);
+  ASSERT_EQ(0, t.z);
+}

@@ -8,11 +8,13 @@
 #define SPEED_TELEPORT 5000
 
 typedef struct {
-  void *obj; /* object being tracked, or 0 */
-  vec prev;  /* its position last frame */
+  void *obj;       /* object being tracked, or 0 */
+  vec prev;        /* its position last frame */
+  int32_t x, y, z; /* its signed speed along each axis this frame */
 } speed_tracker;
 
 extern uint32_t SpeedMeasure(vec *prev, vec *cur, int32_t ticks);
+extern int32_t SpeedAxis(int32_t prev, int32_t cur, int32_t ticks);
 extern uint32_t SpeedTrack(speed_tracker *t, void *obj, vec *trans,
   int32_t ticks);
 
