@@ -4,6 +4,7 @@
 #include "soft.h"
 #include "pcgfx.h"
 #include "tex.h"
+#include "gldepth.h"
 #include "math.h"
 
 #define gte_divide(a,b) ((a)/(b))
@@ -431,7 +432,7 @@ void SwTransformSvtx(
       prim->uvs[ii]=uvs[ii];
     }
     prim->texid = texid;
-    prim->flags = info.semi_trans;
+    prim->flags = info.semi_trans | GL_PRIM_DEPTH;
     if (flag) {
       z_min=min(min(r_verts[0].z,r_verts[1].z),r_verts[2].z);
       z_max=max(max(r_verts[0].z,r_verts[1].z),r_verts[2].z);
@@ -533,7 +534,7 @@ void SwTransformCvtx(
       prim->uvs[ii]=uvs[ii];
     }
     prim->texid = texid;
-    prim->flags = info.semi_trans;
+    prim->flags = info.semi_trans | GL_PRIM_DEPTH;
     z_sum = r_verts[0].z+r_verts[1].z+r_verts[2].z;
     z_idx = far - ((z_sum/32)+idx_adj);
     z_idx = limit(z_idx, 0, 0x7FF);

@@ -18,4 +18,10 @@ static inline float GLDepthFromZ(int32_t z) {
   return 1.0f - ((float)GL_DEPTH_NEAR/(float)z);
 }
 
+/* prim flags bit marking a 3d model triangle for depth testing; the low 2 bits are the blend mode */
+#define GL_PRIM_DEPTH 4
+
+static inline int GLPrimDepthTested(int flags) { return (flags & GL_PRIM_DEPTH) != 0; }
+static inline int GLPrimBlendMode(int flags) { return flags & 3; }
+
 #endif /* _PC_GFX_GLDEPTH_H_ */

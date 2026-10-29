@@ -17,6 +17,7 @@ static PFNGLBLENDEQUATIONPROC pglBlendEquation;
 #include "pbak.h"
 #include "audio.h"
 #include "pc/gfx/tex.h"
+#include "pc/gfx/gldepth.h"
 #include "pc/time.h"
 
 #ifdef CFLAGS_GUI
@@ -239,7 +240,7 @@ void GLShowImage(dim2 *dim, uint8_t *buf) {
 
 void GLDrawPrims(void *data, int count) {
   poly3i *poly;
-  int i, ii, texid, flags;
+  int i, ii, texid, flags, mode;
 
   texid = -1;
   flags = 3;
@@ -252,10 +253,11 @@ void GLDrawPrims(void *data, int count) {
       glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     else
       glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    if (poly->flags != flags) {
-      if (poly->flags == 2) { glBlendEquation(GL_FUNC_REVERSE_SUBTRACT); }
+    mode = GLPrimBlendMode(poly->flags);
+    if (mode != flags) {
+      if (mode == 2) { glBlendEquation(GL_FUNC_REVERSE_SUBTRACT); }
       else if (flags == 2)  { glBlendEquation(GL_FUNC_ADD); }
-      switch (poly->flags) {
+      switch (mode) {
       case 0:
       case 3:
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -267,7 +269,7 @@ void GLDrawPrims(void *data, int count) {
         glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
         break;
       }
-      flags = poly->flags;
+      flags = mode;
     }
     if (poly->texid != texid) {
       if (poly->texid == -1) { glDisable(GL_TEXTURE_2D); }
@@ -363,8 +365,9 @@ static void GLConvertToTris(void *ot, poly3i **tris, int *count) {
     if (prim->type == 1) {
       *(poly3i*)dst = *(poly3i*)src;
 #ifdef CFLAGS_GFX_SW_PERSP
-      for (i=0;i<3;i++)
-        ((poly3i*)dst)->verts[i].z = -1;
+      if (!GLPrimDepthTested(((poly3i*)src)->flags)) /* model tris keep their depth */
+        for (i=0;i<3;i++)
+          ((poly3i*)dst)->verts[i].z = -1;
 #endif
       dst += sizeof(poly3i);
       ++(*count);
