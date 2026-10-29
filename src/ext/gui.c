@@ -683,14 +683,16 @@ static void GuiSpeedOverlay() {
   static speed_tracker crash_speed;
   gool_object *obj;
   uint32_t speed;
-  char text[32];
+  char text[96];
 
   if (!game_settings.speed_display) { return; }
   obj = game_state == GAME_STATE_PLAYING ? crash : 0;
   /* same frame time as GoolObjectPhysics, so open running matches velocity */
   speed = SpeedTrack(&crash_speed, obj, obj ? &obj->trans : 0,
     min(context.ticks_per_frame, 0x66));
-  snprintf(text, sizeof(text), "speed %u", speed);
+  /* total horizontal speed, then the signed speed along each axis (y is up) */
+  snprintf(text, sizeof(text), "speed %6u\nx     %6d\ny     %6d\nz     %6d",
+    speed, crash_speed.x, crash_speed.y, crash_speed.z);
   GuiIgCornerText(text);
 }
 
