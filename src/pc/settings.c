@@ -10,7 +10,7 @@ pc_settings game_settings = {
   .loading_screen_min_ms = 2000,
   .speed_display = 0,
   .skip_splash_screens = 0,
-  .model_depth_buffer = 1
+  .model_depth_buffer = 0
 };
 
 /* restore the default settings */
@@ -19,7 +19,7 @@ void SettingsReset(pc_settings *s) {
   s->loading_screen_min_ms = 2000;
   s->speed_display = 0;
   s->skip_splash_screens = 0;
-  s->model_depth_buffer = 1;
+  s->model_depth_buffer = 0;
 }
 
 /* parse "on"/"off" into flag; returns 0 for any other value */
