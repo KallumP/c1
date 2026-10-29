@@ -123,12 +123,14 @@ UTEST(settings, example_settings_file_matches_defaults) {
   game_settings.loading_screen_min_ms = defaults.loading_screen_min_ms + 1;
   game_settings.speed_display = !defaults.speed_display;
   game_settings.skip_splash_screens = !defaults.skip_splash_screens;
+  game_settings.model_depth_buffer = !defaults.model_depth_buffer;
   /* run from the project root */
-  ASSERT_EQ(4, SettingsLoad("settings.example.cfg"));
+  ASSERT_EQ(5, SettingsLoad("settings.example.cfg"));
   ASSERT_EQ(defaults.loading_screen, game_settings.loading_screen);
   ASSERT_EQ(defaults.loading_screen_min_ms, game_settings.loading_screen_min_ms);
   ASSERT_EQ(defaults.speed_display, game_settings.speed_display);
   ASSERT_EQ(defaults.skip_splash_screens, game_settings.skip_splash_screens);
+  ASSERT_EQ(defaults.model_depth_buffer, game_settings.model_depth_buffer);
   SettingsReset(&game_settings);
 }
 
@@ -189,4 +191,23 @@ UTEST(settings, skip_splash_screens_on_and_off) {
   ASSERT_EQ(0, s.skip_splash_screens);
   ASSERT_EQ(-1, SettingsParseLine("skip_splash_screens = yes", &s));
   ASSERT_EQ(0, s.skip_splash_screens);
+}
+
+UTEST(settings, model_depth_buffer_is_on_by_default) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, s.model_depth_buffer);
+}
+
+UTEST(settings, model_depth_buffer_on_and_off) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, SettingsParseLine("model_depth_buffer = off", &s));
+  ASSERT_EQ(0, s.model_depth_buffer);
+  ASSERT_EQ(1, SettingsParseLine("model_depth_buffer = on", &s));
+  ASSERT_EQ(1, s.model_depth_buffer);
+  ASSERT_EQ(-1, SettingsParseLine("model_depth_buffer = 1", &s));
+  ASSERT_EQ(1, s.model_depth_buffer);
 }
