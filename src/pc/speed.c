@@ -35,14 +35,28 @@ uint32_t SpeedMeasure(vec *prev, vec *cur, int32_t ticks) {
 }
 
 /*
- * track obj's position from frame to frame and return its speed this frame
- * (see SpeedMeasure). tracking restarts, returning 0, when obj changes or is
- * 0 (e.g. not in play), and when it jumps further than SPEED_TELEPORT allows
- * (e.g. respawning at a checkpoint).
+ * signed speed along one axis of a move from prev to cur over ticks, in the
+ * same units as SpeedMeasure. returns 0 if no time has passed.
+ */
+int32_t SpeedAxis(int32_t prev, int32_t cur, int32_t ticks) {
+  int64_t d;
+
+  if (ticks <= 0) { return 0; }
+  d = (int64_t)cur - prev;
+  return (int32_t)((d * 1024) / ((int64_t)ticks * 4096));
+}
+
+/*
+ * track obj's position from frame to frame and return its horizontal speed
+ * this frame (see SpeedMeasure), also recording its speed along each axis in
+ * t->x, t->y and t->z. tracking restarts, with every speed 0, when obj
+ * changes or is 0 (e.g. not in play), and when it jumps further than
+ * SPEED_TELEPORT allows horizontally or vertically (e.g. respawning).
  */
 uint32_t SpeedTrack(speed_tracker *t, void *obj, vec *trans, int32_t ticks) {
   uint32_t speed;
 
+  t->x = 0; t->y = 0; t->z = 0;
   if (!obj) {
     t->obj = 0;
     return 0;
@@ -53,7 +67,14 @@ uint32_t SpeedTrack(speed_tracker *t, void *obj, vec *trans, int32_t ticks) {
     return 0;
   }
   speed = SpeedMeasure(&t->prev, trans, ticks);
+  t->x = SpeedAxis(t->prev.x, trans->x, ticks);
+  t->y = SpeedAxis(t->prev.y, trans->y, ticks);
+  t->z = SpeedAxis(t->prev.z, trans->z, ticks);
   t->prev = *trans;
-  if (speed > SPEED_TELEPORT) { return 0; }
+  if (speed > SPEED_TELEPORT
+   || t->y > SPEED_TELEPORT || t->y < -SPEED_TELEPORT) {
+    t->x = 0; t->y = 0; t->z = 0;
+    return 0;
+  }
   return speed;
 }
