@@ -24,3 +24,16 @@ UTEST(gldepth, furthest_depth_is_below_1) {
 UTEST(gldepth, tolerance_pushes_depth_back) {
   ASSERT_LT(GLDepthFromZ(1000), GLDepthFromZ(1000 + GL_DEPTH_TOLERANCE));
 }
+
+UTEST(gldepth, marked_prim_is_depth_tested) {
+  ASSERT_TRUE(GLPrimDepthTested(GL_PRIM_DEPTH | 3));
+  ASSERT_FALSE(GLPrimDepthTested(3));
+}
+
+UTEST(gldepth, depth_mark_does_not_change_blend_mode) {
+  ASSERT_EQ(0, GLPrimBlendMode(GL_PRIM_DEPTH | 0));
+  ASSERT_EQ(1, GLPrimBlendMode(GL_PRIM_DEPTH | 1));
+  ASSERT_EQ(2, GLPrimBlendMode(2));
+  ASSERT_EQ(3, GLPrimBlendMode(GL_PRIM_DEPTH | 3));
+}
+
