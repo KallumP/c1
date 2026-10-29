@@ -14,6 +14,7 @@
 - game settings are loaded from `settings.cfg` at startup (ignored by git; `settings.example.cfg` lists the defaults): `loading_screen` turns the level loading screen on or off, and `loading_screen_min_ms` sets how long it stays up (default 2000)
 - `speed_display` setting (default off) to show how fast Crash is moving in the top right corner, as a horizontal speed and per-axis (x, y, z) speeds
 - `skip_splash_screens` setting (default off) to boot straight to the main menu, skipping the Sony, Universal and Naughty Dog screens
+- `model_depth_buffer` setting (default on): 3D models are depth tested against each other, so a model behind another (e.g. a crate behind Crash) can't be drawn over it
 
 ### Fixed
 
