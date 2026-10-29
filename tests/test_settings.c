@@ -121,10 +121,12 @@ UTEST(settings, example_settings_file_matches_defaults) {
   SettingsReset(&game_settings);
   game_settings.loading_screen = !defaults.loading_screen; /* so a match proves it was read */
   game_settings.loading_screen_min_ms = defaults.loading_screen_min_ms + 1;
+  game_settings.speed_display = !defaults.speed_display;
   /* run from the project root */
-  ASSERT_EQ(2, SettingsLoad("settings.example.cfg"));
+  ASSERT_EQ(3, SettingsLoad("settings.example.cfg"));
   ASSERT_EQ(defaults.loading_screen, game_settings.loading_screen);
   ASSERT_EQ(defaults.loading_screen_min_ms, game_settings.loading_screen_min_ms);
+  ASSERT_EQ(defaults.speed_display, game_settings.speed_display);
   SettingsReset(&game_settings);
 }
 
@@ -147,4 +149,23 @@ UTEST(settings, local_settings_file_is_valid) {
     EXPECT_NE(-1, SettingsParseLine(line, &s));
   }
   fclose(file);
+}
+
+UTEST(settings, speed_display_is_off_by_default) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(0, s.speed_display);
+}
+
+UTEST(settings, speed_display_on_and_off) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, SettingsParseLine("speed_display = on", &s));
+  ASSERT_EQ(1, s.speed_display);
+  ASSERT_EQ(1, SettingsParseLine("speed_display = off", &s));
+  ASSERT_EQ(0, s.speed_display);
+  ASSERT_EQ(-1, SettingsParseLine("speed_display = fast", &s));
+  ASSERT_EQ(0, s.speed_display);
 }

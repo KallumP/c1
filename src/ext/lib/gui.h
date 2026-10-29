@@ -182,7 +182,8 @@ extern gui_item *GuiGridNew(int column_count, int row_count);
 
 extern void GuiItem(gui_item *item);
 extern void GuiIgInit();
-extern void GuiIgDraw(gui_item *item);
+extern void GuiIgDraw(gui_item *item, void (*overlay)());
+extern void GuiIgCornerText(const char *text);
 extern void GuiIgNavEnableKeyboard();
 extern void GuiIgNavDisableKeyboard();
 extern int GuiIgKeyPressed(int key_code);

@@ -21,6 +21,7 @@ SRC =	src/ns.c \
 	src/pc/pad.c \
 	src/pc/config.c \
 	src/pc/settings.c \
+	src/pc/speed.c \
 	src/pc/loading.c \
 	src/pc/time.c \
 	src/pc/gfx/tex.c \
@@ -42,6 +43,7 @@ TEST_SRC = $(wildcard tests/*.c) \
 	src/pc/pad.c \
 	src/pc/config.c \
 	src/pc/settings.c \
+	src/pc/speed.c \
 	src/pc/loading.c \
 	src/pc/time.c \
 	src/ext/lib/gui.c \
