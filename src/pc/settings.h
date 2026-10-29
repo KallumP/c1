@@ -11,6 +11,7 @@ typedef struct {
   uint32_t loading_screen_min_ms; /* minimum time it is shown for */
   int speed_display;              /* show crash's speed in the top right */
   int skip_splash_screens;        /* boot straight to the main menu */
+  int model_depth_buffer;         /* depth test 3d models against each other */
 } pc_settings;
 
 extern pc_settings game_settings;
