@@ -1114,7 +1114,7 @@ void GfxTransformSvtx(svtx_frame *frame, void *ot, gool_object *obj) {
       obj->size + 0x800-(screen_proj/2),
       prims_tail,
       (rect28*)uv_map,
-      1,
+      0, /* orig passes 0 (sort by sum of vert zs) */
       &params);
 #endif
   }
