@@ -4,6 +4,8 @@ This is a port of the game *Crash Bandicoot* to C.
 
 The code is designed to compile for both psx and pc. At the moment only pc-specific code is working.
 
+This repository is a fork of [wurlyfox/c1](https://github.com/wurlyfox/c1), the original port by wurlyfox (with contributions from others, such as ManDude). The port itself, and the reverse engineering behind it, is their work.
+
 ## Status
 
 - Code - 100% ported
