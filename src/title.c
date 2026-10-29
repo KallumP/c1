@@ -61,6 +61,18 @@ int TitleLoadNextState() {
   title_once = 0;
   if (cur_lid != LID_TITLE) { return 0; }
   next_display_flags = (next_display_flags & ~GOOL_FLAG_DISPANIM_ALL) | GOOL_FLAG_DISPLAY_IMAGES;
+#ifndef PSX
+  if (title_not_seen && game_settings.skip_splash_screens) {
+    /* skip the scea/universal and naughty dog screens on first boot and go
+       straight to the main menu, as when returning to the title */
+    title_state = 5;
+    title->next_state = 5;
+    title->state = 5;
+    title->transition_state = 1;
+    TitleLoadState();
+    return 0;
+  }
+#endif
   if (!title_not_seen) { /* already saw the scea/universal screens? */
     switch (game_state) {
     case GAME_STATE_GAMEOVER:
