@@ -232,6 +232,16 @@ class CutLevel(unittest.TestCase):
         cut = nslevel.cut_level(self.level, [self.willc])
         self.assertEqual(2, len(cut.pages))  # one entry page, one texture page
 
+    def test_packed_pages_list_entries_in_bucket_order(self):
+        # NSPageUpdateEntries scans the page table forward from the bucket of
+        # a page's first entry to find the rest, so a page's entries have to
+        # be in bucket order
+        eids = [nslevel.str_to_eid(n) for n in ("zzzzZ", "aaaaA", "MMMMM", "00000")]
+        pages = nslevel.pack_entries([nslevel.Entry(e, 1, [b"x"]) for e in eids])
+        buckets = [nslevel.eid_bucket(e.eid) for e in pages[0].entries]
+        self.assertEqual(sorted(buckets), buckets)
+        self.assertEqual(set(eids), {e.eid for e in pages[0].entries})
+
     def test_packing_starts_a_new_page_when_one_is_full(self):
         big = [nslevel.Entry(nslevel.str_to_eid("Big%02d" % i), 1, [b"\0" * 40000])
                for i in range(3)]
