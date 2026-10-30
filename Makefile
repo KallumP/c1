@@ -40,6 +40,7 @@ SRC =	src/ns.c \
 
 # test sources (run with utest.h), plus the game sources they test
 TEST_SRC = $(wildcard tests/*.c) \
+	src/ns.c \
 	src/pc/pad.c \
 	src/pc/config.c \
 	src/pc/settings.c \
