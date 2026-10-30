@@ -2,9 +2,9 @@
 
 As of 30 October 2026, c1 no longer supports building for the PS1.
 
-c1 contained the code for a PS1 build alongside the PC one, selected with the `PSX` flag (`#ifdef PSX` branches, and `src/psx/` with the original's annotated assembly in `r3000a.s`). It couldn't be compiled for the PS1 the way the original game was: every shared source file failed with a compiler of the era, for the reasons below. So changes no longer keep the PS1 code compiling, and the `PSX` flag and PS1-specific code are being removed. This page records what was tried and why it failed.
+c1 contained the code for a PS1 build alongside the PC one, selected with the `PSX` flag (`#ifdef PSX` branches, and `src/psx/` with the original's annotated assembly in `r3000a.s`). It couldn't be compiled for the PS1 the way the original game was: every shared source file failed with a compiler of the era, for the reasons below. So the `PSX` flag and PS1-specific code were removed. This page records what was tried and why it failed.
 
-The last version with the PS1 code is tagged `psx-last` when it's removed. File names and examples below refer to the PS1 code as it was then.
+The last version with the PS1 code is tagged `psx-last`. File names and examples below refer to that version.
 
 ## What was tried
 
