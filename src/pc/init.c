@@ -13,6 +13,7 @@
 #include "pc/gfx/gl.h"
 #include "pc/time.h"
 #include "pc/settings.h"
+#include "pc/replay.h"
 
 #define WINDOW_WIDTH  1024
 #define WINDOW_HEIGHT 768
@@ -27,6 +28,7 @@ extern ns_struct ns;
 extern int done;
 extern eid_t insts[8];
 extern page_struct texture_pages[16];
+extern uint32_t seed_a;
 
 void SDLInit() {
   SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
@@ -143,6 +145,10 @@ int init() {
   callbacks.input = SDLInput;
   GLInit(&callbacks);
   sranda2();
+  if (game_settings.record_inputs) {
+    if (!ReplayStart(REPLAY_FILE, REPLAY_RECORD, LID_BOOTLEVEL, seed_a))
+      fprintf(stderr, "could not open %s to record inputs\n", REPLAY_FILE);
+  }
   for (i=1;i<4;i++)
     insts[i] = EID_NONE;
   for (i=0;i<16;i++)
@@ -152,6 +158,7 @@ int init() {
 }
 
 int _kill() {
+  ReplayStop();
   GLKill();
   SDLKill();
 }

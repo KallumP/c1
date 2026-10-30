@@ -68,5 +68,15 @@ void TimeAdvance(int32_t ticks) {
   fixed_ticks += ticks;
 }
 
+/*
+ * wait until a frame's worth of real time has passed since the last call,
+ * then move the fixed clock on that frame. a slow frame isn't made up for,
+ * so game time only ever moves a whole frame at a time
+ */
 void TimeWaitFrame(int32_t ticks) {
+  static int32_t real_stamp = 0;
+
+  while (GetTicks() - real_stamp < ticks);
+  real_stamp = GetTicks();
+  fixed_ticks += ticks;
 }
