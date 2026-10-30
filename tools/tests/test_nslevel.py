@@ -365,22 +365,30 @@ class World(unittest.TestCase):
         self.assertEqual(template[32:], header[32:])
 
 
+def slst_list(item):
+    length, type = struct.unpack_from("<HH", item, 0)
+    return type, list(struct.unpack_from("<%dH" % length, item, 4))
+
+
 class SortList(unittest.TestCase):
-    def test_full_lists_at_both_ends_and_empty_deltas_between(self):
+    # three polygons whose far edges (towards +z) are at z 100, 500 and 900;
+    # the camera moves along -z from 1000 to 600 in steps of 200
+    POLY_ZMAX = [100, 500, 900]
+    CAM_ZS = [1000, 800, 600]
+
+    def test_one_full_list_per_point_and_one_more_for_the_last(self):
+        items = nslevel.slst_items(self.POLY_ZMAX, self.CAM_ZS, step=200, near=50)
+        self.assertEqual(len(self.CAM_ZS) + 1, len(items))
+        self.assertEqual({0}, {slst_list(item)[0] for item in items})  # copied as is, either way
+
+    def test_each_point_lists_only_polygons_in_front_of_the_camera(self):
+        # in front for the whole step to the next point: zmax < cam z - step - near
+        items = nslevel.slst_items(self.POLY_ZMAX, self.CAM_ZS, step=200, near=50)
         ids = [nslevel.poly_id(0, i) for i in range(3)]
-        items = nslevel.slst_items(ids, path_length=4)
-        self.assertEqual(5, len(items))
-        for item in (items[0], items[4]):
-            length, type = struct.unpack_from("<HH", item, 0)
-            self.assertEqual((3, 0), (length, type))
-            self.assertEqual(ids, list(struct.unpack_from("<3H", item, 4)))
-        for item in items[1:4]:
-            length, type, split, swaps = struct.unpack_from("<HHHH", item, 0)
-            self.assertEqual(1, type & 1)
-            # nodes from the delta: split, swaps, then the removals (from 2),
-            # additions (from split) and swaps (from swaps), each ended by 0xFFFF
-            nodes = struct.unpack_from("<%dH" % length, item, 4)
-            self.assertEqual((0xFFFF, 0xFFFF, 0xFFFF), (nodes[2], nodes[split], nodes[swaps]))
+        self.assertEqual(ids[:2], slst_list(items[0])[1])  # 1000-250: 100 and 500
+        self.assertEqual(ids[:1], slst_list(items[1])[1])  # 800-250: 100
+        self.assertEqual([], slst_list(items[2])[1])       # 600-250: none
+        self.assertEqual(slst_list(items[2]), slst_list(items[3]))  # last point again
 
     def test_poly_id_layout(self):
         self.assertEqual((2 << 12) | 7, nslevel.poly_id(2, 7))
