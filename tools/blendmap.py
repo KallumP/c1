@@ -147,3 +147,99 @@ def solid_cells(mesh, size, cell):
                 if all(0 <= key[i] < counts[i] for i in range(3)) and cells.get(key) != "pit":
                     cells[key] = kind
     return cells
+
+
+# world meshes (wgeo): the faces, sliced along z so the sort list can drop
+# the pieces behind the camera a little at a time (see slst_items in
+# nslevel.py), split into meshes of at most WGEO_MAX vertices and polygons
+
+WGEO_MAX = 4096   # polygon and vertex indices are 12 bits
+WORLDS_MAX = 8    # world meshes in a zone
+FACING = 0.5      # a face whose normal's y is over this faces up (under -FACING, down)
+LIGHT = (0.3, 0.8, 0.5)  # towards the light: above, a little to the side and towards the camera
+LIGHT_LEN = sum(c * c for c in LIGHT) ** 0.5
+
+
+def shade(n):
+    """a face's vertex colour: grey, from 70 facing away from the light to
+    128 (full brightness) facing it"""
+    lit = max(0.0, sum(n[i] * LIGHT[i] for i in range(3)) / LIGHT_LEN)
+    level = int(round(128 * (0.55 + 0.45 * lit)))
+    return (level, level, level)
+
+
+def clip(points, axis, value, keep_above):
+    """the part of a convex polygon on one side of the plane where axis is
+    value. a cut point is worked out from the edge's ends in the same order
+    whichever way round the edge is, so two faces sharing an edge get
+    exactly the same point"""
+    out = []
+    for i, p in enumerate(points):
+        q = points[(i + 1) % len(points)]
+        p_in = p[axis] >= value if keep_above else p[axis] <= value
+        q_in = q[axis] >= value if keep_above else q[axis] <= value
+        if p_in:
+            out.append(p)
+        if p_in != q_in:
+            lo, hi = sorted((p, q))
+            t = (value - lo[axis]) / (hi[axis] - lo[axis])
+            cut = [lo[k] + (hi[k] - lo[k]) * t for k in range(3)]
+            cut[axis] = value
+            out.append(tuple(cut))
+    return out
+
+
+def slices(points, piece):
+    """a convex polygon cut by the planes z = multiples of piece"""
+    zs = [p[2] for p in points]
+    for k in range(int(min(zs) // piece), int(max(zs) // piece) + 1):
+        part = clip(clip(points, 2, k * piece, True), 2, (k + 1) * piece, False)
+        if len(part) >= 3:
+            yield part
+
+
+def snap(p):
+    return tuple(int(round(c / 8)) * 8 for c in p)
+
+
+def world_meshes(mesh, piece, ground, side):
+    """world meshes for a mesh's faces: a list of (vertices (x, y, z,
+    colour), polygons (a, b, c, tinf, tpag)), with ground (tinf, tpag) on
+    faces facing up and side on the rest. faces facing down aren't drawn,
+    since the camera looks down on the level and they would hide it"""
+    meshes = []
+    verts, polys, index = [], [], {}
+
+    def add(tri, texture):
+        nonlocal verts, polys, index
+        new = [v for v in tri if v not in index]
+        if len(verts) + len(set(new)) > WGEO_MAX or len(polys) + 1 > WGEO_MAX:
+            meshes.append((verts, polys))
+            verts, polys, index = [], [], {}
+        ids = []
+        for v in tri:
+            if v not in index:
+                index[v] = len(verts)
+                verts.append(v)
+            ids.append(index[v])
+        polys.append(tuple(ids) + texture)
+
+    for tri in mesh.tris:
+        n = normal(mesh, tri)
+        if n is None or n[1] < -FACING:
+            continue
+        texture = ground if n[1] > FACING else side
+        colour = shade(n)
+        for part in slices([mesh.verts[i] for i in tri.verts], piece):
+            part = [snap(p) for p in part]
+            for k in range(1, len(part) - 1):
+                a, b, c = part[0], part[k], part[k + 1]
+                if cross(sub(b, a), sub(c, a)) == (0, 0, 0):
+                    continue
+                add([v + (colour,) for v in (a, b, c)], texture)
+    if polys:
+        meshes.append((verts, polys))
+    if len(meshes) > WORLDS_MAX:
+        raise ValueError("the map needs %d world meshes, more than %d; use fewer faces"
+                         % (len(meshes), WORLDS_MAX))
+    return meshes

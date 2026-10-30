@@ -1,4 +1,4 @@
-﻿"""
+"""
 tests for tools/blendmap.py
 
 run from the project root: python -m unittest discover -s tools/tests
@@ -216,8 +216,8 @@ class WorldMeshes(unittest.TestCase):
                              [blendmap.Tri((0, 2, 1), None, None), blendmap.Tri((0, 1, 3), None, None)])
         [(verts, polys)] = worlds(mesh)
 
-        def on_edge(v):
-            return v[2] * 512 == v[0] * 1000
+        def on_edge(v):  # within the rounding to multiples of 8
+            return abs(v[2] * 512 - v[0] * 1000) <= 8 * 1000
 
         sides = [set(), set()]
         for p in polys:
