@@ -321,6 +321,82 @@ class Zone(unittest.TestCase):
         self.assertEqual(0, len(p) % 4)
 
 
+def octree_cells(rect):
+    """solid leaves of a zone's octree as (x, y, z, w, h, d, value) in zone
+    units relative to the zone, walked the way ZoneQueryOctreeR does"""
+    _, _, _, zw, zh, zd = struct.unpack_from("<iiiIII", rect, 0)
+    root, mdx, mdy, mdz = struct.unpack_from("<4H", rect, 28)
+    cells = []
+
+    def walk(node, level, x, y, z, w, h, d):
+        if node == 0:
+            return
+        if node & 1:
+            cells.append((x, y, z, w, h, d, node >> 1))
+            return
+        fx, fy, fz = level < mdx, level < mdy, level < mdz
+        sw, sh, sd = (w // 2 if fx else w), (h // 2 if fy else h), (d // 2 if fz else d)
+        children = struct.unpack_from("<%dH" % ((1 + fx) * (1 + fy) * (1 + fz)), rect, node)
+        idx = 0
+        for i in range(1 + fx):
+            for j in range(1 + fy):
+                for k in range(1 + fz):
+                    walk(children[idx], level + 1, x + i * sw, y + j * sh, z + k * sd, sw, sh, sd)
+                    idx += 1
+    walk(root, 0, 0, 0, 0, zw, zh, zd)
+    return cells
+
+
+def grid_cells(cells, cell):
+    """the cell sized grid squares that solid leaves cover"""
+    out = set()
+    for x, y, z, w, h, d, _ in cells:
+        for i in range(x, x + w, cell):
+            for j in range(y, y + h, cell):
+                for k in range(z, z + d, cell):
+                    out.add((i, j, k))
+    return out
+
+
+def block_cells(blocks, cell):
+    out = set()
+    for x0, y0, z0, x1, y1, z1 in blocks:
+        for i in range(x0, x1, cell):
+            for j in range(y0, y1, cell):
+                for k in range(z0, z1, cell):
+                    out.add((i, j, k))
+    return out
+
+
+class BlockOctree(unittest.TestCase):
+    SIZE = (2048, 1024, 4096)
+    BLOCKS = [(0, 0, 0, 2048, 256, 1024),        # ground at the start
+              (0, 0, 1536, 2048, 256, 4096),     # ground after a gap
+              (512, 256, 2048, 1024, 512, 2560)]  # a step on it
+
+    def test_solid_cells_are_exactly_the_blocks(self):
+        rect = nslevel.blocks_rect_bytes((10, 20, 30), self.SIZE, self.BLOCKS, cell=128)
+        self.assertEqual((10, 20, 30) + self.SIZE, struct.unpack_from("<iiiIII", rect, 0))
+        cells = octree_cells(rect)
+        self.assertEqual(block_cells(self.BLOCKS, 128), grid_cells(cells, 128))
+        self.assertEqual({0}, {c[6] for c in cells})  # plain ground
+
+    def test_solid_leaves_are_small_enough_to_query(self):
+        rect = nslevel.blocks_rect_bytes((0, 0, 0), self.SIZE, self.BLOCKS, cell=128)
+        for x, y, z, w, h, d, _ in octree_cells(rect):
+            self.assertLessEqual(w, nslevel.FLOOR_CELL_MAX)
+            self.assertLessEqual(d, nslevel.FLOOR_CELL_MAX)
+
+    def test_identical_parts_are_shared_so_it_stays_small(self):
+        big = (4096, 4096, 8192)
+        rect = nslevel.blocks_rect_bytes((0, 0, 0), big, [(0, 0, 0, 4096, 384, 8192)], cell=128)
+        self.assertLess(len(rect), 4096)
+
+    def test_blocks_must_be_on_the_grid(self):
+        with self.assertRaises(ValueError):
+            nslevel.blocks_rect_bytes((0, 0, 0), self.SIZE, [(0, 0, 0, 100, 128, 128)], cell=128)
+
+
 def decode_vertex(data):
     """(x, y, z, r, g, b) the way SwTransformWorlds reads a wgeo vertex"""
     def sx(v, bits):

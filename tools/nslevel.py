@@ -384,6 +384,10 @@ def floor_rect_bytes(x, y, z, w, h, d, depth):
     return pad4(data)
 
 
+def blocks_rect_bytes(origin, size, blocks, cell):
+    return b""
+
+
 def floor_top(h, depth):
     return h >> depth
 
