@@ -933,8 +933,8 @@ MAP_HEADROOM = 1024    # room above the map
 
 def cell_blocks(cells, cell):
     """blocks (see blocks_rect_bytes) for collision cells ({(i, j, k):
-    "ground" or "pit"})"""
-    leaves = {"ground": LEAF_FLOOR, "pit": LEAF_PIT}
+    "floor", "wall" or "pit"})"""
+    leaves = {"floor": LEAF_FLOOR, "wall": LEAF_GROUND, "pit": LEAF_PIT}
     return [(i * cell, j * cell, k * cell, (i + 1) * cell, (j + 1) * cell, (k + 1) * cell, leaves[kind])
             for (i, j, k), kind in cells.items()]
 
@@ -954,7 +954,7 @@ def make_map(level, text, scale=MAP_SCALE, turn=0):
     struct.pack_into("<3h", crash, ENTITY_POINTS, start[0] // 4, (start[1] + 100) // 4, start[2] // 4)
     step = MAP_PATH_STEP
     while True:
-        points = blendmap.camera_path(mesh, cells, fit.size, COURSE_CELL, start, step)
+        points = blendmap.camera_path(cells, fit.size, COURSE_CELL, start, step)
         try:
             return assemble_level(level, t, "BMap", fit.size, cell_blocks(cells, COURSE_CELL), worlds,
                                   points, step, [bytes(crash)])

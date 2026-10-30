@@ -150,30 +150,26 @@ def inside(key, size, cell):
     return all(0 <= key[i] < size[i] // cell for i in range(3))
 
 
+RANK = {"wall": 0, "floor": 1, "pit": 2}  # which kind a cell is where kinds share it
+
+
 def solid_cells(mesh, size, cell):
-    """{(i, j, k): "ground" or "pit"}: the cells just behind each face.
-    faces of objects named pit... are deadly, and win where they share a
-    cell with ground. cells outside the zone (size w, h, d) are left out"""
+    """{(i, j, k): kind}: the cells just behind each face, "floor" behind
+    faces facing up, "pit" behind the faces of objects named pit..., and
+    "wall" behind the rest, except faces facing down: the game never stops
+    a jump at a ceiling in the octree (see FindCeilY in src/solid.c), so
+    crash would jump through it and land on top. pit wins over floor, and
+    floor over wall, where they share a cell. cells outside the zone (size
+    w, h, d) are left out"""
     cells = {}
     for tri in mesh.tris:
         n = normal(mesh, tri)
-        if n is None or is_spawn(tri):
+        if n is None or n[1] < -FACING or is_spawn(tri):
             continue
-        kind = "pit" if is_pit(tri) else "ground"
+        kind = "pit" if is_pit(tri) else "floor" if n[1] > FACING else "wall"
         for key in behind(mesh, tri, n, cell):
-            if inside(key, size, cell) and cells.get(key) != "pit":
+            if inside(key, size, cell) and RANK[kind] >= RANK[cells.get(key, "wall")]:
                 cells[key] = kind
-    return cells
-
-
-def floor_cells(mesh, size, cell):
-    """the cells just behind faces facing up: somewhere to stand, unlike
-    the top of a wall"""
-    cells = set()
-    for tri in mesh.tris:
-        n = normal(mesh, tri)
-        if n is not None and n[1] > FACING and not is_spawn(tri):
-            cells |= {key for key in behind(mesh, tri, n, cell) if inside(key, size, cell)}
     return cells
 
 
@@ -282,10 +278,10 @@ CAM_EDGE = 200            # how far in from the zone's ends the camera path stay
 HEADROOM = 2              # empty cells crash needs above the ground to start on it
 
 
-def ground_tops(cells, floors, i, k, cell, headroom=1):
+def ground_tops(cells, i, k, cell, headroom=1):
     """the tops of the floor cells in column (i, k) with headroom empty
     cells above them, lowest first"""
-    js = sorted(j for (ci, j, ck) in floors if ci == i and ck == k)
+    js = sorted(j for (ci, j, ck), kind in cells.items() if ci == i and ck == k and kind == "floor")
     return [(j + 1) * cell for j in js
             if not any((i, j + h, k) in cells for h in range(1, headroom + 1))]
 
@@ -295,38 +291,36 @@ def spawn(mesh, cells, size, cell):
     object named spawn..., or without one, on the ground nearest the start
     of the route (the +z end), nearest the middle across"""
     marker = {i for tri in mesh.tris if is_spawn(tri) for i in tri.verts}
-    floors = floor_cells(mesh, size, cell)
-    columns = {(i, k) for i, _, k in floors}
+    columns = {(i, k) for (i, _, k), kind in cells.items() if kind == "floor"}
     if marker:
         x = sum(mesh.verts[i][0] for i in marker) / len(marker)
         z = sum(mesh.verts[i][2] for i in marker) / len(marker)
         bottom = min(mesh.verts[i][1] for i in marker)
-        tops = [t for t in ground_tops(cells, floors, int(x // cell), int(z // cell), cell)
+        tops = [t for t in ground_tops(cells, int(x // cell), int(z // cell), cell)
                 if t <= bottom + cell]
         if not tops:
             raise ValueError("there's no ground below the spawn object")
         return (int(round(x)), tops[-1], int(round(z)))
     middle = (min(i for i, _ in columns) + max(i for i, _ in columns) + 1) * cell / 2 if columns else 0
     for i, k in sorted(columns, key=lambda c: (-c[1], abs((c[0] + 0.5) * cell - middle))):
-        tops = ground_tops(cells, floors, i, k, cell, HEADROOM)
+        tops = ground_tops(cells, i, k, cell, HEADROOM)
         if tops:
             return (i * cell + cell // 2, tops[-1], k * cell + cell // 2)
     raise ValueError("the map has no ground for crash to start on")
 
 
-def camera_path(mesh, cells, size, cell, start, step):
+def camera_path(cells, size, cell, start, step):
     """camera path points (x, y, z), step apart along -z from behind crash's
     start to the far end of the zone, CAM_OFFSET above the ground CAM_LEAD
     ahead of each point (the ground nearest the last height, which is kept
     over gaps), along crash's start x"""
     x, height, z = start
     i = x // cell
-    floors = floor_cells(mesh, size, cell)
     first = min(z + CAM_LEAD, size[2] - CAM_EDGE)
     points = []
     for cz in range(first, CAM_EDGE, -step):
         k = (cz - CAM_LEAD) // cell
-        tops = ground_tops(cells, floors, i, k, cell) if k >= 0 else []
+        tops = ground_tops(cells, i, k, cell) if k >= 0 else []
         if tops:
             height = min(tops, key=lambda t: abs(t - height))
         points.append((x + CAM_OFFSET[0], height + CAM_OFFSET[1], cz))
