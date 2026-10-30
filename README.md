@@ -1,10 +1,10 @@
 # C1
 
-This is a port of the game *Crash Bandicoot* to C.
+This is a port of the game *Crash Bandicoot* to C. Added quality of life improvements, and packed with new features.
 
-The code was designed to compile for both psx and pc. As of 30 October 2026, this fork no longer supports building for the PS1 and only builds for pc; see [PS1 build](doc/psx-build.md) for why.
+The code was originally designed to compile for both psx and pc. As of 30 October 2026, this fork no longer supports building for the PS1 and only builds for pc; see [PS1 build](doc/psx-build.md) for why.
 
-This repository is a fork of [wurlyfox/c1](https://github.com/wurlyfox/c1), the original port by wurlyfox (with contributions from others, such as ManDude). The port itself, and the reverse engineering behind it, is their work.
+This repository is a fork of [wurlyfox/c1](https://github.com/wurlyfox/c1), the original port by wurlyfox (with contributions from others, such as ManDude). The port itself, and the reverse engineering behind it, is their work. The original repo has not been touched since 2024, so can act as its successor
 
 ## Status
 
