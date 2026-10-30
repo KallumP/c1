@@ -545,6 +545,21 @@ class Spawn(unittest.TestCase):
             blendmap.spawn(blendmap.Mesh([], []), {}, self.SIZE, 128)
 
 
+class ZonePaths(unittest.TestCase):
+    SPANS = [(32768, 49152), (16384, 32768), (0, 16384)]
+
+    def test_each_point_goes_to_the_zone_crash_is_in_relative_to_it(self):
+        # crash is CAM_LEAD ahead (-z) of the camera, as on n. sanity beach
+        lead = blendmap.CAM_LEAD
+        points = [(1, 2, 40000), (1, 2, 32768 + lead), (1, 2, 32767 + lead), (1, 2, 1000)]
+        self.assertEqual([[(1, 2, 40000 - 32768), (1, 2, lead)], [(1, 2, 16383 + lead)], [(1, 2, 1000)]],
+                         blendmap.zone_paths(points, self.SPANS))
+
+    def test_zones_before_the_start_have_no_points(self):
+        self.assertEqual([[], [(1, 2, 20000 - 16384)], [(1, 2, 1000)]],
+                         blendmap.zone_paths([(1, 2, 20000), (1, 2, 1000)], self.SPANS))
+
+
 class CameraPath(unittest.TestCase):
     SIZE = (2048, 4096, 8192)
 

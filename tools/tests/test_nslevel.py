@@ -630,6 +630,14 @@ class SortList(unittest.TestCase):
         self.assertEqual(1460, len(ids))
         self.assertEqual(1000, sum(1 for i in ids if i >> 12 == 1))  # all of the nearer world
 
+    def test_a_zones_list_takes_in_the_next_zones_meshes(self):
+        # the next zone is further along -z, so its meshes are offset by -16384
+        # in this zone's frame, and come first, being farther
+        verts = [(0, 0, 1000, None), (8, 0, 1000, None), (0, 0, 1008, None)]
+        listed = [(verts, [(0, 1, 2)], 0), (verts, [(0, 1, 2)], -16384)]
+        items = nslevel.zone_slst_items(listed, [3000], step=200)
+        self.assertEqual([nslevel.poly_id(1, 0), nslevel.poly_id(0, 0)], slst_words(items[0])[2])
+
     def test_poly_id_layout(self):
         self.assertEqual((2 << 12) | 7, nslevel.poly_id(2, 7))
 
