@@ -94,7 +94,7 @@ class Fit(unittest.TestCase):
         self.assertEqual((1000, 16, 16), fit.mesh.verts[2])
 
     def test_each_side_is_a_power_of_two_cells(self):
-        fit = blendmap.fit(box_mesh(0, 0, 0, 1000, 129, 5000), cell=128, headroom=0)
+        fit = blendmap.fit(box_mesh(0, 0, 0, 1000, 140, 5000), cell=128, headroom=0)
         self.assertEqual((1024, 256, 8192), fit.size)
 
     def test_headroom_is_added_above(self):

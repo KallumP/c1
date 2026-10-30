@@ -63,3 +63,32 @@ def read_obj(text, scale, turn=0):
             for k in range(1, len(idx) - 1):
                 tris.append(Tri((idx[0], idx[k], idx[k + 1]), obj, mat))
     return Mesh(verts, tris)
+
+
+VERTEX_MAX = 32760  # world mesh vertices are 13 bits of multiples of 8 (src/formats/wgeo.h)
+
+
+class Fit:
+    """a mesh moved into a zone: mesh (vertices in zone units relative to
+    the zone, on multiples of 8), the zone's size (w, h, d) and the offset
+    the mesh was moved by (where the zone's corner was in the mesh)"""
+    def __init__(self, mesh, size, offset):
+        self.mesh, self.size, self.offset = mesh, size, offset
+
+
+def fit(mesh, cell, headroom):
+    """mesh moved so its lowest corner is the zone's, with each side of the
+    zone a power of two cells, and headroom (zone units) above it"""
+    lo = [min(v[i] for v in mesh.verts) for i in range(3)]
+    verts = [tuple(int(round((v[i] - lo[i]) / 8)) * 8 for i in range(3)) for v in mesh.verts]
+    size = []
+    for i in range(3):
+        extent = max(v[i] for v in verts)
+        if extent > VERTEX_MAX:
+            raise ValueError("the map is %d zone units along %s, more than %d; scale it down"
+                             % (extent, "xyz"[i], VERTEX_MAX))
+        side = cell
+        while side < extent + (headroom if i == 1 else 0):
+            side *= 2
+        size.append(side)
+    return Fit(Mesh(verts, mesh.tris), tuple(size), tuple(lo))
