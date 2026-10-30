@@ -73,15 +73,16 @@ class ReadObj(unittest.TestCase):
 
 
 class ReadMtl(unittest.TestCase):
+    ABSOLUTE = os.path.abspath("wall tiles.png")
     MTL = """# Blender MTL File
 newmtl floor
 Kd 0.8 0.8 0.8
 map_Kd textures/floor.png
 newmtl wall
-map_Kd -s 2 2 1 C:\maps\wall tiles.png
+map_Kd -s 2 2 1 %s
 newmtl plain
 Kd 1 0 0
-"""
+""" % ABSOLUTE
 
     def test_reads_each_materials_image_relative_to_the_mtl(self):
         images = blendmap.read_mtl(self.MTL, os.path.join("maps", "x"))
@@ -89,15 +90,13 @@ Kd 1 0 0
 
     def test_options_before_the_image_are_skipped_and_absolute_paths_kept(self):
         images = blendmap.read_mtl(self.MTL, "maps")
-        self.assertEqual("C:\maps\wall tiles.png", images["wall"])
+        self.assertEqual(self.ABSOLUTE, images["wall"])
 
     def test_materials_without_an_image_are_left_out(self):
         self.assertNotIn("plain", blendmap.read_mtl(self.MTL, "maps"))
 
     def test_obj_lists_its_material_libraries(self):
-        mesh = blendmap.read_obj("mtllib level.mtl
-v 0 0 0
-", scale=1)
+        mesh = blendmap.read_obj("mtllib level.mtl\nv 0 0 0\n", scale=1)
         self.assertEqual(["level.mtl"], mesh.mtllibs)
 
 
