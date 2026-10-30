@@ -297,6 +297,14 @@ class Zone(unittest.TestCase):
         self.assertEqual((0, 0), struct.unpack_from("<ii", h, nslevel.ZONE_LOADLIST))
         self.assertEqual(nslevel.EID_NONE, struct.unpack_from("<I", h, nslevel.ZONE_MIDI)[0])
 
+    def test_zone_header_lists_itself_then_its_neighbors(self):
+        # as on n. sanity beach: itself, the zone before, the zone after
+        self_eid, before, after = (nslevel.str_to_eid(n) for n in ("Bm01Z", "Bm00Z", "Bm02Z"))
+        h = nslevel.zone_header_bytes(bytes(nslevel.ZONE_HEADER_SIZE), self_eid, [], path_count=1,
+                                      entity_count=0, neighbors=[before, after])
+        self.assertEqual(3, struct.unpack_from("<I", h, nslevel.ZONE_PATHS_IDX + 12)[0])
+        self.assertEqual((self_eid, before, after, 0), struct.unpack_from("<4I", h, nslevel.ZONE_NEIGHBORS))
+
     def test_load_list_opens_every_texture_page(self):
         # a zone's texture pages are only put in vram when its load list
         # opens them (LevelUpdate, NSPageOpen)
