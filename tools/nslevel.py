@@ -337,6 +337,7 @@ ZONE_HEADER_SIZE = 888
 
 OCTREE_NODES = 36    # zone_rect: x y z w h d unk, then root and max depths
 LEAF_GROUND = 1      # leaf (low bit) with value 0: plain solid ground
+LEAF_PIT = (11 << 4) | 1  # leaf with subtype 11: kills what falls on it (ProcessNode in src/solid.c)
 FLOOR_CELL_MAX = 1024  # largest floor cell (zone units); see floor_rect_bytes
 
 
@@ -598,12 +599,35 @@ def slst_items(poly_zmax, cam_zs, step, near):
     return items + [items[-1]]
 
 
+# entities (zone_entity in src/formats/zdat.h): parent zone, spawn flags,
+# group, id, point count, 3 init flags, type, subtype, then the points, in
+# units of 4 zone units relative to the zone
+ENTITY_ID = 8
+ENTITY_POINT_COUNT = 10
+ENTITY_TYPE = 18
+ENTITY_POINTS = 20
+ENTITY_ID_MAX = 303  # ids index the spawn table (GOOL_SPAWN_COUNT in src/gool.h)
+
+
 def entity_type(item):
-    return 0, 0
+    """an entity's type (its exec map slot) and subtype"""
+    return item[ENTITY_TYPE], item[ENTITY_TYPE + 1]
 
 
 def place_entity(item, entity_id, pos):
-    return item
+    """a copy of a real entity with a new id, moved so its first point is at
+    pos (zone units relative to the zone); a path (such as a crab's patrol)
+    keeps its shape"""
+    if not 0 < entity_id <= ENTITY_ID_MAX:
+        raise ValueError("entity id %d is outside 1..%d" % (entity_id, ENTITY_ID_MAX))
+    data = bytearray(item)
+    count = struct.unpack_from("<H", data, ENTITY_POINT_COUNT)[0]
+    points = [struct.unpack_from("<3h", data, ENTITY_POINTS + 6 * i) for i in range(count)]
+    offset = [pos[i] // 4 - points[0][i] for i in range(3)]
+    for i, point in enumerate(points):
+        struct.pack_into("<3h", data, ENTITY_POINTS + 6 * i, *(point[a] + offset[a] for a in range(3)))
+    struct.pack_into("<H", data, ENTITY_ID, entity_id)
+    return bytes(data)
 
 
 # the mock level

@@ -392,6 +392,14 @@ class BlockOctree(unittest.TestCase):
         rect = nslevel.blocks_rect_bytes((0, 0, 0), big, [(0, 0, 0, 4096, 384, 8192)], cell=128)
         self.assertLess(len(rect), 4096)
 
+    def test_blocks_can_have_their_own_leaf_value(self):
+        pit = (0, 0, 1024, 2048, 128, 1536, nslevel.LEAF_PIT)
+        rect = nslevel.blocks_rect_bytes((0, 0, 0), self.SIZE, self.BLOCKS + [pit], cell=128)
+        cells = octree_cells(rect)
+        pit_cells = {c for c in grid_cells([c for c in cells if c[6] == nslevel.LEAF_PIT >> 1], 128)}
+        self.assertEqual(block_cells([pit[:6]], 128), pit_cells)
+        self.assertEqual(11, ((nslevel.LEAF_PIT & 0x3F0) >> 4))  # subtype 11: fall kill (ProcessNode)
+
     def test_blocks_must_be_on_the_grid(self):
         with self.assertRaises(ValueError):
             nslevel.blocks_rect_bytes((0, 0, 0), self.SIZE, [(0, 0, 0, 100, 128, 128)], cell=128)
