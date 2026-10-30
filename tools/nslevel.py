@@ -258,6 +258,23 @@ def write_level(level, out_dir, name):
         f.write(nsd_bytes(level.nsd, level.pages))
 
 
+# exec map slots CoreObjectsCreate opens for every normal level: crash,
+# fruit, hud, DoctC, shadow and boxes (src/main.c)
+CORE_EXEC_SLOTS = [0, 3, 4, 5, 29, 34]
+
+
+def references(entry, eids):
+    return set()
+
+
+def pack_entries(entries):
+    return []
+
+
+def cut_level(level, keep):
+    return level
+
+
 def type_name(etype):
     return TYPE_NAMES.get(etype, str(etype))
 

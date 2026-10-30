@@ -181,9 +181,78 @@ class WriteLevel(unittest.TestCase):
             nslevel.entry_page_bytes([big], 0)
 
 
+def entry_page(entries):
+    return nslevel.Page(nslevel.PAGE_ENTRIES, entries=entries)
+
+
+def words(*eids):
+    return struct.pack("<%dI" % len(eids), *eids)
+
+
+class CutLevel(unittest.TestCase):
+    """a level where WillC uses a model, which uses a texture page; a zone
+    uses its own world mesh; nothing uses the beach object"""
+    def setUp(self):
+        self.willc = EID_WILLC
+        self.model = nslevel.str_to_eid("Mdl0G")
+        self.tex = nslevel.str_to_eid("TexP1")
+        self.zone = nslevel.str_to_eid("a5_9Z")
+        self.world = nslevel.str_to_eid("a5_9W")
+        self.beach = nslevel.str_to_eid("BeaOC")
+        pages = [
+            entry_page([nslevel.Entry(self.willc, 11, [b"head", words(0x10, self.model)]),
+                        nslevel.Entry(self.model, 2, [words(self.tex, 7)])]),
+            entry_page([nslevel.Entry(self.zone, 7, [words(self.world)]),
+                        nslevel.Entry(self.world, 3, [b"mesh"]),
+                        nslevel.Entry(self.beach, 11, [b"beach"])]),
+            nslevel.Page(nslevel.PAGE_TEXTURE, eid=self.tex, data=make_texture_page(self.tex)),
+        ]
+        nsd = nslevel.read_nsd(make_nsd([], 9, self.zone, [self.willc, self.beach]))
+        self.level = nslevel.Level(nsd, pages)
+
+    def eids(self, level):
+        found = {e.eid for p in level.pages for e in p.entries}
+        return found | {p.eid for p in level.pages if p.type == nslevel.PAGE_TEXTURE}
+
+    def test_references_are_eids_in_an_entrys_items(self):
+        entry = nslevel.Entry(self.willc, 11, [b"head", words(0x10, self.model, self.zone)])
+        self.assertEqual({self.model, self.zone},
+                         nslevel.references(entry, {self.model, self.zone, self.beach}))
+
+    def test_keeps_what_the_kept_executables_use_and_drops_the_rest(self):
+        cut = nslevel.cut_level(self.level, [self.willc])
+        self.assertEqual({self.willc, self.model, self.tex}, self.eids(cut))
+
+    def test_exec_map_keeps_only_kept_executables(self):
+        cut = nslevel.cut_level(self.level, [self.willc])
+        self.assertEqual(self.willc, cut.nsd.ldat.exec_map[0])
+        self.assertEqual(nslevel.EID_NONE, cut.nsd.ldat.exec_map[1])
+
+    def test_kept_entries_are_packed_into_fewer_pages(self):
+        cut = nslevel.cut_level(self.level, [self.willc])
+        self.assertEqual(2, len(cut.pages))  # one entry page, one texture page
+
+    def test_packing_starts_a_new_page_when_one_is_full(self):
+        big = [nslevel.Entry(nslevel.str_to_eid("Big%02d" % i), 1, [b"\0" * 40000])
+               for i in range(3)]
+        pages = nslevel.pack_entries(big)
+        self.assertEqual(3, len(pages))
+        self.assertEqual(big, [e for p in pages for e in p.entries])
+
+
 @unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
                      "needs N. Sanity Beach in streams/")
 class RealLevel(unittest.TestCase):
+    def test_cut_n_sanity_beach_keeps_crash_and_the_hud_only(self):
+        level = nslevel.read_level(STREAMS, 9)
+        cut = nslevel.cut_level(level, [level.nsd.ldat.exec_map[i] for i in nslevel.CORE_EXEC_SLOTS])
+        counts = nslevel.count_by_type(cut.pages)
+        for name in ("ZDAT", "WGEO", "SLST", "MIDI"):
+            self.assertNotIn(name, counts)
+        gools = {nslevel.eid_to_str(e.eid) for p in cut.pages for e in p.entries if e.type == 11}
+        self.assertTrue({"WillC", "DispC", "FruiC", "ShadC", "BoxsC", "DoctC"} <= gools, gools)
+        self.assertNotIn("BeaOC", gools)
+        self.assertLess(len(cut.pages), len(level.pages))
     def test_copy_of_n_sanity_beach_has_the_same_entries(self):
         level = nslevel.read_level(STREAMS, 9)
         out = os.path.join(TOOLS, "..", "build", "test_custom_levels")
