@@ -8,7 +8,7 @@
 
 ### Fixed
 
-- landing on the warp pad at the end of a level went straight to the level end screen without Crash's 'win level' animation. Before the animation, Crash's code checks there are enough free pages to load it, and the count of pages it needs started from an uninitialised value, so it was usually judged too big and the animation was skipped
+- landing on the warp pad at the end of a level skipped Crash's 'win level' animation and went straight to the level end screen
 
 ## 2026-10-28
 
