@@ -5,8 +5,7 @@
 #include <time.h>
 #include "common.h"
 
-#define REPLAY_FILE  "inputs.rec"
-#define REPLAY_DIR   "recorded_inputs"
+#define REPLAY_DIR   "recorded_inputs" /* one file per run, named by start time */
 #define REPLAY_MAGIC 0x31434552 /* "REC1" */
 
 /* state needed to start a level the same way again */

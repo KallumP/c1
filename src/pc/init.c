@@ -128,6 +128,35 @@ static void FindDataDir() {
   SDL_free(base);
 }
 
+/*
+ * replay the newest recording if replay_inputs is on, otherwise record this
+ * run to a new file in recorded_inputs, named by its start time
+ */
+static void InitReplay() {
+  char path[256];
+  time_t now;
+
+  if (game_settings.replay_inputs) {
+    if (!ReplayNewestFile(REPLAY_DIR, path, sizeof(path)))
+      fprintf(stderr, "no recordings in %s/ to replay\n", REPLAY_DIR);
+    else if (ReplayStart(path, REPLAY_PLAY, LID_BOOTLEVEL, seed_a)) {
+      fprintf(stderr, "replaying %s\n", path);
+      TimeSetSpeed(game_settings.replay_speed);
+    }
+    else
+      fprintf(stderr, "could not replay %s\n", path);
+    return;
+  }
+  if (!ReplayMakeDir(REPLAY_DIR)) {
+    fprintf(stderr, "could not make %s/ to record inputs\n", REPLAY_DIR);
+    return;
+  }
+  now = time(0);
+  ReplayFileName(path, sizeof(path), REPLAY_DIR, localtime(&now));
+  if (!ReplayStart(path, REPLAY_RECORD, LID_BOOTLEVEL, seed_a))
+    fprintf(stderr, "could not open %s to record inputs\n", path);
+}
+
 int init() {
   gl_callbacks callbacks;
   int i;
@@ -145,16 +174,7 @@ int init() {
   callbacks.input = SDLInput;
   GLInit(&callbacks);
   sranda2();
-  if (game_settings.replay_inputs) { /* replay wins if both are on */
-    if (ReplayStart(REPLAY_FILE, REPLAY_PLAY, LID_BOOTLEVEL, seed_a))
-      TimeSetSpeed(game_settings.replay_speed);
-    else
-      fprintf(stderr, "could not replay inputs from %s\n", REPLAY_FILE);
-  }
-  else if (game_settings.record_inputs) {
-    if (!ReplayStart(REPLAY_FILE, REPLAY_RECORD, LID_BOOTLEVEL, seed_a))
-      fprintf(stderr, "could not open %s to record inputs\n", REPLAY_FILE);
-  }
+  InitReplay();
   for (i=1;i<4;i++)
     insts[i] = EID_NONE;
   for (i=0;i<16;i++)
