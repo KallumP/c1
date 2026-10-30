@@ -935,7 +935,8 @@ def make_course(level):
 
 # maps modelled in blender (see tools/blendmap.py)
 
-MAP_SCALE = 400        # zone units per blender metre: crash is a little over 2 m tall
+MAP_SCALE = 400        # zone units per blender metre: crash is about 665 tall (his bound in
+                       # StopAtFloor in src/solid.c), so 1.7 m
 MAP_PIECE = 512        # the world meshes are sliced along z this often
 MAP_TILE = 1024        # and along x and y this often, so textures don't stretch over whole faces
 MAP_PATH_STEP = 128    # camera path points; doubled while the sort list doesn't fit in a page

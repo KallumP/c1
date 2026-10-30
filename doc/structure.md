@@ -99,7 +99,9 @@ Project structure is listed below, including descriptions for each file.
 ├── tools                    # helper scripts
 │   ├── extract_streams.py   # extracts game assets from a disc image
 │   ├── nslevel.py           # reads, writes and makes levels (custom_levels/)
-│   └── tests                # nslevel.py's tests (python -m unittest discover -s tools/tests)
+│   ├── blendmap.py          # turns a map exported from blender into the parts of a level, for nslevel.py
+│   └── tests                # the tools' tests (python -m unittest discover -s tools/tests)
+├── maps                     # maps modelled in blender, to make levels from with nslevel.py map
 ├── custom_levels            # levels made with tools/nslevel.py, to boot into with boot_level
 ├── controls.example.cfg     # example key bindings (copy to controls.cfg to change the controls)
 ├── settings.example.cfg     # example settings (copy to settings.cfg to change the settings)
