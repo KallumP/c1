@@ -118,6 +118,7 @@ UTEST(replay, replay_refuses_a_recording_from_another_boot_level) {
 }
 
 UTEST(replay, replay_of_a_missing_file_fails_cleanly) {
+  remove("build/no_such_file.rec");
   ASSERT_EQ(0, ReplayStart("build/no_such_file.rec", REPLAY_PLAY, 0x19, 12345));
   ASSERT_FALSE(TimeIsFixed());
 }
