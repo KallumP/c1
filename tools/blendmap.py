@@ -502,16 +502,18 @@ def camera_path(cells, size, cell, start, step):
     return points
 
 
+def zone_index(spans, z):
+    """which zone span z is in (past either end of the map, the end one)"""
+    z = min(max(z, spans[-1][0]), spans[0][1] - 1)
+    return next(i for i, (z0, z1) in enumerate(spans) if z0 <= z < z1)
+
+
 def zone_paths(points, spans):
     """camera path points (x, y, z) split into each zone span's path, by the
     zone crash is in (CAM_LEAD ahead, along -z, as on n. sanity beach), with
-    z relative to it (past either end of the map, the end zone's); zones
-    before crash's start have none"""
+    z relative to it; zones before crash's start have none"""
     paths = [[] for _ in spans]
     for x, y, z in points:
-        crash = min(max(z - CAM_LEAD, spans[-1][0]), spans[0][1] - 1)
-        for path, (z0, z1) in zip(paths, spans):
-            if z0 <= crash < z1:
-                path.append((x, y, z - z0))
-                break
+        i = zone_index(spans, z - CAM_LEAD)
+        paths[i].append((x, y, z - spans[i][0]))
     return paths
