@@ -46,18 +46,28 @@ def parse_args(argv):
 
 def read_map_cfg(folder):
     """{"scale": n, "turn": n} for the settings the map.cfg in folder gives
-    (none without one). blank lines and lines starting with # are skipped"""
+    (none without one). blank lines and lines starting with # are skipped;
+    anything else that isn't scale or turn set to a whole number is a
+    ValueError"""
     path = os.path.join(folder, MAP_CFG)
     if not os.path.exists(path):
         return {}
     settings = {}
     with open(path) as f:
-        for line in f:
+        for line_no, line in enumerate(f, 1):
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            key, _, value = line.partition("=")
-            settings[key.strip()] = int(value)
+            key, equals, value = (part.strip() for part in line.partition("="))
+            if not equals:
+                raise ValueError("%s, line %d: expected key = value" % (path, line_no))
+            if key not in ("scale", "turn"):
+                raise ValueError("%s, line %d: unknown setting %s (it takes scale and turn)" % (path, line_no, key))
+            try:
+                settings[key] = int(value)
+            except ValueError:
+                raise ValueError("%s, line %d: %s has to be a whole number, not %s"
+                                 % (path, line_no, key, value or "nothing"))
     return settings
 
 
@@ -88,7 +98,11 @@ def main(argv):
         return 1
     path, default_name = nslevel.map_source(source)
     name = name or default_name
-    scale, turn = map_options(os.path.dirname(path), scale, turn)
+    try:
+        scale, turn = map_options(os.path.dirname(path), scale, turn)
+    except ValueError as e:
+        print(e)
+        return 1
     with open(path) as f:
         text = f.read()
     images = nslevel.map_images(path, text)
