@@ -29,3 +29,13 @@ void ReplayRecordStop(replay_recorder *r) {
   fclose(r->file);
   r->file = 0;
 }
+
+int ReplayStart(const char *path, int mode, uint32_t lid, uint32_t seed) {
+  return 0;
+}
+
+void ReplayUpdate() {
+}
+
+void ReplayStop() {
+}

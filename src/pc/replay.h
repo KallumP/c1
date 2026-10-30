@@ -31,4 +31,12 @@ extern void ReplayRecordFrame(replay_recorder *r, int32_t ticks,
   uint32_t held);
 extern void ReplayRecordStop(replay_recorder *r);
 
+/* game side */
+#define REPLAY_RECORD 1
+
+extern int ReplayStart(const char *path, int mode, uint32_t lid,
+  uint32_t seed);
+extern void ReplayUpdate();
+extern void ReplayStop();
+
 #endif /* _PC_REPLAY_H_ */
