@@ -166,6 +166,19 @@ def read_level(streams_dir, lid):
     return Level(nsd, pages)
 
 
+def read_level_files(path):
+    """read path.nsd and path.nsf"""
+    return None
+
+
+def entry_page_bytes(entries, index):
+    return b""
+
+
+def write_level(level, out_dir, name):
+    pass
+
+
 def type_name(etype):
     return TYPE_NAMES.get(etype, str(etype))
 

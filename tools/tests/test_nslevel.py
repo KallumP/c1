@@ -129,9 +129,75 @@ class Summary(unittest.TestCase):
         self.assertEqual({"GOOL": 1, "ZDAT": 1, "TPAG": 1}, nslevel.count_by_type(pages))
 
 
+def probe(nsd, eid):
+    """find eid in the page table the way NSProbe does: scan from its bucket"""
+    i = nsd.ptb_offsets[(eid >> 15) & 0xFF]
+    while nsd.page_table[i][1] != eid:
+        i += 1
+    return nsd.page_table[i][0]
+
+
+def small_level():
+    zone = nslevel.str_to_eid("a5_9Z")
+    tpag = nslevel.str_to_eid("TexP1")
+    pages = [
+        nslevel.read_pages(make_page(1, [make_entry(zone, 7, [b"zone", b"rect"]),
+                                         make_entry(EID_WILLC, 11, [b"code"])]), page_count=1)[0],
+        nslevel.read_pages(make_texture_page(tpag), page_count=1)[0],
+    ]
+    nsd = nslevel.read_nsd(make_nsd([], 9, zone, [EID_WILLC]))
+    return nslevel.Level(nsd, pages)
+
+
+class WriteLevel(unittest.TestCase):
+    def setUp(self):
+        self.dir = os.path.join(TOOLS, "..", "build", "test_custom_levels")
+        os.makedirs(self.dir, exist_ok=True)
+
+    def test_written_level_reads_back_the_same(self):
+        level = small_level()
+        nslevel.write_level(level, self.dir, "small")
+        back = nslevel.read_level_files(os.path.join(self.dir, "small"))
+        self.assertEqual(2, back.nsd.page_count)
+        self.assertEqual(0, back.nsd.pages_offset)
+        self.assertEqual(9, back.nsd.ldat.lid)
+        self.assertEqual(level.nsd.ldat.zone_spawn, back.nsd.ldat.zone_spawn)
+        self.assertEqual(level.nsd.ldat.exec_map, back.nsd.ldat.exec_map)
+        self.assertEqual([[(e.eid, e.type, e.items) for e in p.entries] for p in level.pages],
+                         [[(e.eid, e.type, e.items) for e in p.entries] for p in back.pages])
+        self.assertEqual(level.pages[1].data, back.pages[1].data)
+
+    def test_page_table_finds_every_entry_by_bucket(self):
+        level = small_level()
+        nslevel.write_level(level, self.dir, "small")
+        nsd = nslevel.read_level_files(os.path.join(self.dir, "small")).nsd
+        self.assertEqual(0 << 1 | 1, probe(nsd, EID_WILLC))
+        self.assertEqual(0 << 1 | 1, probe(nsd, nslevel.str_to_eid("a5_9Z")))
+        self.assertEqual(1 << 1 | 1, probe(nsd, nslevel.str_to_eid("TexP1")))
+
+    def test_too_many_entries_for_a_page_is_an_error(self):
+        big = nslevel.Entry(EID_WILLC, 11, [b"\0" * nslevel.PAGE_SIZE])
+        with self.assertRaises(ValueError):
+            nslevel.entry_page_bytes([big], 0)
+
+
 @unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
                      "needs N. Sanity Beach in streams/")
 class RealLevel(unittest.TestCase):
+    def test_copy_of_n_sanity_beach_has_the_same_entries(self):
+        level = nslevel.read_level(STREAMS, 9)
+        out = os.path.join(TOOLS, "..", "build", "test_custom_levels")
+        os.makedirs(out, exist_ok=True)
+        nslevel.write_level(level, out, "beach_copy")
+        copy = nslevel.read_level_files(os.path.join(out, "beach_copy"))
+        self.assertEqual(level.nsd.page_count, copy.nsd.page_count)
+        self.assertEqual(level.nsd.ldat.image, copy.nsd.ldat.image)
+        self.assertEqual(sorted(level.nsd.page_table), sorted(copy.nsd.page_table))
+        for a, b in zip(level.pages, copy.pages):
+            self.assertEqual([(e.eid, e.type, e.items) for e in a.entries],
+                             [(e.eid, e.type, e.items) for e in b.entries])
+        for _, eid in copy.nsd.page_table:
+            probe(copy.nsd, eid)  # every entry can be found
     def test_reads_n_sanity_beach(self):
         level = nslevel.read_level(STREAMS, 9)
         self.assertEqual(9, level.nsd.ldat.lid)
