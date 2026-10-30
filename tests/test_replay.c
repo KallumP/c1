@@ -124,6 +124,17 @@ UTEST(replay, keyboard_and_real_clock_take_over_at_the_end_of_the_recording) {
   keys[SDL_SCANCODE_LEFT] = 0;
 }
 
+UTEST(replay, ending_a_replay_goes_back_to_normal_speed) {
+  SDL_Scancode held[1] = { 0 };
+
+  Record(0x19, held, 1);
+  ASSERT_EQ(1, ReplayStart(TEST_REPLAY, REPLAY_PLAY, 0x19, 12345));
+  TimeSetSpeed(8);
+  ReplayUpdate(); /* the only recorded frame */
+  ReplayUpdate(); /* past the end */
+  ASSERT_EQ(1u, TimeGetSpeed());
+}
+
 UTEST(replay, replay_refuses_a_recording_from_another_boot_level) {
   SDL_Scancode held[1] = { 0 };
 

@@ -80,3 +80,10 @@ void TimeWaitFrame(int32_t ticks) {
   real_stamp = GetTicks();
   fixed_ticks += ticks;
 }
+
+void TimeSetSpeed(uint32_t speed) {
+}
+
+uint32_t TimeGetSpeed() {
+  return 0;
+}
