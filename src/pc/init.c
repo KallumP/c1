@@ -146,7 +146,9 @@ int init() {
   GLInit(&callbacks);
   sranda2();
   if (game_settings.replay_inputs) { /* replay wins if both are on */
-    if (!ReplayStart(REPLAY_FILE, REPLAY_PLAY, LID_BOOTLEVEL, seed_a))
+    if (ReplayStart(REPLAY_FILE, REPLAY_PLAY, LID_BOOTLEVEL, seed_a))
+      TimeSetSpeed(game_settings.replay_speed);
+    else
       fprintf(stderr, "could not replay inputs from %s\n", REPLAY_FILE);
   }
   else if (game_settings.record_inputs) {

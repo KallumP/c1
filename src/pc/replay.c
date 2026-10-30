@@ -127,5 +127,6 @@ void ReplayStop() {
     fclose(replay_file);
     replay_file = 0;
   }
+  TimeSetSpeed(1);
   TimeSetFixed(0);
 }

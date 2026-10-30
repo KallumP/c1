@@ -68,22 +68,27 @@ void TimeAdvance(int32_t ticks) {
   fixed_ticks += ticks;
 }
 
+static uint32_t speed = 1; /* times normal speed, 0 = as fast as possible */
+
 /*
- * wait until a frame's worth of real time has passed since the last call,
- * then move the fixed clock on that frame. a slow frame isn't made up for,
- * so game time only ever moves a whole frame at a time
+ * wait until a frame's worth of real time (divided by the speed) has passed
+ * since the last call, then move the fixed clock on that frame. a slow frame
+ * isn't made up for, so game time only ever moves a whole frame at a time
  */
 void TimeWaitFrame(int32_t ticks) {
   static int32_t real_stamp = 0;
 
-  while (GetTicks() - real_stamp < ticks);
+  if (speed)
+    while (GetTicks() - real_stamp < ticks / (int32_t)speed);
   real_stamp = GetTicks();
   fixed_ticks += ticks;
 }
 
-void TimeSetSpeed(uint32_t speed) {
+/* how fast TimeWaitFrame lets the fixed clock run, for replays */
+void TimeSetSpeed(uint32_t new_speed) {
+  speed = new_speed;
 }
 
 uint32_t TimeGetSpeed() {
-  return 0;
+  return speed;
 }
