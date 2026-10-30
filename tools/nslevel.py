@@ -335,6 +335,10 @@ ZONE_MIDI = ZONE_DISPLAY_FLAGS + 4 + 36
 ZONE_HEADER_SIZE = 888
 
 
+def load_texture_pages(level, zone_eid):
+    pass
+
+
 OCTREE_NODES = 36    # zone_rect: x y z w h d unk, then root and max depths
 LEAF_GROUND = 1      # leaf (low bit) with value 0: plain solid ground
 LEAF_PIT = (11 << 4) | 1  # leaf with subtype 11: kills what falls on it (ProcessNode in src/solid.c)
@@ -611,11 +615,14 @@ def slst_items(poly_zmax, cam_zs, step, near):
 # entities (zone_entity in src/formats/zdat.h): parent zone, spawn flags,
 # group, id, point count, 3 init flags, type, subtype, then the points, in
 # units of 4 zone units relative to the zone
+ENTITY_SPAWN_FLAGS = 4
 ENTITY_ID = 8
 ENTITY_POINT_COUNT = 10
 ENTITY_TYPE = 18
 ENTITY_POINTS = 20
 ENTITY_ID_MAX = 303  # ids index the spawn table (GOOL_SPAWN_COUNT in src/gool.h)
+ENTITY_PLAIN_LIGHT = 0x18  # spawn_flags >> 3 is a lighting region in the zone's octree
+                           # (ZoneColorsScaleSeekByEntityNode); crash's points at plain light
 
 
 def entity_type(item):
@@ -626,7 +633,8 @@ def entity_type(item):
 def place_entity(item, entity_id, pos):
     """a copy of a real entity with a new id, moved so its first point is at
     pos (zone units relative to the zone); a path (such as a crab's patrol)
-    keeps its shape"""
+    keeps its shape. it is lit plainly, like crash, since the lighting
+    region it pointed at in its own zone isn't in this one"""
     if not 0 < entity_id <= ENTITY_ID_MAX:
         raise ValueError("entity id %d is outside 1..%d" % (entity_id, ENTITY_ID_MAX))
     data = bytearray(item)
@@ -636,6 +644,8 @@ def place_entity(item, entity_id, pos):
     for i, point in enumerate(points):
         struct.pack_into("<3h", data, ENTITY_POINTS + 6 * i, *(point[a] + offset[a] for a in range(3)))
     struct.pack_into("<H", data, ENTITY_ID, entity_id)
+    flags = struct.unpack_from("<H", data, ENTITY_SPAWN_FLAGS)[0]
+    struct.pack_into("<H", data, ENTITY_SPAWN_FLAGS, (flags & 7) | ENTITY_PLAIN_LIGHT)
     return bytes(data)
 
 
@@ -713,6 +723,155 @@ def make_mock(level):
     return mock
 
 
+# shared by the custom levels
+
+def used_textures(world):
+    """(tinf, tpag) pairs a mesh's polygons use, most used first"""
+    counts = {}
+    for i in range(len(world.items[1]) // 8):
+        w0 = struct.unpack_from("<I", world.items[1], 8 * i)[0]
+        key = ((w0 >> 8) & 0xFFF, (w0 >> 5) & 7)
+        counts[key] = counts.get(key, 0) + 1
+    return sorted(counts, key=counts.get, reverse=True)
+
+
+class Templates:
+    """what custom levels take from a real level: its spawn zone (header
+    settings, origin), crash's entity, its biggest world mesh (for textures),
+    and an example of each kind of entity (by type and subtype)"""
+    def __init__(self, level):
+        entries = {e.eid: e for p in level.pages for e in p.entries}
+        zone = entries[level.nsd.ldat.zone_spawn]
+        self.header = zone.items[0]
+        self.origin = struct.unpack_from("<iii", zone.items[1], 0)
+        worlds = [entries[struct.unpack_from("<I", self.header, 4 + i * ZONE_WORLD_SIZE)[0]]
+                  for i in range(struct.unpack_from("<I", self.header, 0)[0])]
+        self.world = max((w for w in worlds if not struct.unpack_from("<I", w.items[0], 28)[0]),
+                         key=lambda w: len(w.items[1]))  # biggest non-backdrop mesh
+        self.textures = used_textures(self.world)
+        self.entities = {}
+        for e in entries.values():
+            if e.type != 7:  # zones
+                continue
+            paths_idx, path_count, entity_count, _ = struct.unpack_from("<4I", e.items[0], ZONE_PATHS_IDX)
+            for item in e.items[paths_idx + path_count:paths_idx + path_count + entity_count]:
+                self.entities.setdefault(entity_type(item), item)
+        self.crash = self.entities[(0, 0)]
+
+
+def assemble_level(level, templates, prefix, size, blocks, verts, polys, points, step, entities):
+    """a custom level from a real level: one zone of size (w, h, d) at the
+    template zone's origin, with collision from blocks, a world mesh of
+    verts and polys (a, b, c, tinf, tpag) relative to the zone, one follow
+    camera path through points (x, y, z) step apart going along -z, and entities (crash
+    first). keeps crash, the hud and core objects, and the code for the
+    entities' types, from level"""
+    t = templates
+    zone_eid, world_eid, slst_eid = (str_to_eid(prefix + c) for c in "ZWS")
+    x0, y0, z0 = t.origin
+    world = Entry(world_eid, 3, [
+        world_header_bytes(t.world.items[0], (x0, y0, z0), len(polys), len(verts)),
+        b"".join(world_polygon_bytes(a, b, c, tinf, tpag) for a, b, c, tinf, tpag in polys),
+        b"".join(world_vertex_bytes(x, y, z, (128, 128, 128)) for x, y, z in verts)])
+    cam_points = [(x, y, z, -181, 1, 0) for x, y, z in points]
+    path = path_bytes(slst_eid, cam_points, cam_mode=5, zoom=1700,
+                      avg_node_dist=step, direction=(0, 0, -4096))
+    poly_zmax = [max(verts[a][2], verts[b][2], verts[c][2]) for a, b, c, _, _ in polys]
+    slst = Entry(slst_eid, 4, slst_items(poly_zmax, [p[2] for p in points], step, MOCK_NEAR))
+    zone = Entry(zone_eid, 7, [
+        zone_header_bytes(t.header, zone_eid, [(world_eid, (x0, y0, z0))], 1, len(entities)),
+        blocks_rect_bytes(t.origin, size, blocks, COURSE_CELL),
+        path] + list(entities))
+    tpags = struct.unpack_from("<8I", t.world.items[0], 32)
+    exec_map = level.nsd.ldat.exec_map
+    slots = set(CORE_EXEC_SLOTS) | {entity_type(e)[0] for e in entities}
+    keep = [exec_map[i] for i in slots] + [tp for tp in tpags if tp]
+    out = cut_level(level, keep)
+    out.pages = pack_entries([zone, world, slst]) + out.pages
+    out.nsd.ldat.lid = LID_TEST
+    out.nsd.ldat.zone_spawn = zone_eid
+    out.nsd.ldat.path_idx_spawn = 0
+    return out
+
+
+# the course level: an obstacle course along -z (zone units, on a 128 grid)
+
+COURSE_SIZE = (4096, 4096, 8192)
+COURSE_CELL = 128
+COURSE_PIECE = 512       # mesh squares
+COURSE_PATH_STEP = 128   # camera path points; with the pieces, keeps the sort list in a page
+COURSE_GROUND = 512      # height of the ground's top
+COURSE_LEAD = 1450       # how far ahead of the camera crash is (as on the beach)
+
+# (x0, x1, z0, z1, top): platforms, from the start (high z) to the end
+# crash starts COURSE_LEAD in front of the camera path's start, so the start
+# platform reaches back to the end of the zone
+COURSE_PLATFORMS = [
+    (1024, 3072, 5760, 8192, 512),    # start
+    (1024, 3072, 4096, 5120, 512),    # after gap 1: a row of boxes
+    (1024, 3072, 3712, 4096, 768),    # step up
+    (1024, 3072, 3328, 3712, 1024),   # and up again
+    (1024, 3072, 2432, 2816, 1024),   # ledge, after gap 2
+    (512, 3584, 1408, 2432, 512),     # down to a wide stretch with crabs
+    (1024, 3072, 0, 896, 512),        # end, after gap 3: the warp pad
+]
+COURSE_GAPS = [(1024, 3072, 5120, 5760), (1024, 3072, 2816, 3328), (1024, 3072, 896, 1408)]
+COURSE_PIT = 128         # height of the deadly floor under each gap
+
+COURSE_BOXES = [(34, 2), (34, 6), (34, 9), (34, 10), (34, 13)]  # beach box subtypes, in a row
+COURSE_BOX_Z = 4480
+COURSE_CRABS = [(2048, 2100), (2048, 1700)]   # centre x, z of each crab's patrol
+COURSE_WARP = (2048, 448)                     # x, z of the warp pad
+COURSE_CRASH = (2048, 6500)
+
+
+def course_top(z):
+    """the ground's top at z along the middle of the course, or None over a gap"""
+    for x0, x1, z0, z1, top in COURSE_PLATFORMS:
+        if z0 <= z < z1:
+            return top
+    return None
+
+
+def make_course(level):
+    """an obstacle course: gaps to jump (with a deadly floor below), steps
+    and a ledge, a row of boxes, crabs, and the warp pad at the end; built
+    the same way as make_mock, from level (a real level such as N. Sanity
+    Beach) for crash, the objects and the textures"""
+    t = Templates(level)
+    w, h, d = COURSE_SIZE
+    blocks = [(x0, 0, z0, x1, top, z1) for x0, x1, z0, z1, top in COURSE_PLATFORMS]
+    blocks += [(x0, 0, z0, x1, COURSE_PIT, z1, LEAF_PIT) for x0, x1, z0, z1 in COURSE_GAPS]
+    top_texture, side_texture = t.textures[0], t.textures[1]
+    verts, polys = blocks_mesh([b[:6] for b in blocks], top_texture, side_texture, COURSE_PIECE)
+
+    points, height = [], COURSE_GROUND
+    for z in range(d - 200, 200, -COURSE_PATH_STEP):
+        top = course_top(z - COURSE_LEAD)
+        height = top if top is not None else height  # keep the height over gaps
+        points.append((COURSE_CRASH[0] + MOCK_CAM[0], height + MOCK_CAM[1], z))
+
+    crash = bytearray(t.crash)
+    struct.pack_into("<3h", crash, ENTITY_POINTS, COURSE_CRASH[0] // 4,
+                     (course_top(COURSE_CRASH[1]) + 100) // 4, COURSE_CRASH[1] // 4)
+    entities, next_id = [bytes(crash)], 20
+    for i, kind in enumerate(COURSE_BOXES):
+        x = 2048 + (i - len(COURSE_BOXES) // 2) * 448
+        entities.append(place_entity(t.entities[kind], next_id, (x, course_top(COURSE_BOX_Z), COURSE_BOX_Z)))
+        next_id += 1
+    crab = t.entities[(31, 0)]
+    count = struct.unpack_from("<H", crab, ENTITY_POINT_COUNT)[0]
+    xs = [struct.unpack_from("<h", crab, ENTITY_POINTS + 6 * i)[0] * 4 for i in range(count)]
+    first_from_middle = xs[0] - (min(xs) + max(xs)) // 2   # so the patrol is centred
+    for x, z in COURSE_CRABS:
+        entities.append(place_entity(crab, next_id, (x + first_from_middle, course_top(z), z)))
+        next_id += 1
+    x, z = COURSE_WARP
+    entities.append(place_entity(t.entities[(32, 1)], next_id, (x, course_top(z), z)))
+    return assemble_level(level, t, "Cour", COURSE_SIZE, blocks, verts, polys, points,
+                          COURSE_PATH_STEP, entities)
+
+
 def type_name(etype):
     return TYPE_NAMES.get(etype, str(etype))
 
@@ -735,6 +894,7 @@ CUSTOM_LEVELS_DIR = os.path.join(ROOT, "custom_levels")
 USAGE = """usage:
   python tools/nslevel.py list <lid>         list a level's entries by type
   python tools/nslevel.py copy <lid> <name>  copy a level to custom_levels/<name>
+  python tools/nslevel.py course [name]      make an obstacle course as custom_levels/<name> (course)
   python tools/nslevel.py mock [name]        make a level from scratch (a flat floor
                                              and crash) as custom_levels/<name> (mock)
   (lid is the hex level id, e.g. 9 for N. Sanity Beach)"""
@@ -753,6 +913,11 @@ def main(argv):
         level.nsd.ldat.lid = LID_TEST
         write_level(level, CUSTOM_LEVELS_DIR, argv[2])
         print("wrote %s" % os.path.join(CUSTOM_LEVELS_DIR, argv[2]))
+        return 0
+    if len(argv) >= 1 and argv[0] == "course":
+        name = argv[1] if len(argv) >= 2 else "course"
+        write_level(make_course(read_level(STREAMS_DIR, 9)), CUSTOM_LEVELS_DIR, name)
+        print("wrote %s" % os.path.join(CUSTOM_LEVELS_DIR, name))
         return 0
     if len(argv) >= 1 and argv[0] == "mock":
         name = argv[1] if len(argv) >= 2 else "mock"

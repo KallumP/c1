@@ -310,6 +310,23 @@ class Zone(unittest.TestCase):
         self.assertEqual((0, 0), struct.unpack_from("<ii", h, nslevel.ZONE_LOADLIST))
         self.assertEqual(nslevel.EID_NONE, struct.unpack_from("<I", h, nslevel.ZONE_MIDI)[0])
 
+    def test_load_list_opens_every_texture_page(self):
+        # a zone's texture pages are only put in vram when its load list
+        # opens them (LevelUpdate, NSPageOpen)
+        zone_eid = nslevel.str_to_eid("Flr0Z")
+        zone = nslevel.Entry(zone_eid, 7, [nslevel.zone_header_bytes(
+            bytes(nslevel.ZONE_HEADER_SIZE), zone_eid, [], path_count=0, entity_count=0)])
+        pages = [entry_page([zone]),
+                 nslevel.Page(nslevel.PAGE_TEXTURE, eid=1),
+                 entry_page([]),
+                 nslevel.Page(nslevel.PAGE_TEXTURE, eid=3)]
+        level = nslevel.Level(None, pages)
+        nslevel.load_texture_pages(level, zone_eid)
+        entries, count = struct.unpack_from("<ii", zone.items[0], nslevel.ZONE_LOADLIST)
+        pgids = struct.unpack_from("<2I", zone.items[0], nslevel.ZONE_LOADLIST + 8 + 32)
+        self.assertEqual((0, 2), (entries, count))
+        self.assertEqual((nslevel.pgid(1), nslevel.pgid(3)), pgids)
+
     def test_path_without_neighbors(self):
         points = [(10, 20, 30, 0, 0, 0), (40, 50, 60, 0, 0, 0)]
         slst = nslevel.str_to_eid("Flr0S")
