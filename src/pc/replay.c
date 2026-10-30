@@ -41,7 +41,7 @@ void ReplayFileName(char *name, size_t size, const char *dir,
   char stamp[32];
 
   strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H-%M-%S", start);
-  snprintf(name, size, "%s/%s.rec", dir, stamp);
+  snprintf(name, size, "%s/%s.inputs", dir, stamp);
 }
 
 /* find the newest recording in dir; returns 0 if there are none */
@@ -56,7 +56,7 @@ int ReplayNewestFile(const char *dir, char *path, size_t size) {
   newest[0] = 0;
   while ((e = readdir(d))) {
     len = strlen(e->d_name);
-    if (len < 4 || strcmp(&e->d_name[len-4], ".rec") != 0) { continue; }
+    if (len < 7 || strcmp(&e->d_name[len-7], ".inputs") != 0) { continue; }
     if (len < sizeof(newest) && strcmp(e->d_name, newest) > 0)
       strcpy(newest, e->d_name);
   }
