@@ -1,5 +1,7 @@
 #include "follow.h"
 
+int32_t follow_cam_offset = 0; /* the camera's x less its path's (game units) */
+
 /*
  * the follow camera's next sideways offset from its path, from offset
  * towards target (crash's x less the path's): 1/FOLLOW_CAM_EASE of the way,

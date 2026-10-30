@@ -51,6 +51,7 @@ extern uint32_t screen_proj;
 #include "solid.h"
 #include "pc/time.h"
 #include "pc/gfx/soft.h"
+#include "pc/follow.h"
 extern sw_transform_struct params;
 
 //----- (800253A0) --------------------------------------------------------
@@ -324,6 +325,10 @@ void LevelUpdate(entry *zone, zone_path *path, int32_t progress, uint32_t flags)
   }
   cam_rot_before = cam_rot;
   ZonePathProgressToLoc(cur_path, -cur_progress, (gool_vectors*)&cam_trans);
+  if (cur_path->cam_mode == FOLLOW_CAM_MODE) /* not in orig */
+    cam_trans.x += follow_cam_offset; /* the follow camera stays off its path */
+  else
+    follow_cam_offset = 0;
   cam_rot_after = cam_rot;
   ns.level_update_pending = 0;
 }
