@@ -852,11 +852,15 @@ class Map(unittest.TestCase):
     # a floor 100 m long: 40000 units at the default scale, so 3 zones of 16384
     LONG_OBJ = "o Floor\nv -4 0 -50\nv -4 0 50\nv 4 0 50\nv 4 0 -50\nf 1 2 3 4\n"
 
+    _long = None
+
     def long_zones(self):
-        level, entries, _ = self.make(self.LONG_OBJ)
-        zones = sorted((e for e in entries.values() if e.type == 7),
-                       key=lambda z: -struct.unpack_from("<i", z.items[1], 8)[0])  # from the route's start (+z)
-        return level, entries, zones
+        if Map._long is None:  # built once, as it takes a while
+            level, entries, _ = self.make(self.LONG_OBJ)
+            zones = sorted((e for e in entries.values() if e.type == 7),
+                           key=lambda z: -struct.unpack_from("<i", z.items[1], 8)[0])  # from the start (+z)
+            Map._long = level, entries, zones
+        return Map._long
 
     def neighbors(self, zone):
         count = struct.unpack_from("<I", zone.items[0], nslevel.ZONE_PATHS_IDX + 12)[0]
