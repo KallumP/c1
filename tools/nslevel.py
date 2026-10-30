@@ -952,7 +952,7 @@ def make_map(level, text, scale=MAP_SCALE, turn=0):
     struct.pack_into("<3h", crash, ENTITY_POINTS, start[0] // 4, (start[1] + 100) // 4, start[2] // 4)
     step = MAP_PATH_STEP
     while True:
-        points = blendmap.camera_path(cells, fit.size, COURSE_CELL, start, step)
+        points = blendmap.camera_path(mesh, cells, fit.size, COURSE_CELL, start, step)
         try:
             return assemble_level(level, t, "BMap", fit.size, cell_blocks(cells, COURSE_CELL), worlds,
                                   points, step, [bytes(crash)])
