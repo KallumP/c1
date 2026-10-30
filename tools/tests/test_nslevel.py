@@ -240,6 +240,65 @@ class CutLevel(unittest.TestCase):
         self.assertEqual(big, [e for p in pages for e in p.entries])
 
 
+def octree_leaves(rect):
+    """(level, y offset as a fraction of the zone height, leaf value) for
+    each solid leaf of a zone's octree, walked the way ZoneQueryOctreeR does"""
+    root, mdx, mdy, mdz = struct.unpack_from("<4H", rect, 28)
+    leaves = []
+
+    def walk(node, level, y, height):
+        if node == 0:
+            return
+        if node & 1:
+            leaves.append((level, y, node >> 1))
+            return
+        fx, fy, fz = level < mdx, level < mdy, level < mdz
+        children = struct.unpack_from("<%dH" % ((1 + fx) * (1 + fy) * (1 + fz)), rect, node)
+        idx = 0
+        for i in range(1 + fx):
+            for j in range(1 + fy):
+                for k in range(1 + fz):
+                    sub = height / 2 if fy else height
+                    walk(children[idx], level + 1, y + (sub if j else 0), sub)
+                    idx += 1
+    walk(root, 0, 0.0, 1.0)
+    return leaves
+
+
+class Zone(unittest.TestCase):
+    def test_floor_octree_is_one_solid_leaf_at_the_bottom(self):
+        rect = nslevel.floor_rect_bytes(100, 200, 300, 4096, 2048, 4096, depth=3)
+        self.assertEqual((100, 200, 300, 4096, 2048, 4096),
+                         struct.unpack_from("<iiiIII", rect, 0))
+        self.assertEqual([(3, 0.0, 0)], octree_leaves(rect))  # bottom eighth, plain ground
+
+    def test_floor_top_is_a_fraction_of_the_height(self):
+        self.assertEqual(256, nslevel.floor_top(2048, depth=3))
+
+    def test_zone_header_fields(self):
+        template = bytearray(nslevel.ZONE_HEADER_SIZE)
+        world = nslevel.str_to_eid("Flr0W")
+        self_eid = nslevel.str_to_eid("Flr0Z")
+        h = nslevel.zone_header_bytes(bytes(template), self_eid, [(world, (1, 2, 3))],
+                                      path_count=1, entity_count=1)
+        self.assertEqual(1, struct.unpack_from("<I", h, 0)[0])
+        self.assertEqual((world, 1, 2, 3), struct.unpack_from("<I3i", h, 4))
+        self.assertEqual((2, 1, 1, 1), struct.unpack_from("<4I", h, nslevel.ZONE_PATHS_IDX))
+        self.assertEqual(self_eid, struct.unpack_from("<I", h, nslevel.ZONE_NEIGHBORS)[0])
+        self.assertEqual((0, 0), struct.unpack_from("<ii", h, nslevel.ZONE_LOADLIST))
+        self.assertEqual(nslevel.EID_NONE, struct.unpack_from("<I", h, nslevel.ZONE_MIDI)[0])
+
+    def test_path_without_neighbors(self):
+        points = [(10, 20, 30, 0, 0, 0), (40, 50, 60, 0, 0, 0)]
+        slst = nslevel.str_to_eid("Flr0S")
+        p = nslevel.path_bytes(slst, points, cam_mode=5, zoom=1700, avg_node_dist=400)
+        self.assertEqual((slst, 0, 0), struct.unpack_from("<III", p, 0))
+        self.assertEqual(2, struct.unpack_from("<H", p, 30)[0])  # length
+        self.assertEqual(5, struct.unpack_from("<H", p, 32)[0])  # cam mode
+        self.assertEqual(points, [struct.unpack_from("<6h", p, 50 + 12 * i) for i in range(2)])
+        self.assertEqual(0, len(p) % 4)
+
+
 @unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
                      "needs N. Sanity Beach in streams/")
 class RealLevel(unittest.TestCase):

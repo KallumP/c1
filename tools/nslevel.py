@@ -322,6 +322,32 @@ def cut_level(level, keep):
     return Level(nsd, pack_entries(kept_entries) + raw_pages)
 
 
+# zone header layout (zone_header in src/formats/zdat.h)
+ZONE_WORLD_SIZE = 64        # eid, trans, 4 pointers, 8 tpages
+ZONE_PATHS_IDX = 4 + 8 * ZONE_WORLD_SIZE   # then path_count, entity_count, neighbor_count
+ZONE_NEIGHBORS = ZONE_PATHS_IDX + 16
+ZONE_LOADLIST = ZONE_NEIGHBORS + 32
+ZONE_DISPLAY_FLAGS = ZONE_LOADLIST + 168
+ZONE_MIDI = ZONE_DISPLAY_FLAGS + 4 + 36
+ZONE_HEADER_SIZE = 888
+
+
+def floor_rect_bytes(x, y, z, w, h, d, depth):
+    return b""
+
+
+def floor_top(h, depth):
+    return 0
+
+
+def zone_header_bytes(template, self_eid, worlds, path_count, entity_count):
+    return b""
+
+
+def path_bytes(slst, points, cam_mode, zoom, avg_node_dist):
+    return b""
+
+
 def type_name(etype):
     return TYPE_NAMES.get(etype, str(etype))
 
