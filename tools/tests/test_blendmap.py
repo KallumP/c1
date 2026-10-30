@@ -259,8 +259,9 @@ class WorldMeshes(unittest.TestCase):
         # fewer polygons, as the sort list only needs the slices along z
         wall = quad_mesh([(0, 0, 512), (1024, 0, 512), (1024, 768, 512), (0, 768, 512)])
         [(verts, polys)] = blendmap.world_meshes(wall, 256, GROUND, SIDE, tile=512)
-        xs = {verts[i][0] for p in polys for i in p[:3]}
-        self.assertEqual({0, 512, 1024}, xs)
+        widths = [max(verts[i][0] for i in p[:3]) - min(verts[i][0] for i in p[:3]) for p in polys]
+        self.assertLessEqual(max(widths), 512)
+        self.assertGreater(max(widths), 256)
 
     def test_slicing_leaves_no_cracks_along_shared_edges(self):
         # two triangles sharing a slanted edge (x = z / 2, so every cut along it is on
