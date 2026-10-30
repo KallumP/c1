@@ -419,32 +419,145 @@ def path_bytes(slst, points, cam_mode, zoom, avg_node_dist, direction=(0, 0, 0))
     return pad4(data)
 
 
+# world meshes (wgeo, see src/formats/wgeo.h; its bitfield macros list fields
+# high bits first)
+
 def world_vertex_bytes(x, y, z, color):
-    return b""
+    """a vertex at (x, y, z) relative to its mesh, in zone units (multiples
+    of 8, within -32768..32760), and its colour"""
+    x, y, z = x // 8, y // 8, z // 8
+    h0 = ((x & 0x1FFF) << 3) | (((z >> 8) & 3) << 1)   # x:13, z2:2, fx:1
+    h1 = ((y & 0x1FFF) << 3) | ((z >> 10) & 7)          # y:13, z3:3
+    return struct.pack("<BBBBHH", color[0], color[1], color[2], z & 0xFF, h0, h1)
 
 
 def world_polygon_bytes(a, b, c, tinf, tpag):
-    return b""
+    """a triangle of vertex indices a, b, c with texture info tinf (a word
+    index into the mesh's texinfos) on texture page tpag, not animated"""
+    w0 = (c << 20) | (tinf << 8) | (tpag << 5)   # c, tinf, tpag, anim_phase
+    w1 = (a << 20) | (b << 8)                    # a, b, anim_period, anim_mask
+    return struct.pack("<II", w0, w1)
 
 
 def floor_grid(w, d, cell):
-    return [], []
+    """a flat w by d grid of cell sized squares at y 0: vertices (x, y, z)
+    and triangles (a, b, c), two per square"""
+    nx, nz = w // cell, d // cell
+    verts = [(i * cell, 0, k * cell) for k in range(nz + 1) for i in range(nx + 1)]
+    polys = []
+    for k in range(nz):
+        for i in range(nx):
+            v = k * (nx + 1) + i
+            polys += [(v, v + 1, v + nx + 1), (v + 1, v + nx + 2, v + nx + 1)]
+    return verts, polys
+
+
+WGEO_HEADER = "<iiiIIIII"  # trans x y z, poly, vert, texinfo and tpag counts, is_backdrop
 
 
 def world_header_bytes(template, trans, poly_count, vert_count):
-    return b""
+    """a mesh header from a real one (keeping its texture pages and
+    texinfos), placed at trans (zone units) with new counts"""
+    fields = list(struct.unpack_from(WGEO_HEADER, template, 0))
+    fields[0:5] = [trans[0], trans[1], trans[2], poly_count, vert_count]
+    return struct.pack(WGEO_HEADER, *fields) + template[struct.calcsize(WGEO_HEADER):]
 
+
+# sort lists (slst, see src/formats/slst.h and src/slst.c)
 
 def poly_id(world_idx, poly_idx):
-    return 0
+    return (world_idx << 12) | poly_idx  # flag:1, world_idx:3, poly_idx:12
 
 
-def slst_items(ids, path_length):
-    return []
+def slst_items(poly_zmax, cam_zs, step, near):
+    """a sort list for a camera path along -z (cameras at z cam_zs): for each
+    point, the polygons (of world 0, by their largest z) that stay in front
+    of the camera all the way to the next point, so none is ever drawn from
+    behind the camera, which the renderer would project mirrored.
+
+    every item is a full list rather than a delta (the game copies an even
+    type item as is, whichever way the camera moves). LevelUpdate reads
+    item k on reaching point k, and item N (one past the last point) when
+    starting in the second half of the path, so that repeats the last."""
+    def full_list(cam_z):
+        ids = [poly_id(0, i) for i, zmax in enumerate(poly_zmax) if zmax < cam_z - step - near]
+        return pad4(struct.pack("<HH%dH" % len(ids), len(ids), 0, *ids))
+    items = [full_list(z) for z in cam_zs]
+    return items + [items[-1]]
+
+
+# the mock level
+
+MOCK_SIZE = (4096, 3200, 8192)   # zone w, h, d (zone units)
+MOCK_FLOOR_DEPTH = 3             # floor top at h >> 3 = 400
+MOCK_CELL = 512                  # floor grid squares
+MOCK_CAM = (101, 1316)           # follow camera offset from crash: x, height (as on the beach)
+MOCK_PATH_STEP = 80              # distance between camera path points (the sort list
+                                 # has a list per point, and has to fit in a page)
+MOCK_NEAR = 64                   # how far in front of the camera a polygon has to be
+
+
+def most_used_texture(world):
+    """(tinf, tpag) that most of a mesh's polygons use"""
+    counts = {}
+    for i in range(len(world.items[1]) // 8):
+        w0 = struct.unpack_from("<I", world.items[1], 8 * i)[0]
+        key = ((w0 >> 8) & 0xFFF, (w0 >> 5) & 7)
+        counts[key] = counts.get(key, 0) + 1
+    return max(counts, key=counts.get)
 
 
 def make_mock(level):
-    return level
+    """a level from scratch: one zone with a flat floor, a straight follow
+    camera path, and crash; with crash, the hud and core objects (and the
+    floor's texture) taken from level, a real level such as N. Sanity Beach"""
+    entries = {e.eid: e for p in level.pages for e in p.entries}
+    template = entries[level.nsd.ldat.zone_spawn]
+    header = template.items[0]
+    paths_idx, path_count, _, _ = struct.unpack_from("<4I", header, ZONE_PATHS_IDX)
+    crash = next(item for item in template.items[paths_idx + path_count:]
+                 if item[18] == 0)  # entity type 0, crash (exec map slot 0)
+    worlds = [entries[struct.unpack_from("<I", header, 4 + i * ZONE_WORLD_SIZE)[0]]
+              for i in range(struct.unpack_from("<I", header, 0)[0])]
+    floor_template = max((w for w in worlds if not struct.unpack_from("<I", w.items[0], 28)[0]),
+                         key=lambda w: len(w.items[1]))  # biggest non-backdrop mesh
+    tinf, tpag = most_used_texture(floor_template)
+
+    zone_eid, world_eid, slst_eid = str_to_eid("MockZ"), str_to_eid("MockW"), str_to_eid("MockS")
+    x0, y0, z0 = struct.unpack_from("<iii", template.items[1], 0)
+    w, h, d = MOCK_SIZE
+    top = floor_top(h, MOCK_FLOOR_DEPTH)
+
+    verts, polys = floor_grid(w, d, MOCK_CELL)
+    world = Entry(world_eid, 3, [
+        world_header_bytes(floor_template.items[0], (x0, y0 + top, z0), len(polys), len(verts)),
+        b"".join(world_polygon_bytes(a, b, c, tinf, tpag) for a, b, c in polys),
+        b"".join(world_vertex_bytes(x, y, z, (128, 128, 128)) for x, y, z in verts)])
+
+    crash_x, crash_z = w // 2, d - 1700
+    cam_x, cam_y = crash_x + MOCK_CAM[0], top + MOCK_CAM[1]
+    points = [(cam_x, cam_y, z, -181, 1, 0) for z in range(d - 200, 200, -MOCK_PATH_STEP)]
+    path = path_bytes(slst_eid, points, cam_mode=5, zoom=1700, avg_node_dist=MOCK_PATH_STEP,
+                      direction=(0, 0, -4096))
+    poly_zmax = [max(verts[a][2], verts[b][2], verts[c][2]) for a, b, c in polys]
+    slst = Entry(slst_eid, 4, slst_items(poly_zmax, [p[2] for p in points], MOCK_PATH_STEP, MOCK_NEAR))
+
+    crash = bytearray(crash)  # entity location is in units of 4 zone units
+    struct.pack_into("<3h", crash, 20, crash_x // 4, (top + 100) // 4, crash_z // 4)
+    zone = Entry(zone_eid, 7, [
+        zone_header_bytes(header, zone_eid, [(world_eid, (x0, y0 + top, z0))], 1, 1),
+        floor_rect_bytes(x0, y0, z0, w, h, d, MOCK_FLOOR_DEPTH),
+        path,
+        bytes(crash)])
+
+    tpags = struct.unpack_from("<8I", floor_template.items[0], 32)
+    keep = [level.nsd.ldat.exec_map[i] for i in CORE_EXEC_SLOTS] + [t for t in tpags if t]
+    mock = cut_level(level, keep)
+    mock.pages = pack_entries([zone, world, slst]) + mock.pages
+    mock.nsd.ldat.lid = LID_TEST
+    mock.nsd.ldat.zone_spawn = zone_eid
+    mock.nsd.ldat.path_idx_spawn = 0
+    return mock
 
 
 def type_name(etype):
@@ -469,6 +582,8 @@ CUSTOM_LEVELS_DIR = os.path.join(ROOT, "custom_levels")
 USAGE = """usage:
   python tools/nslevel.py list <lid>         list a level's entries by type
   python tools/nslevel.py copy <lid> <name>  copy a level to custom_levels/<name>
+  python tools/nslevel.py mock [name]        make a level from scratch (a flat floor
+                                             and crash) as custom_levels/<name> (mock)
   (lid is the hex level id, e.g. 9 for N. Sanity Beach)"""
 
 
@@ -485,6 +600,11 @@ def main(argv):
         level.nsd.ldat.lid = LID_TEST
         write_level(level, CUSTOM_LEVELS_DIR, argv[2])
         print("wrote %s" % os.path.join(CUSTOM_LEVELS_DIR, argv[2]))
+        return 0
+    if len(argv) >= 1 and argv[0] == "mock":
+        name = argv[1] if len(argv) >= 2 else "mock"
+        write_level(make_mock(read_level(STREAMS_DIR, 9)), CUSTOM_LEVELS_DIR, name)
+        print("wrote %s" % os.path.join(CUSTOM_LEVELS_DIR, name))
         return 0
     print(USAGE)
     return 1
