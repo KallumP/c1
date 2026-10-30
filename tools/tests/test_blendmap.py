@@ -10,6 +10,7 @@ import unittest
 TOOLS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, TOOLS)
 import blendmap  # noqa: E402
+import tpage  # noqa: E402
 
 
 QUAD_OBJ = """# a comment
@@ -350,6 +351,53 @@ class WorldMeshes(unittest.TestCase):
             for p in polys:
                 self.assertTrue(all(0 <= i < len(verts) for i in p[:3]))
         self.assertEqual(2 * 250 * 10, sum(len(polys) for _, polys in out))
+
+
+class TileRegions(unittest.TestCase):
+    UP, EAST = (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)
+
+    def test_a_piece_gets_the_part_of_the_tile_under_it(self):
+        # floors are mapped by x and z; the tile repeats every 1024, so a 512 square is a quarter
+        tri = [(0, 0, 0), (512, 0, 0), (512, 0, 512)]
+        self.assertEqual((0, 0, 32, 32), blendmap.tile_region(tri, self.UP, 1024)[:4])
+        tri = [(1536, 0, 1024), (2048, 0, 1024), (2048, 0, 1536)]  # the next cell over: the same part
+        self.assertEqual((32, 0, 32, 32), blendmap.tile_region(tri, self.UP, 1024)[:4])
+
+    def test_corners_go_where_the_points_are(self):
+        tri = [(0, 0, 0), (512, 0, 0), (512, 0, 512)]
+        x, y, w, h, layout = blendmap.tile_region(tri, self.UP, 1024)
+        self.assertEqual(((0, 0), (1, 0), (1, 1)), tpage.LAYOUTS[layout])
+        tri = [(512, 0, 512), (0, 0, 0), (512, 0, 0)]  # the same, starting elsewhere
+        x, y, w, h, layout = blendmap.tile_region(tri, self.UP, 1024)
+        self.assertEqual(((1, 1), (0, 0), (1, 0)), tpage.LAYOUTS[layout])
+
+    def test_walls_are_upright(self):
+        # a wall facing +x is mapped by z and y; the image's top is up
+        tri = [(0, 0, 0), (0, 1024, 0), (0, 1024, 1024)]
+        x, y, w, h, layout = blendmap.tile_region(tri, self.EAST, 1024)
+        self.assertEqual((0, 0, 64, 64), (x, y, w, h))
+        self.assertEqual(1, tpage.LAYOUTS[layout][0][1])  # the low point at the bottom
+        self.assertEqual(0, tpage.LAYOUTS[layout][1][1])
+
+    def test_an_odd_triangle_gets_an_aligned_region_around_it(self):
+        tri = [(100, 0, 100), (300, 0, 120), (180, 0, 400)]
+        x, y, w, h, layout = blendmap.tile_region(tri, self.UP, 1024)
+        self.assertEqual((0, 0, 32, 32), (x, y, w, h))  # 6..25 x, 6..25 y in pixels
+        self.assertEqual(3, len(set(tpage.LAYOUTS[layout])))
+
+    def test_textured_materials_get_tile_regions(self):
+        mesh = merged(floor(0, 0, 512, 512, y=0), wall_mesh())
+        mesh = blendmap.Mesh(mesh.verts, [blendmap.Tri(t.verts, None, "stone" if i < 2 else "plain")
+                                          for i, t in enumerate(mesh.tris)])
+        [(verts, polys)] = blendmap.world_meshes(mesh, 512, GROUND, SIDE, 1024, textured={"stone"})
+        kinds = {type(p[3]).__name__ if p[4] is None else p[3:] for p in polys}
+        self.assertEqual({"TileRegion", SIDE}, kinds)
+        region = next(p[3] for p in polys if p[4] is None)
+        self.assertEqual("stone", region.material)
+
+
+def wall_mesh():
+    return quad_mesh([(512, 0, 0), (512, 256, 0), (512, 256, 256), (512, 0, 256)])
 
 
 def moved(mesh, dx, dy, dz):
