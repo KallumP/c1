@@ -31,6 +31,15 @@ A map modelled in Blender can become a level the game boots straight into: its f
    - If the route runs along X in Blender, add `--turn 90` (or `--turn 270` if Crash ends up facing backwards).
    - If the map isn't modelled at 1 m to a Blender unit, or Crash looks too big or small in it, add `--scale <units per m>` (the default is 400). If the map is too wide or too tall for the game at that scale, the tool says so and gives the largest scale that fits.
    - A warning that a `.mtl` or image wasn't found means those faces get N. Sanity Beach's textures instead. Check the paths in the `.mtl`.
+   - Once the turn and scale look right, save them in a `map.cfg` in the map's folder, so the map always comes out the same without the flags. `--turn` and `--scale` on the command line still override it. It holds one setting a line, and lines starting with `#` are comments:
+
+     ```
+     # maps/my_map/map.cfg
+     turn = 90
+     scale = 2000
+     ```
+
+     A setting other than `turn` or `scale`, or a value that isn't a whole number, stops the tool with a message naming the line.
 7. **Setup which level to boot into** In `settings.cfg`:
 
    ```

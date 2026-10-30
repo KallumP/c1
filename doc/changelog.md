@@ -9,6 +9,7 @@
 - `boot_level` setting to boot straight into a level from `custom_levels/`
 - `python tools/generate_level_terrain.py maps/<map>` makes a custom level from a map modelled in Blender and exported as `.obj` into a folder of its own: its geometry and Crash, with no other objects. faces get their material's image as a texture (from the `.mtl`). a map longer than one zone (16,384 units) is split into a chain of zones along its route
 - a follow camera for custom levels (`cam_mode` 9, which the map tool uses): it slides sideways after Crash as well as along its path, so he stays in view on paths beside each other
+- a map's folder can hold a `map.cfg` setting its `turn` and `scale`, so `generate_level_terrain.py` makes it the same way every time without flags (`--turn` and `--scale` still override it)
 
 ### Fixed
 
