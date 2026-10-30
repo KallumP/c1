@@ -165,6 +165,22 @@ class SolidCells(unittest.TestCase):
         self.assertEqual("floor", cells[(3, 3, 0)])
         self.assertEqual("wall", cells[(3, 2, 0)])
 
+    def test_walls_hanging_in_the_air_are_left_out(self):
+        # the game blocks crash at any wall cell whose top is above his feet, however
+        # high it hangs (PlotNodeWalls in src/solid.c), so a lintel would close a doorway
+        lintel = quad_mesh([(512, 1024, 0), (512, 1536, 0), (512, 1536, 256), (512, 1024, 256)])
+        cells = self.cells(merged(floor(0, 0, 1024, 256, y=512), lintel))
+        self.assertEqual({"floor"}, set(cells.values()))
+
+    def test_walls_standing_on_a_floor_or_the_zones_bottom_are_kept(self):
+        on_floor = quad_mesh([(512, 512, 0), (512, 1024, 0), (512, 1024, 256), (512, 512, 256)])
+        on_bottom = quad_mesh([(768, 0, 0), (768, 512, 0), (768, 512, 256), (768, 0, 256)])
+        cells = self.cells(merged(floor(0, 0, 512, 256, y=512), on_floor, on_bottom))
+        self.assertEqual({(3, j, k) for j in (4, 5, 6, 7) for k in (0, 1)},
+                         {key for key, kind in cells.items() if kind == "wall" and key[0] == 3})
+        self.assertEqual({(5, j, k) for j in range(4) for k in (0, 1)},
+                         {key for key, kind in cells.items() if kind == "wall" and key[0] == 5})
+
     def test_ceilings_are_not_solid(self):
         # the game never stops a jump at the octree (FindCeilY in src/solid.c), so
         # crash would jump through a ceiling and land on top of it
