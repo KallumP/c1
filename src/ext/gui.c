@@ -680,7 +680,7 @@ void GuiUpdate() {
 }
 
 /*
- * text in the top right corner: REPLAYING while replaying recorded inputs,
+ * text in the top right corner: REPLAYING INPUTS while replaying recorded inputs,
  * and crash's speed when speed_display is on in settings.cfg
  */
 static void GuiCornerOverlay() {
@@ -693,7 +693,7 @@ static void GuiCornerOverlay() {
   len = 0;
   text[0] = 0;
   if (ReplayIsPlaying())
-    len += snprintf(text, sizeof(text), "REPLAYING");
+    len += snprintf(text, sizeof(text), "REPLAYING INPUTS");
   if (game_settings.speed_display) {
     obj = game_state == GAME_STATE_PLAYING ? crash : 0;
     /* same frame time as GoolObjectPhysics, so open running matches velocity */
