@@ -30,23 +30,40 @@ static inline int32_t GetTicks() {
 }
 #endif
 
+/*
+ * fixed clock (for recording and replaying inputs): game time only moves
+ * when TimeAdvance is called, so every read of it is the same on replay
+ */
+static int fixed_clock = 0;
+static int32_t fixed_ticks = 0;
+
 void SetTicksElapsed(int32_t ticks) {
+  if (fixed_clock) { fixed_ticks = ticks; return; }
   ticks_base = GetTicks() - ticks;
 }
 
 int GetTicksElapsed() {
   int32_t ticks;
 
+  if (fixed_clock) { return fixed_ticks; }
   ticks = GetTicks() - ticks_base;
   return ticks;
 }
 
+/* switch between the fixed and real clocks, carrying on from the current time */
 void TimeSetFixed(int fixed) {
+  int32_t ticks;
+
+  ticks = GetTicksElapsed();
+  fixed_clock = fixed;
+  SetTicksElapsed(ticks);
 }
 
 int TimeIsFixed() {
-  return 0;
+  return fixed_clock;
 }
 
+/* move the fixed clock on */
 void TimeAdvance(int32_t ticks) {
+  fixed_ticks += ticks;
 }
