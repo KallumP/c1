@@ -436,7 +436,7 @@ class TileRegions(unittest.TestCase):
     def test_a_zones_meshes_are_the_pieces_in_it_relative_to_it(self):
         mesh = floor(0, 0, 1024, 4096, y=256)
         [(verts, polys)] = blendmap.world_meshes(mesh, 512, GROUND, SIDE, span=(2048, 4096))
-        self.assertEqual(2 * 4, len(polys))  # 4 of the 8 pieces along z, 2 triangles each
+        self.assertAlmostEqual(1024 * 2048, sum(area(verts, p) for p in polys))  # half of it along z
         self.assertEqual((0, 2048), (min(v[2] for v in verts), max(v[2] for v in verts)))
 
     def test_too_many_meshes_for_a_zone_is_an_error(self):
