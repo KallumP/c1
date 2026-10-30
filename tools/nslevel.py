@@ -490,6 +490,8 @@ def zone_header_bytes(template, self_eid, worlds, path_count, entity_count, neig
 
 
 PATH_LINKS_MAX = 4  # neighbor_paths in zone_path (src/formats/zdat.h)
+FOLLOW_CAM_MODE = 9  # a path's cam_mode for the follow camera: along the path, and sideways
+                     # after crash (src/pc/follow.h; the game's own cameras are 0 to 8)
 
 
 def path_bytes(slst, points, cam_mode, zoom, avg_node_dist, direction=(0, 0, 0), links=()):
@@ -743,7 +745,7 @@ def assemble_level(level, templates, size, zones, step, spawn_zone, tpag_eids=()
             if nxt is not None and zones[nxt].points:
                 links.append((2, neighbors.index(zone_eids[nxt]) + 1, 0, 1))  # on to the start of the next
             cam_points = [(x, y, zz, -181, 1, 0) for x, y, zz in z.points]
-            paths = [path_bytes(slst_eid, cam_points, cam_mode=5, zoom=1700, avg_node_dist=step,
+            paths = [path_bytes(slst_eid, cam_points, cam_mode=FOLLOW_CAM_MODE, zoom=1700, avg_node_dist=step,
                                 direction=(0, 0, -4096), links=links)]
             entries.append(Entry(slst_eid, 4, zone_slst_items(meshes, [p[2] for p in z.points], step)))
         entries.append(Entry(zone_eids[i], 7, [

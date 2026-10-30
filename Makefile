@@ -25,6 +25,7 @@ SRC =	src/ns.c \
 	src/pc/loading.c \
 	src/pc/time.c \
 	src/pc/replay.c \
+	src/pc/follow.c \
 	src/pc/gfx/tex.c \
 	src/pc/gfx/soft.c \
 	src/pc/gfx/gl.c \
@@ -49,6 +50,7 @@ TEST_SRC = $(wildcard tests/*.c) \
 	src/pc/loading.c \
 	src/pc/time.c \
 	src/pc/replay.c \
+	src/pc/follow.c \
 	src/ext/lib/gui.c \
 	src/util/tree.c \
 	src/util/list.c

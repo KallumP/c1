@@ -53,6 +53,7 @@ Project structure is listed below, including descriptions for each file.
 │   │   │── settings.c,h     # game settings (settings.cfg loading)
 │   │   │── loading.c,h      # level loading screen image conversion and minimum display time
 │   │   │── speed.c,h        # crash's speed measurement for the speed display
+│   │   │── follow.c,h       # the follow camera's sideways offset (cam_mode 9, custom levels)
 │   │   └── time.c,h         # tick counter
 │   ├── common.h             # common includes, macros, and codes
 │   ├── geom.h               # geometric primitives (point, vector, angle, rect, matrix etc.)
@@ -95,6 +96,7 @@ Project structure is listed below, including descriptions for each file.
 │   ├── test_loading.c       # loading screen image conversion and timing
 │   ├── test_gui.c           # in-game GUI tree node insertion and removal
 │   ├── test_speed.c         # crash's speed measurement and tracking
+│   ├── test_follow.c        # the follow camera's sideways offset
 │   └── test_sf2.c           # soundfont record struct sizes
 ├── tools                    # helper scripts
 │   ├── extract_streams.py   # extracts game assets from a disc image

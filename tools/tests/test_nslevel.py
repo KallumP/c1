@@ -843,6 +843,13 @@ class Map(unittest.TestCase):
         level, entries, zone = self.make("o Floor\n" + "\n".join(rows), scale=96)
         self.assertGreater(struct.unpack_from("<I", zone.items[0], 0)[0], 1)
 
+    def test_paths_use_the_follow_camera(self):
+        # cam_mode 9 (src/pc/follow.h): along the path, and sideways after crash
+        level, entries, zone = self.make()
+        paths_idx = struct.unpack_from("<I", zone.items[0], nslevel.ZONE_PATHS_IDX)[0]
+        self.assertEqual(nslevel.FOLLOW_CAM_MODE, struct.unpack_from("<H", zone.items[paths_idx], 32)[0])
+        self.assertEqual(9, nslevel.FOLLOW_CAM_MODE)
+
     def test_turn_runs_the_map_along_z(self):
         # turned a quarter, the 16 m long floor runs along x
         level, entries, zone = self.make(scale=256, turn=90)

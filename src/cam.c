@@ -9,6 +9,7 @@
 #include "formats/svtx.h"
 #include "formats/tgeo.h"
 #include "formats/zdat.h"
+#include "pc/follow.h"
 
 /* .sdata */
 int32_t cam_offset_z  = -0x12C00; /* 800564A4; gp[0x2A] */
@@ -487,6 +488,7 @@ int CamUpdate() {
   zone_path_point *point;
   int next_island_cam_state;
   int i, cam_mode, skip, n_path_idx, pt_idx;
+  int32_t path_x;
 
   if (!crash) { return 0; }
   if (cur_display_flags & GOOL_FLAG_SPIN_DEATH) {
@@ -500,6 +502,13 @@ int CamUpdate() {
   case 6:
     game_state = GAME_STATE_PLAYING;
     CamFollow(crash, 0);
+    return 1;
+  case FOLLOW_CAM_MODE: /* follow crash, sideways too (custom levels) */
+    game_state = GAME_STATE_PLAYING;
+    CamFollow(crash, 0); /* along the path; LevelUpdate keeps the offset on */
+    path_x = cam_trans.x - follow_cam_offset;
+    follow_cam_offset = FollowCamOffset(follow_cam_offset, crash->trans.x - path_x);
+    cam_trans.x = path_x + follow_cam_offset;
     return 1;
   case 0: /* no camera */
     game_state = GAME_STATE_PLAYING;
