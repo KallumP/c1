@@ -7,6 +7,7 @@ the work.
 import os
 import sys
 
+import blendmap
 import nslevel
 
 USAGE = """usage:
@@ -37,6 +38,13 @@ def parse_args(argv):
     return args[0], (args[1] if len(args) == 2 else None), options["--scale"], options["--turn"]
 
 
+def fitting_scale(scale, too_big):
+    """the largest scale (rounded down to a 10) at which a map that was
+    too_big (blendmap.TooBig) at scale fits"""
+    e = too_big
+    return int(scale * (e.side_max - e.fixed) / (e.extent - e.fixed)) // 10 * 10
+
+
 def main(argv):
     try:
         source, name, scale, turn = parse_args(argv)
@@ -49,7 +57,13 @@ def main(argv):
     with open(path) as f:
         text = f.read()
     images = nslevel.map_images(path, text)
-    level = nslevel.make_map(nslevel.read_level(nslevel.STREAMS_DIR, 9), text, scale, turn, images)
+    try:
+        level = nslevel.make_map(nslevel.read_level(nslevel.STREAMS_DIR, 9), text, scale, turn, images)
+    except blendmap.TooBig as e:
+        print("%s: at --scale %d it's %d units along %s, and the game's collision only reaches %d. "
+              "use --scale %d or less" % (source, scale, e.extent, "xyz"[e.axis], e.side_max,
+                                          fitting_scale(scale, e)))
+        return 1
     nslevel.write_level(level, nslevel.CUSTOM_LEVELS_DIR, name)
     print("wrote %s" % os.path.join(nslevel.CUSTOM_LEVELS_DIR, name))
     return 0

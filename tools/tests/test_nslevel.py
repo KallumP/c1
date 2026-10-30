@@ -464,25 +464,149 @@ def slst_list(item):
     return type, list(struct.unpack_from("<%dH" % length, item, 4))
 
 
+class _Nodes:
+    """slst_context in src/slst.c, reading add or remove nodes"""
+    def __init__(self, nodes, start, end):
+        self.nodes, self.i, self.end = nodes, start, end
+        self.idx = self.len = self.count = self.poly = 0
+
+    def word(self):
+        w = self.nodes[self.i] if self.i < len(self.nodes) else 0xFFFF
+        self.i += 1
+        return w
+
+    def next(self):  # SlstRemNext / SlstAddNext
+        if self.len > 0:
+            self.poly = self.word()
+            self.idx += self.poly >> 15
+        else:
+            node = self.word()
+            if self.i < self.end and node != 0xFFFF:
+                self.idx, self.len = node & 0xFFF, ((node & 0xF000) >> 12) + 1
+            else:
+                self.idx, self.len = 0xFFFF00, 0
+            if self.len > 0:
+                self.poly = self.word()
+
+
+def slst_words(item):
+    """a sort list item's 16 bit words after its length and type: a delta's
+    split_idx, swaps_idx and nodes (slst_delta in src/formats/slst.h)"""
+    length, type = struct.unpack_from("<HH", item, 0)
+    return length, type, list(struct.unpack_from("<%dH" % length, item, 4))
+
+
+def slst_decode(item, src, forward):
+    """SlstUpdate (src/slst.c) on src, a list of poly ids: a full list is
+    copied, a delta applied forward (SlstDecodeForward) or backward
+    (SlstDecodeBackward). the deltas here have no swaps"""
+    length, type, nodes = slst_words(item)
+    if not type & 1:
+        return nodes
+    split, swaps = nodes[0], nodes[1]
+    assert swaps == length, "no swaps"
+    if forward:
+        rem, add = _Nodes(nodes, 2, split), _Nodes(nodes, split, swaps)
+    else:
+        add, rem = _Nodes(nodes, 2, split), _Nodes(nodes, split, swaps)
+    rem.next()
+    add.next()
+    isrc, dst = 0, []
+    for _ in range(100000):
+        if forward:
+            removes = isrc < len(src) and rem.len > 0 and rem.idx - 1 - isrc == 0
+            adds = add.len > 0 and add.idx + rem.count - isrc == 0
+        else:
+            removes = isrc < len(src) and rem.len > 0 and rem.idx + rem.count - isrc == 0
+            adds = add.len > 0 and add.idx + rem.count - (add.count + 1) - isrc == 0
+        if removes:
+            isrc += 1
+            rem.len -= 1
+            rem.count += 1
+            rem.next()
+        elif adds:
+            dst.append(add.poly & 0x7FFF)
+            add.len -= 1
+            add.count += 1
+            add.next()
+        elif isrc < len(src):
+            if forward:
+                n = min(add.idx + rem.count - isrc, rem.idx - (isrc + 1), len(src) - (isrc + 1))
+                n = 1 if n == 0 else n
+            else:
+                n = min(add.idx + (rem.count - add.count) - (isrc + 1), rem.idx + rem.count - isrc,
+                        len(src) - (isrc + 1))
+                n = 1 if n <= 0 else n
+            assert n > 0, "the game would loop forever"
+            dst += src[isrc:isrc + n]
+            isrc += n
+        if not (isrc < len(src) or add.len > 0 or rem.len > 0):
+            return dst
+    raise AssertionError("the game would loop forever")
+
+
+def slst_walk(items, forward=True):
+    """each point's list, the way LevelUpdate gets it walking the whole path
+    from its first point (forward) or its last (backward)"""
+    n = len(items) - 1
+    if forward:
+        lists = [slst_decode(items[0], [], True)]
+        for k in range(1, n):
+            lists.append(slst_decode(items[k], lists[-1], True))
+        return lists
+    lists = [slst_decode(items[n], [], False)]
+    for k in range(n - 1, 0, -1):
+        lists.insert(0, slst_decode(items[k], lists[0], False))
+    return lists
+
+
 class SortList(unittest.TestCase):
     # three polygons whose far edges (towards +z) are at z 100, 500 and 900;
     # the camera moves along -z from 1000 to 600 in steps of 200
     POLY_ZMAX = [100, 500, 900]
     CAM_ZS = [1000, 800, 600]
 
-    def test_one_full_list_per_point_and_one_more_for_the_last(self):
+    def test_full_lists_at_the_ends_and_changes_between(self):
+        # LevelUpdate copies item 0 at the first point and item N at the
+        # last (N points), and steps between with items 1..N-1
         items = nslevel.slst_items([self.POLY_ZMAX], self.CAM_ZS, step=200, near=50)
         self.assertEqual(len(self.CAM_ZS) + 1, len(items))
-        self.assertEqual({0}, {slst_list(item)[0] for item in items})  # copied as is, either way
+        self.assertEqual([0, 1, 1, 0], [slst_words(item)[1] & 1 for item in items])
 
     def test_each_point_lists_only_polygons_in_front_of_the_camera(self):
         # in front for the whole step to the next point: zmax < cam z - step - near
         items = nslevel.slst_items([self.POLY_ZMAX], self.CAM_ZS, step=200, near=50)
         ids = [nslevel.poly_id(0, i) for i in range(3)]
-        self.assertEqual(ids[:2], slst_list(items[0])[1])  # under 1000-250: 100 and 500
-        self.assertEqual(ids[:2], slst_list(items[1])[1])  # under 800-250: 100 and 500
-        self.assertEqual(ids[:1], slst_list(items[2])[1])  # under 600-250: 100
-        self.assertEqual(slst_list(items[2]), slst_list(items[3]))  # last point again
+        expected = [ids[:2], ids[:2], ids[:1]]  # under 1000-250 and 800-250: 100 and 500; then 100
+        self.assertEqual(expected, slst_walk(items))
+        self.assertEqual(expected, slst_walk(items, forward=False))
+
+    def test_walking_the_path_either_way_gives_each_points_list(self):
+        # polygons coming into view and leaving it, in runs longer than a
+        # node holds (16), at the start, middle and end of the lists
+        zmax = [z * 10 for z in range(300)]
+        zmid = [(z * 37) % 300 for z in range(300)]
+        cams = list(range(3500, 600, -170))
+        items = nslevel.slst_items([zmax, zmax[:40]], cams, step=170, near=50,
+                                   world_zmid=[zmid, zmid[:40]])
+        expected = [slst_words(nslevel.slst_items([zmax, zmax[:40]], [c], step=170, near=50,
+                                                  world_zmid=[zmid, zmid[:40]])[0])[2] for c in cams]
+        self.assertEqual(expected, slst_walk(items))
+        self.assertEqual(expected, slst_walk(items, forward=False))
+
+    def test_changes_go_both_ways(self):
+        ids = list(range(1, 200))
+        cases = [([], ids[:30]), (ids[:30], []), (ids[:50], ids[10:60]), (ids[::2], ids[::3]),
+                 (ids[5:40] + ids[90:120], ids[:20] + ids[30:100] + ids[150:]), (ids, ids)]
+        for a, b in cases:
+            item = nslevel.slst_delta(a, b)
+            self.assertEqual(b, slst_decode(item, a, True))
+            self.assertEqual(a, slst_decode(item, b, False))
+
+    def test_a_long_path_fits_in_a_page(self):
+        zmax = [z * 8 for z in range(4000)]
+        items = nslevel.slst_items([zmax], list(range(32000, 0, -128)), step=128, near=50)
+        self.assertLess(sum(len(i) for i in items), nslevel.PAGE_SIZE // 2)
 
     def test_lists_polygons_of_every_world_mesh(self):
         items = nslevel.slst_items([[100, 900], [200]], [1000], step=200, near=50)
@@ -594,6 +718,21 @@ class Map(unittest.TestCase):
             clut_y = (rgn >> 6) & 127
             self.assertIn(stone, struct.unpack_from("<16H", page.data, clut_y * 512))
         self.assertGreater(on_page, 0)
+
+    def test_each_mesh_holds_only_the_texture_regions_it_uses(self):
+        # a mesh header's texinfos are indexed by 12 bits of words, so a map
+        # whose meshes together use more regions than that still fits if each
+        # mesh lists its own
+        template = struct.pack(nslevel.WGEO_HEADER, 0, 0, 0, 0, 0, 2, 1, 0) + bytes(32) + b"TEX!TEX?"
+        TileRegion = nslevel.blendmap.TileRegion
+        a, b = TileRegion("stone", 0, 0, 32, 32, 0), TileRegion("stone", 32, 0, 32, 32, 0)
+        verts = [(0, 0, 0, (128, 128, 128))] * 3
+        worlds = [(verts, [(0, 1, 2, a, None), (0, 1, 2, a, None)]), (verts, [(0, 1, 2, b, None)])]
+        worlds, (tpags, texinfos, pages) = nslevel.map_textures(worlds, {"stone": self.stone()}, template)
+        self.assertEqual([8, 8], [len(t) for t in texinfos])  # one region (2 words) each
+        self.assertEqual([2, 2], [p[3] for p in worlds[0][1]])  # after the template's 2 words
+        self.assertEqual([2], [p[3] for p in worlds[1][1]])
+        self.assertNotEqual(texinfos[0], texinfos[1])
 
     def test_materials_without_an_image_keep_n_sanity_beachs_textures(self):
         level, entries, zone = self.make(self.TEXTURED_OBJ, images={"stone": self.stone()})

@@ -27,6 +27,12 @@ class Args(unittest.TestCase):
         with self.assertRaises(ValueError):
             generate_level_terrain.parse_args(["maps/x", "--turn"])
 
+    def test_too_big_says_the_largest_scale_that_fits(self):
+        # 20000 long at scale 1000 with a 256 margin that doesn't scale:
+        # (16384 - 256) / (20000 - 256) of 1000, rounded down to a 10
+        e = generate_level_terrain.blendmap.TooBig(2, 20000, 16384, fixed=256)
+        self.assertEqual(810, generate_level_terrain.fitting_scale(1000, e))
+
     def test_without_a_map_it_prints_usage(self):
         self.assertEqual(1, generate_level_terrain.main([]))
 

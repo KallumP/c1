@@ -384,7 +384,6 @@ LEAF_PIT = (11 << 4) | 1  # leaf with subtype 11: kills what falls on it (Proces
 FLOOR_CELL_MAX = 1024  # largest solid cell (zone units): ZoneQueryOctree stores a cell's position
                        # relative to the query point as int16 (>> 4), so a bigger one is misplaced
 
-
 def pad4(data):
     return data + b"\0" * (-len(data) % 4)
 
@@ -547,6 +546,48 @@ def poly_id(world_idx, poly_idx):
 
 
 POLY_IDS_MAX = 1460  # polygons the game can list (SlstInit in src/slst.c)
+SLST_FULL, SLST_DELTA = 0, 1  # item types: SlstUpdate copies an even one, applies an odd one
+SLST_RUN_MAX = 16             # ids a delta node can hold
+SLST_NEXT = 0x8000            # a node's id flag: this one goes one place on from the last
+
+
+def slst_full(ids):
+    return pad4(struct.pack("<HH%dH" % len(ids), len(ids), SLST_FULL, *ids))
+
+
+def slst_delta(a, b):
+    """a sort list item that turns list a into list b, going forward along
+    the path, and b into a going back (SlstDecodeForward and
+    SlstDecodeBackward in src/slst.c). both lists have to be in the same
+    order, so it only removes and adds ids, without swaps.
+
+    a remove node is (count - 1) << 12 | the first id's place in a, plus 1,
+    then the ids, each after the first flagged as the next place on. an add
+    node is (count - 1) << 12 | how many of a's kept ids come before, then
+    the ids, which go in together there"""
+    in_a, in_b = set(a), set(b)
+    removes, adds = [], []
+    gone = [i for i, x in enumerate(a) if x not in in_b]
+    while gone:
+        run = 1
+        while run < min(len(gone), SLST_RUN_MAX) and gone[run] == gone[0] + run:
+            run += 1
+        removes += [((run - 1) << 12) | (gone[0] + 1)] + [a[gone[0]]] + [a[i] | SLST_NEXT for i in gone[1:run]]
+        gone = gone[run:]
+    kept, new = 0, []
+    for x in b + [None]:
+        if x is not None and x not in in_a:
+            new.append(x)
+            continue
+        while new:
+            run = new[:SLST_RUN_MAX]
+            adds += [((len(run) - 1) << 12) | kept] + run
+            new = new[SLST_RUN_MAX:]
+        kept += 1
+    split = 2 + len(removes)
+    swaps = split + len(adds)
+    words = [split, swaps] + removes + adds
+    return pad4(struct.pack("<HH%dH" % len(words), len(words), SLST_DELTA, *words))
 
 
 def slst_items(world_zmax, cam_zs, step, near, world_zmid=None):
@@ -560,21 +601,23 @@ def slst_items(world_zmax, cam_zs, step, near, world_zmid=None):
     in src/pc/gfx/soft.c), so each is farthest first by the polygons' middle
     z (world_zmid, laid out like world_zmax; their largest z if not given).
 
-    every item is a full list rather than a delta (the game copies an even
-    type item as is, whichever way the camera moves). LevelUpdate reads
-    item k on reaching point k, and item N (one past the last point) when
-    starting in the second half of the path, so that repeats the last."""
+    LevelUpdate copies item 0 at the first point and item N (one past the
+    last point) at the last, so those are full lists; between them, item k
+    is the change from point k-1's list to point k's, which it applies
+    forward going on to point k and backward going back from it. as every
+    list is in the same order, a change is only what comes into view and
+    what leaves it, so a long path stays small."""
     world_zmid = world_zmid or world_zmax
 
-    def full_list(cam_z):
+    def ids(cam_z):
         front = [(zmax, world_zmid[w][i], poly_id(w, i)) for w, poly_zmax in enumerate(world_zmax)
                  for i, zmax in enumerate(poly_zmax) if zmax < cam_z - step - near]
         if len(front) > POLY_IDS_MAX:  # too many to list: leave out the farthest
             front = sorted(front, key=lambda f: -f[0])[:POLY_IDS_MAX]
-        ids = [f[2] for f in sorted(front, key=lambda f: (f[1], f[2]))]
-        return pad4(struct.pack("<HH%dH" % len(ids), len(ids), 0, *ids))
-    items = [full_list(z) for z in cam_zs]
-    return items + [items[-1]]
+        return [f[2] for f in sorted(front, key=lambda f: (f[1], f[2]))]
+    lists = [ids(z) for z in cam_zs]
+    return ([slst_full(lists[0])] + [slst_delta(a, b) for a, b in zip(lists, lists[1:])]
+            + [slst_full(lists[-1])])
 
 
 # entities (zone_entity in src/formats/zdat.h): parent zone, spawn flags,
@@ -636,18 +679,18 @@ def assemble_level(level, templates, prefix, size, blocks, worlds, points, step,
     to the zone), one follow camera path through points (x, y, z) step
     apart going along -z, and entities (crash first). keeps crash, the hud
     and core objects, and the code for the entities' types, from level.
-    textures, from map_textures, adds texture pages and the meshes'
+    textures, from map_textures, adds texture pages and each mesh's
     texinfos for them"""
-    tpag_eids, texinfos, texture_pages = textures or ((), b"", [])
+    tpag_eids, texinfos, texture_pages = textures or ((), [b""] * len(worlds), [])
     t = templates
     zone_eid, slst_eid = str_to_eid(prefix + "Z"), str_to_eid(prefix + "S")
     world_eids = [str_to_eid(prefix + ("W" if i == 0 else str(i))) for i in range(len(worlds))]
     x0, y0, z0 = t.origin
     world_entries = [Entry(eid, 3, [
-        world_header_bytes(t.world.items[0], (x0, y0, z0), len(polys), len(verts), tpag_eids, texinfos),
+        world_header_bytes(t.world.items[0], (x0, y0, z0), len(polys), len(verts), tpag_eids, infos),
         b"".join(world_polygon_bytes(a, b, c, tinf, tpag) for a, b, c, tinf, tpag in polys),
         b"".join(world_vertex_bytes(x, y, z, colour) for x, y, z, colour in verts)])
-        for eid, (verts, polys) in zip(world_eids, worlds)]
+        for eid, (verts, polys), infos in zip(world_eids, worlds, texinfos)]
     cam_points = [(x, y, z, -181, 1, 0) for x, y, z in points]
     path = path_bytes(slst_eid, cam_points, cam_mode=5, zoom=1700,
                       avg_node_dist=step, direction=(0, 0, -4096))
@@ -699,7 +742,9 @@ def map_textures(worlds, images, template):
     """texture pages for the materials' images that the world meshes' tile
     regions (blendmap.TileRegion) use, and the meshes with each region
     turned into a texinfo index and texture page slot, for a mesh header
-    from template: (worlds, (tpag eids, texinfos, texture pages))"""
+    from template: (worlds, (tpag eids, each mesh's texinfos, texture
+    pages)). each mesh lists only the regions it uses, as the indices only
+    reach TEXINFO_WORDS_MAX words into its header"""
     fields = struct.unpack_from(WGEO_HEADER, template, 0)
     used = sorted({p[3].material for _, polys in worlds for p in polys if p[4] is None})
     chunks = [used[i:i + tpage.TILES_PER_PAGE] for i in range(0, len(used), tpage.TILES_PER_PAGE)]
@@ -713,9 +758,9 @@ def map_textures(worlds, images, template):
         pages.append(Page(PAGE_TEXTURE, eid=eid, data=data))
         for m, place in zip(chunk, places):
             place_of[m] = (fields[6] + k, place)
-    index, texinfos = {}, b""
-    out = []
-    for verts, polys in worlds:
+    out, all_texinfos = [], []
+    for w, (verts, polys) in enumerate(worlds):
+        index, texinfos = {}, b""
         new = []
         for p in polys:
             if p[4] is None:
@@ -726,10 +771,12 @@ def map_textures(worlds, images, template):
                     texinfos += tpage.texinfo_bytes(place, r.layout, (r.x, r.y, r.w, r.h))
                 p = p[:3] + (index[r], slot)
             new.append(p)
+        if fields[5] + len(texinfos) // 4 > TEXINFO_WORDS_MAX:
+            raise ValueError("world mesh %d uses %d texture regions, more than its texinfos hold (%d)" % (
+                w, len(index), (TEXINFO_WORDS_MAX - fields[5]) // 2))
         out.append((verts, new))
-    if fields[5] + len(texinfos) // 4 > TEXINFO_WORDS_MAX:
-        raise ValueError("too many texture regions for a mesh's texinfos")
-    return out, ([p.eid for p in pages], texinfos, pages)
+        all_texinfos.append(texinfos)
+    return out, ([p.eid for p in pages], all_texinfos, pages)
 
 
 def map_source(path):
@@ -780,8 +827,10 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None):
     fit = blendmap.fit(blendmap.read_obj(text, scale, turn), MAP_CELL, MAP_HEADROOM, margin=MAP_CELL)
     mesh = fit.mesh
     cells = blendmap.solid_cells(mesh, fit.size, MAP_CELL)
+    texinfo_words = struct.unpack_from(WGEO_HEADER, t.world.items[0], 0)[5]  # the template's own
     worlds = blendmap.world_meshes(mesh, MAP_PIECE, t.textures[0], t.textures[1], MAP_TILE,
-                                   textured=set(images or ()))
+                                   textured=set(images or ()),
+                                   regions_max=(TEXINFO_WORDS_MAX - texinfo_words) // 2)
     textures = None
     if images:
         worlds, textures = map_textures(worlds, images, t.world.items[0])
