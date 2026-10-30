@@ -83,3 +83,42 @@ def texture_page(eid, tiles):
         places.append(Place(unit // 32, unit % 32, y0 // 4, 0, clut_y))
     struct.pack_into("<HHIII", page, 0, MAGIC_PAGE, PAGE_TEXTURE, eid, ENTRY_TPAG, 0)
     return bytes(page), places
+
+
+# texture infos (texinfo2 in src/geom.h, 8 bytes in a world mesh's header):
+# a region of a texture page and which of its corners go on a triangle's
+# three corners. LAYOUTS are uv_map's 24 orders (src/gfx.c): every ordered
+# pick of 3 of the region's 4 corners, as (x, y) with 0 left/top, 1 right/bottom
+LAYOUTS = [
+    ((0, 0), (1, 0), (0, 1)), ((0, 0), (0, 1), (1, 0)), ((1, 0), (0, 1), (0, 0)),
+    ((1, 0), (0, 0), (0, 1)), ((0, 1), (0, 0), (1, 0)), ((0, 1), (1, 0), (0, 0)),
+    ((0, 0), (1, 0), (1, 1)), ((0, 0), (1, 1), (1, 0)), ((1, 0), (1, 1), (0, 0)),
+    ((1, 0), (0, 0), (1, 1)), ((1, 1), (0, 0), (1, 0)), ((1, 1), (1, 0), (0, 0)),
+    ((1, 0), (1, 1), (0, 1)), ((1, 0), (0, 1), (1, 1)), ((1, 1), (0, 1), (1, 0)),
+    ((1, 1), (1, 0), (0, 1)), ((0, 1), (1, 0), (1, 1)), ((0, 1), (1, 1), (1, 0)),
+    ((0, 0), (1, 1), (0, 1)), ((0, 0), (0, 1), (1, 1)), ((1, 1), (0, 1), (0, 0)),
+    ((1, 1), (0, 0), (0, 1)), ((0, 1), (0, 0), (1, 1)), ((0, 1), (1, 1), (0, 0)),
+]
+SIZES = [4, 8, 16, 32, 64]  # region widths and heights
+SEMI_TRANS = 3              # as n. sanity beach's world textures
+
+
+def uv_idx(layout, w, h):
+    """uv_map's index for a layout and a w x h region"""
+    return layout * 25 + SIZES.index(h) * 5 + SIZES.index(w)
+
+
+def texinfo_bytes(place, layout, region):
+    """a texture info for region (x, y, w, h, in pixels of the tile at
+    place) put on a triangle's corners in layout. regions are a power of
+    two 4 to 64 pixels a side, at x on 8 pixels (the step for 4 bit
+    textures) and y on 4"""
+    x, y, w, h = region
+    if (w not in SIZES or h not in SIZES or x % 8 or y % 4 or x < 0 or y < 0
+            or x + w > TILE or y + h > TILE):
+        raise ValueError("region %r isn't one the game can address in a tile" % (region,))
+    unit = place.segment * 32 + place.offs_x + x // 8
+    flags = (1 << 7) | (SEMI_TRANS << 5) | place.clut_x  # type 1 (textured), no_cull 0
+    rgn = ((uv_idx(layout, w, h) << 22) | (0 << 20) | ((unit // 32) << 18) | ((unit % 32) << 13)
+           | (place.clut_y << 6) | (place.offs_y + y // 4))
+    return struct.pack("<4BI", 0, 0, 0, flags, rgn)
