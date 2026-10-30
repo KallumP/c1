@@ -191,12 +191,20 @@ class SharedItems(unittest.TestCase):
 
     def test_each_items_offset_points_at_its_data(self):
         # the loader makes each item offset a pointer on its own (NSPageStruct in src/ns.c)
-        items = [self.A, self.B, self.A, self.B, b""]
+        items = [self.A, self.B, self.A, self.B]
         data = nslevel.entry_bytes(nslevel.Entry(nslevel.str_to_eid("TestS"), 4, items))
-        offsets = struct.unpack_from("<6I", data, 16)
+        offsets = struct.unpack_from("<5I", data, 16)
         for item, offset in zip(items, offsets):
             self.assertEqual(item, data[offset:offset + len(item)])
         self.assertEqual(len(data), offsets[-1])
+
+    def test_other_entries_keep_every_item_including_empty_ones(self):
+        # sort lists never have empty items, but other entries might, and an empty
+        # item's offset is the next item's, so only sort lists share
+        items = [self.A, b"", self.A]
+        data = nslevel.entry_bytes(nslevel.Entry(nslevel.str_to_eid("TestZ"), 7, items))
+        self.assertEqual(16 + 4 * 4 + 2 * len(self.A), len(data))
+        self.assertEqual(items, nslevel.read_entry(data, 0).items)
 
     def test_shared_items_read_back(self):
         items = [self.A, self.B, self.A, self.A, self.B]

@@ -29,6 +29,7 @@ TYPE_NAMES = {
 # page types
 PAGE_ENTRIES = 0
 PAGE_TEXTURE = 1
+SHARED_ITEMS_TYPE = 4  # sort lists: many of their items are the same, and none is empty
 
 NSD_PTB_COUNT = 256
 NSD_COMPRESSED_PAGE_COUNT = 64
@@ -126,7 +127,11 @@ def read_entry(data, off):
     if magic != MAGIC_ENTRY:
         raise ValueError("bad entry magic %x at %x" % (magic, off))
     offsets = struct.unpack_from("<%dI" % (item_count + 1), data, off + 16)
-    items = [bytes(data[off + offsets[i]:off + offsets[i + 1]]) for i in range(item_count)]
+    if etype == SHARED_ITEMS_TYPE:  # an item ends where the next stored item starts
+        ends = sorted(set(offsets))
+        items = [bytes(data[off + o:off + next((e for e in ends if e > o), o)]) for o in offsets[:-1]]
+    else:
+        items = [bytes(data[off + offsets[i]:off + offsets[i + 1]]) for i in range(item_count)]
     return Entry(eid, etype, items)
 
 
@@ -184,15 +189,20 @@ def pgid(index):
 
 
 def entry_bytes(entry):
-    """an entry: header, item offsets relative to the entry, then the items"""
+    """an entry: header, item offsets relative to the entry, then the items.
+    a sort list's identical items are stored once, their offsets pointing at
+    the same data (the loader makes each offset a pointer on its own)"""
     offset = 16 + 4 * (len(entry.items) + 1)
-    offsets = []
+    offsets, stored, blobs = [], {}, []
     for item in entry.items:
-        offsets.append(offset)
-        offset += len(item)
+        if item not in stored or entry.type != SHARED_ITEMS_TYPE:
+            stored[item] = offset
+            blobs.append(item)
+            offset += len(item)
+        offsets.append(stored[item])
     offsets.append(offset)
     data = struct.pack("<IIii", MAGIC_ENTRY, entry.eid, entry.type, len(entry.items))
-    return data + struct.pack("<%dI" % len(offsets), *offsets) + b"".join(entry.items)
+    return data + struct.pack("<%dI" % len(offsets), *offsets) + b"".join(blobs)
 
 
 def entry_page_bytes(entries, index):
