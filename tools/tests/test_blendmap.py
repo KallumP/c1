@@ -433,6 +433,19 @@ class TileRegions(unittest.TestCase):
         region = next(p[3] for p in polys if p[4] is None)
         self.assertEqual("stone", region.material)
 
+    def test_a_zones_meshes_are_the_pieces_in_it_relative_to_it(self):
+        mesh = floor(0, 0, 1024, 4096, y=256)
+        [(verts, polys)] = blendmap.world_meshes(mesh, 512, GROUND, SIDE, span=(2048, 4096))
+        self.assertEqual(2 * 4, len(polys))  # 4 of the 8 pieces along z, 2 triangles each
+        self.assertEqual((0, 2048), (min(v[2] for v in verts), max(v[2] for v in verts)))
+
+    def test_too_many_meshes_for_a_zone_is_an_error(self):
+        floors = [floor(0, k * 256, 256, k * 256 + 256, y=(k % 7) * 8) for k in range(250)]
+        mesh = merged(*[merged(*[blendmap.Mesh([(x + i * 256, y, z) for x, y, z in f.verts], f.tris)
+                                 for i in range(10)]) for f in floors])
+        with self.assertRaises(ValueError):
+            blendmap.world_meshes(mesh, 256, GROUND, SIDE, worlds_max=1)
+
     def test_meshes_split_before_their_texture_regions_overflow(self):
         # each region a mesh uses is a texinfo (8 bytes) in its header, so
         # it counts towards fitting a page, and a header's texinfo indices
