@@ -105,7 +105,7 @@ Project structure is listed below, including descriptions for each file.
 │   ├── blendmap.py          # turns a map exported from blender into the parts of a level, for nslevel.py
 │   ├── tpage.py             # texture pages: images as 16 colour tiles, and texture infos for parts of them
 │   └── tests                # the tools' tests (python -m unittest discover -s tools/tests)
-├── maps                     # your maps modelled in blender, a folder each, to make levels from (ignored by git)
+├── maps                     # your maps modelled in blender, a folder each, to make levels from (ignored by git, apart from the included tide_ruins map)
 ├── custom_levels            # levels made with tools/generate_level_terrain.py, to boot into with boot_level
 ├── controls.example.cfg     # example key bindings (copy to controls.cfg to change the controls)
 ├── settings.example.cfg     # example settings (copy to settings.cfg to change the settings)

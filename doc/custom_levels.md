@@ -1,59 +1,64 @@
 # Custom levels
 
-A map modelled in Blender can become a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. There are no objects yet (eg: enemies, fruit or crates). Maps go in `maps/`, a folder each; like `custom_levels/`, it's ignored by git.
+A map modelled in Blender can become a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. There are no objects yet (eg: enemies, fruit or crates). Maps go in `maps/`, a folder each. One map is included to try it with, `maps/tide_ruins` (see [maps/README.md](../maps/README.md) for instructions to play it); the maps you add are ignored by git, like `custom_levels/`.
 
 ## From Blender to the game
+
+The examples below use the included map, `maps/tide_ruins`. It's ready to use, so to try it, do step 1 and then start at step 6.
 
 1. **Get set up (once).** You need the game built (see [Building](building.md)), its files in `streams/` (see [Running](running.md)), Python 3, and [Pillow](https://pypi.org/project/pillow/) for textures (`pip install pillow`). Without Pillow, a map with no images still works.
 2. **Get the map ready in Blender** (see [Modelling](#modelling) below): the route running towards +Y, faces pointing the right way, and optionally a `spawn` object and `pit` objects.
 3. **Unpack textures** if they're packed in the `.blend`: File > External Data > Unpack Resources. That saves them as image files that the export can point at.
-4. **Export** with File > Export > Wavefront (.obj) into a folder of the map's own, `maps/my_map/`:
+4. **Export** with File > Export > Wavefront (.obj) into a folder of the map's own, such as `maps/tide_ruins/`:
    - keep the default axes (Forward -Z, Up Y)
    - turn on Materials, so it writes a `.mtl` next to the `.obj`. It only writes a material's image if the image goes into a Principled BSDF's Base Color. Maps from older Blender versions often use a Diffuse BSDF instead, and then the `.mtl` has no `map_Kd` lines. Swap each Diffuse BSDF for a Principled BSDF with the image in its Base Color before exporting.
    - leave the rest as it is: the object names (`spawn`, `pit…`) go into the `.obj` as they are
 5. **Put the images in the folder too**, and make the `.mtl` point at them there. Blender writes the path each image had when it was exported. Edit each `map_Kd` line to just the file name (or a path inside the folder, such as `textures/floor.png`). The folder is then the whole map, with nothing outside it:
 
    ```
-   maps/my_map/my_map.obj
-   maps/my_map/my_map.mtl
-   maps/my_map/floor.png
-   maps/my_map/wall.png
+   maps/tide_ruins/tide_ruins.obj
+   maps/tide_ruins/tide_ruins.mtl
+   maps/tide_ruins/grass.png
+   maps/tide_ruins/rock.png
+   ...
    ```
 
    The folder must hold exactly one `.obj`. The files in it can have any names.
 6. **Make the level.** From the project directory, run:
 
    ```
-   python tools/generate_level_terrain.py maps/my_map
+   python tools/generate_level_terrain.py maps/tide_ruins
    ```
 
-   It writes `custom_levels/my_map` (the `.nsd` and `.nsf`), named after the folder. Add a name to save it as something else (`python tools/generate_level_terrain.py maps/my_map other_name`). It prints `wrote …` when it's done. It also takes a `.obj` instead of a folder, and names the level after the file.
+   It writes `custom_levels/tide_ruins` (the `.nsd` and `.nsf`), named after the folder. Add a name to save it as something else (`python tools/generate_level_terrain.py maps/tide_ruins other_name`). It prints `wrote …` when it's done. It also takes a `.obj` instead of a folder, and names the level after the file.
    - If the route runs along X in Blender, add `--turn 90` (or `--turn 270` if Crash ends up facing backwards).
    - If the map isn't modelled at 1 m to a Blender unit, or Crash looks too big or small in it, add `--scale <units per m>` (the default is 400). If the map is too wide or too tall for the game at that scale, the tool says so and gives the largest scale that fits.
    - A warning that a `.mtl` or image wasn't found means those faces get N. Sanity Beach's textures instead. Check the paths in the `.mtl`.
    - Once the turn and scale look right, save them in a `map.cfg` in the map's folder, so the map always comes out the same without the flags. `--turn` and `--scale` on the command line still override it. It holds one setting a line, and lines starting with `#` are comments:
 
      ```
-     # maps/my_map/map.cfg
+     # maps/tide_ruins/map.cfg
      turn = 90
      scale = 2000
      ```
+
+     (`tide_ruins` doesn't actually need one: it's modelled at 1 m to a unit with its route along Y, so the defaults suit it.)
 
      A setting other than `turn` or `scale`, or a value that isn't a whole number, stops the tool with a message naming the line.
 7. **Setup which level to boot into** In `settings.cfg`:
 
    ```
-   boot_level = my_map
+   boot_level = tide_ruins
    ```
 8. **Run the game** (`build/c1.exe`). It starts in your map. Crash runs with the camera behind him, looking along the route. If the level named in `boot_level` doesn't exist, the game says so in the console and starts normally. Remove `boot_level` to start at the title screen again.
 
-Levels are made from your copy of the game, so `custom_levels/` is ignored by git, and so is `maps/`.
+Levels are made from your copy of the game, so `custom_levels/` is ignored by git, and so is `maps/`, apart from the included `tide_ruins` map and `maps/README.md`.
 
 To change the map, edit it in Blender, export over the old files, and run step 6 again. `settings.cfg` doesn't need changing, and you don't need to rebuild the game.
 
 ### If you only have an .obj
 
-Make a folder `maps/my_map/` for it and start at step 5. The `.obj` should have Y up, with the route running towards -Z in the file, which is what Blender's default export gives. Without a `.mtl`, the map uses N. Sanity Beach's textures. If it comes out on its side or facing the wrong way, re-export it from Blender with the default axes, or use `--turn`.
+Make a folder in `maps/` for it, such as `maps/tide_ruins/`, and start at step 5. The `.obj` should have Y up, with the route running towards -Z in the file, which is what Blender's default export gives. Without a `.mtl`, the map uses N. Sanity Beach's textures. If it comes out on its side or facing the wrong way, re-export it from Blender with the default axes, or use `--turn`.
 
 ### Modelling
 
