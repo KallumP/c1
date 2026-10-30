@@ -99,7 +99,7 @@ Project structure is listed below, including descriptions for each file.
 ├── tools                    # helper scripts
 │   ├── extract_streams.py   # extracts game assets from a disc image
 │   ├── generate_level_terrain.py  # makes a level from a map in maps/: python tools/generate_level_terrain.py maps/<map>
-│   ├── nslevel.py           # reads, writes and makes levels (custom_levels/)
+│   ├── nslevel.py           # reads and writes level files, and makes a level from a map's parts
 │   ├── blendmap.py          # turns a map exported from blender into the parts of a level, for nslevel.py
 │   ├── tpage.py             # texture pages: images as 16 colour tiles, and texture infos for parts of them
 │   └── tests                # the tools' tests (python -m unittest discover -s tools/tests)
