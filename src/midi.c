@@ -2,17 +2,6 @@
 #include "globals.h"
 #include "level.h"
 
-#ifdef PSX
-#define SepSetVol         SsSepSetVol
-#define SepPlay           SsSepPlay
-#define SepPause          SsSepPause
-#define SepReplay         SsSepReplay
-#define SepStop           SsSepStop
-#define SepSetCrescendo   SsSepSetCrescendo
-#define SepSetDecrescendo SsSepSetDecrescendo
-#define SepOpen           SsSepOpen
-#define SepClose          SsSepClose
-#else
 #define SepSetVol         SwSepSetVol
 #define SepPlay           SwSepPlay
 #define SepPause          SwSepPause
@@ -22,7 +11,6 @@
 #define SepSetDecrescendo SwSepSetDecrescendo
 #define SepOpen           SwSepOpen
 #define SepClose          SwSepClose
-#endif
 
 /* .sdata */
 int32_t ramp_rate = 30;    /* 800564F4; gp[0x3E] */
@@ -64,9 +52,6 @@ int MidiInit() {
   int16_t vol;
   int i;
 
-#ifdef PSX
-  SsSetTickMode(1);
-#endif
   seq_vol = (0x3FFF * mus_vol) >> 8;
   vol = seq_vol >> 7;
   for (i=(seq_count>1);i<seq_count;i++)
@@ -121,13 +106,9 @@ int MidiInit() {
       break;
     }
   }
-#ifdef PSX
-  return SpuVmSetMaxVoice(*(uint8_t*)(&max_midi_voices)); /* tentative name! */
-#else
   // TODO
   SwMidiInit();
   return 0;
-#endif
 }
 
 //----- (800313B4) --------------------------------------------------------
@@ -158,25 +139,6 @@ void MidiTogglePlayback(int a1) {
   SepSetVol(sep_access_num, midi_seqs[1].num, seq2_vol, seq2_vol);
 }
 
-#ifdef PSX
-static inline int MidiGetVab(entry *midi) {
-  midi_header *header;
-  uint8_t *vh;
-
-  header = (midi_header*)midi->items[0];
-  NSOpen(&header->midi, 1, 1); /* preload the midi entry itself? from midi header */
-  vh = (uint8_t*)midi->items[1]; /* vab data */
-  /* open new vab header (item2) for vab body at arg3, and allocate a new vab id */
-  vab_id = SsVabFakeHead(vh, -1, (dword_8005CFB0 << 16) | 0x2000);
-  if (vab_id == -1) /* failed to open header or allocate? */
-    exit(); /* abort */
-  vab_id = SsVabFakeBody(vab_id); /* assign allocated vab id to vab body */
-  if (vab_id == -1) /* failed to assign id? */
-    exit(); /* abort */
-  SsStart(); /* start the sound system */
-  return vab_id;
-}
-#else
 uint8_t *vabs[16] = { 0 };
 
 static inline int MidiGetVab(entry *midi) {
@@ -227,7 +189,6 @@ void VabClose(int _vab_id) {
   vabs[_vab_id] = 0;
 }
 
-#endif
 
 //----- (800314C4) --------------------------------------------------------
 int MidiOpenAndPlay(eid_t *eid) {
@@ -327,13 +288,9 @@ void MidiUpdate(void *en_ref) {
 int MidiKill() {
   MidiClose(sep_access_num, 1);
 
-#ifdef PSX
-  return SsEnd();
-#else
   int i;
   for (i=0;i<16;i++)
     VabClose(i);
-#endif
 }
 
 //----- (80031964) --------------------------------------------------------

@@ -162,13 +162,8 @@ typedef struct _page_struct {
 } page_struct;
 
 /* ns struct */
-#ifdef PSX
-#define NS_PHYSICAL_PAGE_COUNT 22
-#define NS_VIRTUAL_PAGE_COUNT  38
-#else
 #define NS_PHYSICAL_PAGE_COUNT 128
 #define NS_VIRTUAL_PAGE_COUNT  0
-#endif
 
 typedef struct {
   int inited;               /* 8005C528 */
@@ -262,19 +257,6 @@ extern char *NSGetFilenameStr(int type, char *str);
 
 extern int NSEntryItemSize(entry *entry, int idx);
 extern int NSCountEntries(ns_struct *nss, int type);
-#ifdef PSX
-/* psx needs to actually 'page' the pages from cd
-   so the per-frame handler is needed
-   as well as allocate, free, and delete functions */
-extern void NSUpdate(pgid_t pgid);
-extern void NSUpdate2(pgid_t pgid);
-extern int NSCdSeek(int idx);
-extern int NSPageUpdate(page_struct *ps, pgid_t pgid);
-extern int NSPageAllocate(int* count, int flag);
-extern int NSPageFree(page_struct* ps);
-extern int NSAudioPageAllocate(int type, int idx);
-extern page_struct *NSPageDelete(page_struct *ps);
-#endif
 extern int NSTexturePageAllocate();
 extern int NSTexturePageFree(int idx);
 extern void NSPageDecRef(page_struct *ps);
@@ -293,7 +275,5 @@ extern entry *NSLookup(void *ref);
 extern void NSInit(ns_struct *nss, uint32_t lid);
 extern int NSKill(ns_struct *nss);
 extern void NSKillPage(ns_struct *nss, int idx);
-#ifndef PSX
 extern uint8_t *NSFileReadRange(char *filename, int start, int end, size_t *size);
-#endif
 #endif /* _NS_H_ */
