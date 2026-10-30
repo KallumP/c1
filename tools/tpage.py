@@ -3,6 +3,8 @@ texture pages (tpag) for custom levels: images turned into 16 colour tiles
 on a page the game loads into vram, and the texture infos that put a part
 of a tile on a polygon. see src/pc/gfx/tex.c for how the game reads them.
 """
+import struct
+
 from PIL import Image
 
 TILE = 64     # tiles are TILE x TILE pixels, the largest texture region (uv_map in src/gfx.c)
@@ -34,3 +36,50 @@ def tile(image):
     pixels = [index[rgb] for rgb in im.getdata()]
     palette = [colour_5551(rgb) for rgb in rgbs] + [0] * (COLOURS - len(rgbs))
     return pixels, palette
+
+
+# a texture page is the whole 64 KB page (header included) read as ROWS rows
+# of ROW_BYTES bytes: 1024 4 bit pixels, or 256 16 bit colours. it is split
+# into TILE x TILE slots; the first holds the header in its top row, so it
+# holds the tiles' palettes instead, one a row from row 1 (16 colours are
+# 32 bytes, just the slot's width)
+PAGE_SIZE = 0x10000
+ROWS = 128
+ROW_BYTES = 512
+SLOTS_ACROSS = ROW_BYTES * 2 // TILE
+TILES_PER_PAGE = SLOTS_ACROSS * (ROWS // TILE) - 1
+MAGIC_PAGE = 0x1234
+PAGE_TEXTURE = 1
+ENTRY_TPAG = 5
+
+
+class Place:
+    """where a tile is on its page, as a texture info gives it: x in units
+    of 8 pixels (4 bit) as segment * 32 + offs_x, y in units of 4 rows as
+    offs_y, and its palette at 16 bit colour (clut_x * 16, clut_y)"""
+    def __init__(self, segment, offs_x, offs_y, clut_x, clut_y):
+        self.segment, self.offs_x, self.offs_y = segment, offs_x, offs_y
+        self.clut_x, self.clut_y = clut_x, clut_y
+
+
+def texture_page(eid, tiles):
+    """a texture page holding tiles ((pixels, palette) from tile()): its
+    bytes, and each tile's Place"""
+    if len(tiles) > TILES_PER_PAGE:
+        raise ValueError("%d tiles, more than a page holds (%d)" % (len(tiles), TILES_PER_PAGE))
+    page = bytearray(PAGE_SIZE)
+    places = []
+    for k, (pixels, palette) in enumerate(tiles):
+        slot = k + 1
+        x0, y0 = (slot % SLOTS_ACROSS) * TILE, (slot // SLOTS_ACROSS) * TILE
+        for y in range(TILE):
+            row = (y0 + y) * ROW_BYTES
+            for x in range(0, TILE, 2):
+                a, b = pixels[y * TILE + x], pixels[y * TILE + x + 1]
+                page[row + (x0 + x) // 2] = a | (b << 4)  # even pixels in the low nibble
+        clut_y = 1 + k
+        page[clut_y * ROW_BYTES:clut_y * ROW_BYTES + 2 * COLOURS] = struct.pack("<%dH" % COLOURS, *palette)
+        unit = x0 // 8
+        places.append(Place(unit // 32, unit % 32, y0 // 4, 0, clut_y))
+    struct.pack_into("<HHIII", page, 0, MAGIC_PAGE, PAGE_TEXTURE, eid, ENTRY_TPAG, 0)
+    return bytes(page), places
