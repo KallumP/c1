@@ -175,6 +175,12 @@ class ZoneSpans(unittest.TestCase):
         # the route runs along -z, so the first zone is the +z end
         self.assertEqual([(32768, 49152), (16384, 32768), (0, 16384)], blendmap.zone_spans(49152, 128))
 
+    def test_a_zones_cells_are_the_ones_in_it_relative_to_it(self):
+        cells = {(1, 2, 0): "floor", (1, 2, 127): "wall", (1, 2, 128): "pit", (3, 0, 300): "floor"}
+        self.assertEqual({(1, 2, 0): "pit", (3, 0, 44): "floor"},
+                         blendmap.zone_cells(cells, (16384, 32768), 128))
+        self.assertEqual({(1, 2, 0): "floor", (1, 2, 127): "wall"}, blendmap.zone_cells(cells, (0, 16384), 128))
+
 
 def quad_mesh(corners, obj=None):
     """a mesh of one quad (corners anticlockwise seen from its front)"""
