@@ -119,6 +119,11 @@ def is_pit(tri):
     return (tri.obj or "").lower().startswith("pit")
 
 
+def is_spawn(tri):
+    """faces of an object named spawn... only mark where crash starts"""
+    return (tri.obj or "").lower().startswith("spawn")
+
+
 def solid_cells(mesh, size, cell):
     """{(i, j, k): "ground" or "pit"}: the cells just behind each face, so
     a face's solid side is on the cell boundary nearest to it. faces of
@@ -128,7 +133,7 @@ def solid_cells(mesh, size, cell):
     cells = {}
     for tri in mesh.tris:
         n = normal(mesh, tri)
-        if n is None:
+        if n is None or is_spawn(tri):
             continue
         a, b, c = (mesh.verts[i] for i in tri.verts)
         centre = [(a[i] + b[i] + c[i]) / 3 for i in range(3)]
@@ -226,7 +231,7 @@ def world_meshes(mesh, piece, ground, side):
 
     for tri in mesh.tris:
         n = normal(mesh, tri)
-        if n is None or n[1] < -FACING:
+        if n is None or n[1] < -FACING or is_spawn(tri):
             continue
         texture = ground if n[1] > FACING else side
         colour = shade(n)
@@ -243,3 +248,59 @@ def world_meshes(mesh, piece, ground, side):
         raise ValueError("the map needs %d world meshes, more than %d; use fewer faces"
                          % (len(meshes), WORLDS_MAX))
     return meshes
+
+
+# crash's spawn and the camera path (zone units relative to the zone)
+
+CAM_OFFSET = (101, 1316)  # follow camera from crash: x, height (as on n. sanity beach)
+CAM_LEAD = 1450           # how far ahead of the camera crash is (as on the beach)
+CAM_EDGE = 200            # how far in from the zone's ends the camera path stays
+HEADROOM = 2              # empty cells crash needs above the ground to start on it
+
+
+def ground_tops(cells, i, k, cell, headroom=1):
+    """the tops of the solid cells in column (i, k) with headroom empty
+    cells above them, lowest first"""
+    js = sorted(j for (ci, j, ck) in cells if ci == i and ck == k)
+    return [(j + 1) * cell for j in js
+            if not any((i, j + h, k) in cells for h in range(1, headroom + 1))]
+
+
+def spawn(mesh, cells, size, cell):
+    """where crash starts, (x, y, z): on the ground below the middle of an
+    object named spawn..., or without one, on the ground nearest the start
+    of the route (the +z end), nearest the middle across"""
+    marker = {i for tri in mesh.tris if is_spawn(tri) for i in tri.verts}
+    columns = {(i, k) for i, _, k in cells}
+    if marker:
+        x = sum(mesh.verts[i][0] for i in marker) / len(marker)
+        z = sum(mesh.verts[i][2] for i in marker) / len(marker)
+        bottom = min(mesh.verts[i][1] for i in marker)
+        tops = [t for t in ground_tops(cells, int(x // cell), int(z // cell), cell) if t <= bottom + cell]
+        if not tops:
+            raise ValueError("there's no ground below the spawn object")
+        return (int(round(x)), tops[-1], int(round(z)))
+    middle = size[0] / 2
+    for i, k in sorted(columns, key=lambda c: (-c[1], abs((c[0] + 0.5) * cell - middle))):
+        tops = ground_tops(cells, i, k, cell, HEADROOM)
+        if tops:
+            return (i * cell + cell // 2, tops[-1], k * cell + cell // 2)
+    raise ValueError("the map has no ground for crash to start on")
+
+
+def camera_path(cells, size, cell, start, step):
+    """camera path points (x, y, z), step apart along -z from behind crash's
+    start to the far end of the zone, CAM_OFFSET above the ground CAM_LEAD
+    ahead of each point (the ground nearest the last height, which is kept
+    over gaps), along crash's start x"""
+    x, height, z = start
+    i = x // cell
+    first = min(z + CAM_LEAD, size[2] - CAM_EDGE)
+    points = []
+    for cz in range(first, CAM_EDGE, -step):
+        k = (cz - CAM_LEAD) // cell
+        tops = ground_tops(cells, i, k, cell) if k >= 0 else []
+        if tops:
+            height = min(tops, key=lambda t: abs(t - height))
+        points.append((x + CAM_OFFSET[0], height + CAM_OFFSET[1], cz))
+    return points
