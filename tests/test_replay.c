@@ -4,7 +4,7 @@
 #include "pc/pad.h"
 #include "pc/time.h"
 
-#define TEST_REPLAY "build/test_replay.rec"
+#define TEST_REPLAY "build/test_replay.inputs"
 
 extern uint8_t keys[512]; /* defined in test_pad.c */
 
@@ -144,8 +144,8 @@ UTEST(replay, replay_refuses_a_recording_from_another_boot_level) {
 }
 
 UTEST(replay, replay_of_a_missing_file_fails_cleanly) {
-  remove("build/no_such_file.rec");
-  ASSERT_EQ(0, ReplayStart("build/no_such_file.rec", REPLAY_PLAY, 0x19, 12345));
+  remove("build/no_such_file.inputs");
+  ASSERT_EQ(0, ReplayStart("build/no_such_file.inputs", REPLAY_PLAY, 0x19, 12345));
   ASSERT_FALSE(TimeIsFixed());
 }
 
@@ -174,22 +174,22 @@ UTEST(replay, file_name_starts_with_the_start_time) {
   t.tm_year = 2026 - 1900; t.tm_mon = 9; t.tm_mday = 30;
   t.tm_hour = 14; t.tm_min = 5; t.tm_sec = 9;
   ReplayFileName(name, sizeof(name), "recorded_inputs", &t);
-  ASSERT_STREQ("recorded_inputs/2026-10-30_14-05-09.rec", name);
+  ASSERT_STREQ("recorded_inputs/2026-10-30_14-05-09.inputs", name);
 }
 
 UTEST(replay, newest_file_is_the_latest_start_time) {
   char path[256];
 
   ASSERT_EQ(1, ReplayMakeDir(TEST_REC_DIR));
-  TouchFile("2026-10-30_14-05-09.rec");
-  TouchFile("2026-11-02_08-00-00.rec");
-  TouchFile("2026-10-31_23-59-59.rec");
+  TouchFile("2026-10-30_14-05-09.inputs");
+  TouchFile("2026-11-02_08-00-00.inputs");
+  TouchFile("2026-10-31_23-59-59.inputs");
   TouchFile("zzz.txt"); /* not a recording */
   ASSERT_EQ(1, ReplayNewestFile(TEST_REC_DIR, path, sizeof(path)));
-  ASSERT_STREQ(TEST_REC_DIR "/2026-11-02_08-00-00.rec", path);
-  RemoveFile("2026-10-30_14-05-09.rec");
-  RemoveFile("2026-11-02_08-00-00.rec");
-  RemoveFile("2026-10-31_23-59-59.rec");
+  ASSERT_STREQ(TEST_REC_DIR "/2026-11-02_08-00-00.inputs", path);
+  RemoveFile("2026-10-30_14-05-09.inputs");
+  RemoveFile("2026-11-02_08-00-00.inputs");
+  RemoveFile("2026-10-31_23-59-59.inputs");
   RemoveFile("zzz.txt");
 }
 
@@ -207,7 +207,7 @@ UTEST(replay, making_a_folder_that_exists_is_fine) {
 }
 
 UTEST(replay, start_fails_cleanly_for_a_bad_path) {
-  ASSERT_EQ(0, ReplayStart("build/no/such/dir/test.rec", REPLAY_RECORD, 0x19, 12345));
+  ASSERT_EQ(0, ReplayStart("build/no/such/dir/test.inputs", REPLAY_RECORD, 0x19, 12345));
   ASSERT_FALSE(TimeIsFixed());
 }
 
@@ -245,7 +245,7 @@ UTEST(replay, recording_to_a_bad_path_fails) {
   replay_recorder r = { 0 };
   replay_header header = { 0 };
 
-  ASSERT_EQ(0, ReplayRecordStart(&r, "build/no/such/dir/test.rec", &header));
+  ASSERT_EQ(0, ReplayRecordStart(&r, "build/no/such/dir/test.inputs", &header));
   ASSERT_TRUE(r.file == 0);
 }
 
