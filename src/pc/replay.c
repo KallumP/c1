@@ -1,6 +1,9 @@
 /*
  * input recording and replay (pc)
  */
+#include <string.h>
+#include <dirent.h>
+#include <sys/stat.h>
 #include "replay.h"
 #include "pad.h"
 #include "time.h"
@@ -32,17 +35,47 @@ void ReplayRecordStop(replay_recorder *r) {
   r->file = 0;
 }
 
+/* name a recording by its start time, so names sort oldest to newest */
 void ReplayFileName(char *name, size_t size, const char *dir,
   struct tm *start) {
-  name[0] = 0;
+  char stamp[32];
+
+  strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H-%M-%S", start);
+  snprintf(name, size, "%s/%s.rec", dir, stamp);
 }
 
+/* find the newest recording in dir; returns 0 if there are none */
 int ReplayNewestFile(const char *dir, char *path, size_t size) {
-  return 0;
+  DIR *d;
+  struct dirent *e;
+  char newest[256];
+  size_t len;
+
+  d = opendir(dir);
+  if (!d) { return 0; }
+  newest[0] = 0;
+  while ((e = readdir(d))) {
+    len = strlen(e->d_name);
+    if (len < 4 || strcmp(&e->d_name[len-4], ".rec") != 0) { continue; }
+    if (len < sizeof(newest) && strcmp(e->d_name, newest) > 0)
+      strcpy(newest, e->d_name);
+  }
+  closedir(d);
+  if (!newest[0]) { return 0; }
+  snprintf(path, size, "%s/%s", dir, newest);
+  return 1;
 }
 
+/* make dir if it doesn't exist; returns 0 if it can't be made */
 int ReplayMakeDir(const char *dir) {
-  return 0;
+  struct stat st;
+
+#ifdef _WIN32
+  mkdir(dir);
+#else
+  mkdir(dir, 0755);
+#endif
+  return stat(dir, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
 static replay_recorder recorder = { 0 };
