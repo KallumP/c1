@@ -72,5 +72,44 @@ class ReadObj(unittest.TestCase):
             blendmap.read_obj("v 0 0 0\nv 1 0 0\nf 1 2 3\n", scale=1)
 
 
+def box_mesh(x0, y0, z0, x1, y1, z1):
+    """a mesh of two triangles spanning the box's corners"""
+    verts = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z1)]
+    return blendmap.Mesh(verts, [blendmap.Tri((0, 1, 2), None, None)])
+
+
+class Fit(unittest.TestCase):
+    def test_moves_the_mesh_to_the_zones_corner(self):
+        fit = blendmap.fit(box_mesh(-1000, -500, 300, 1000, 500, 900), cell=128, headroom=0)
+        self.assertEqual((0, 0, 0), tuple(min(v[i] for v in fit.mesh.verts) for i in range(3)))
+        self.assertEqual((2000, 1000, 600), tuple(max(v[i] for v in fit.mesh.verts) for i in range(3)))
+        self.assertEqual((-1000, -500, 300), fit.offset)
+
+    def test_vertices_are_on_multiples_of_8(self):
+        fit = blendmap.fit(box_mesh(0.4, 3, 13, 1001, 20.2, 30), cell=128, headroom=0)
+        for v in fit.mesh.verts:
+            for c in v:
+                self.assertIsInstance(c, int)
+                self.assertEqual(0, c % 8, v)
+        self.assertEqual((1000, 16, 16), fit.mesh.verts[2])
+
+    def test_each_side_is_a_power_of_two_cells(self):
+        fit = blendmap.fit(box_mesh(0, 0, 0, 1000, 129, 5000), cell=128, headroom=0)
+        self.assertEqual((1024, 256, 8192), fit.size)
+
+    def test_headroom_is_added_above(self):
+        fit = blendmap.fit(box_mesh(0, 0, 0, 1000, 100, 1000), cell=128, headroom=1500)
+        self.assertEqual(2048, fit.size[1])
+
+    def test_triangles_are_kept(self):
+        mesh = box_mesh(0, 0, 0, 1, 1, 1)
+        self.assertIs(mesh.tris, blendmap.fit(mesh, cell=128, headroom=0).mesh.tris)
+
+    def test_too_big_for_a_world_mesh_is_an_error(self):
+        # world mesh vertices are 13 bits of multiples of 8 (src/formats/wgeo.h)
+        with self.assertRaises(ValueError):
+            blendmap.fit(box_mesh(0, 0, 0, 40000, 10, 10), cell=128, headroom=0)
+
+
 if __name__ == "__main__":
     unittest.main()
