@@ -149,7 +149,7 @@ class TextureInfo(unittest.TestCase):
         for layout in (0, 7, 23):
             for w, h in ((4, 4), (32, 64), (64, 8)):
                 q = quads[tpage.uv_idx(layout, w, h)]
-                self.assertEqual((w - 1, h - 1), (max(q[0:8:2]), max(q[1:8:2])))
+                self.assertEqual((w - 1, h - 1), (max(q[0:6:2]), max(q[1:6:2])))  # triangles use 3 points
                 corners = tuple((q[2 * i] // (w - 1), q[2 * i + 1] // (h - 1)) for i in range(3))
                 self.assertEqual(tpage.LAYOUTS[layout], corners)
 
