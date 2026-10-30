@@ -96,7 +96,11 @@ void ReplayUpdate() {
   replay_frame frame;
 
   if (replay_file) {
-    if (fread(&frame, sizeof(frame), 1, replay_file) != 1) { return; }
+    if (fread(&frame, sizeof(frame), 1, replay_file) != 1) {
+      fprintf(stderr, "replay finished, back to the keyboard\n");
+      ReplayStop();
+      return;
+    }
     if (frame.ticks != GetTicksElapsed() && !replay_desynced) {
       fprintf(stderr, "replay out of step at tick %d (recorded at %d)\n",
         GetTicksElapsed(), frame.ticks);
