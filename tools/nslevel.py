@@ -366,6 +366,8 @@ def load_texture_pages(level, zone_eid):
 
 OCTREE_NODES = 36    # zone_rect: x y z w h d unk, then root and max depths
 LEAF_GROUND = 1      # leaf (low bit) with value 0: plain solid ground
+LEAF_FLOOR = 3       # leaf of type 1, floor: crash can step up onto it (by up to land_offset in
+                     # src/solid.c, about 244), unlike ground (FindFloorY counts that as a wall)
 LEAF_PIT = (11 << 4) | 1  # leaf with subtype 11: kills what falls on it (ProcessNode in src/solid.c)
 FLOOR_CELL_MAX = 1024  # largest floor cell (zone units); see floor_rect_bytes
 
@@ -932,7 +934,7 @@ MAP_HEADROOM = 1024    # room above the map
 def cell_blocks(cells, cell):
     """blocks (see blocks_rect_bytes) for collision cells ({(i, j, k):
     "ground" or "pit"})"""
-    leaves = {"ground": LEAF_GROUND, "pit": LEAF_PIT}
+    leaves = {"ground": LEAF_FLOOR, "pit": LEAF_PIT}
     return [(i * cell, j * cell, k * cell, (i + 1) * cell, (j + 1) * cell, (k + 1) * cell, leaves[kind])
             for (i, j, k), kind in cells.items()]
 
