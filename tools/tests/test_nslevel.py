@@ -580,9 +580,10 @@ class SortList(unittest.TestCase):
 
 class MapCells(unittest.TestCase):
     def test_cells_become_blocks_with_their_leaf(self):
-        blocks = nslevel.cell_blocks({(1, 2, 3): "ground", (0, 0, 0): "pit"}, 128)
+        blocks = nslevel.cell_blocks({(1, 2, 3): "floor", (0, 0, 0): "pit", (2, 0, 0): "wall"}, 128)
         self.assertEqual(sorted([(128, 256, 384, 256, 384, 512, nslevel.LEAF_FLOOR),
-                                 (0, 0, 0, 128, 128, 128, nslevel.LEAF_PIT)]), sorted(blocks))
+                                 (0, 0, 0, 128, 128, 128, nslevel.LEAF_PIT),
+                                 (256, 0, 0, 384, 128, 128, nslevel.LEAF_GROUND)]), sorted(blocks))
 
     def test_floor_leaf_is_a_floor_crash_can_step_up_onto(self):
         # FindFloorY in src/solid.c: type (bits 1-3) 0 is wall or scenery, which crash

@@ -144,7 +144,7 @@ class SolidCells(unittest.TestCase):
     def test_floor_is_solid_just_below_its_top(self):
         cells = self.cells(floor(0, 0, 512, 256, y=512))
         self.assertEqual({(i, 3, k) for i in range(4) for k in range(2)}, set(cells))
-        self.assertEqual({"ground"}, set(cells.values()))
+        self.assertEqual({"floor"}, set(cells.values()))
 
     def test_a_floor_off_the_grid_goes_to_the_nearest_cell_top(self):
         self.assertEqual(set(self.cells(floor(0, 0, 512, 256, y=512))),
@@ -155,11 +155,21 @@ class SolidCells(unittest.TestCase):
     def test_wall_is_solid_behind_its_face(self):
         # a wall at x 512 facing +x, 256 high and 256 along z
         wall = quad_mesh([(512, 0, 0), (512, 256, 0), (512, 256, 256), (512, 0, 256)])
-        self.assertEqual({(3, j, k) for j in range(2) for k in range(2)}, set(self.cells(wall)))
+        cells = self.cells(wall)
+        self.assertEqual({(3, j, k) for j in range(2) for k in range(2)}, set(cells))
+        self.assertEqual({"wall"}, set(cells.values()))
 
-    def test_ceiling_is_solid_above_its_face(self):
+    def test_floor_wins_where_it_shares_a_cell_with_a_wall(self):
+        wall = quad_mesh([(512, 0, 0), (512, 512, 0), (512, 512, 256), (512, 0, 256)])
+        cells = self.cells(merged(wall, floor(0, 0, 512, 256, y=512)))
+        self.assertEqual("floor", cells[(3, 3, 0)])
+        self.assertEqual("wall", cells[(3, 2, 0)])
+
+    def test_ceilings_are_not_solid(self):
+        # the game never stops a jump at the octree (FindCeilY in src/solid.c), so
+        # crash would jump through a ceiling and land on top of it
         ceiling = quad_mesh([(0, 1024, 0), (256, 1024, 0), (256, 1024, 256), (0, 1024, 256)])
-        self.assertEqual({(i, 8, k) for i in range(2) for k in range(2)}, set(self.cells(ceiling)))
+        self.assertEqual({}, self.cells(ceiling))
 
     def test_slope_is_a_staircase(self):
         # rises from 256 to 512 over 512 along -z
@@ -173,7 +183,7 @@ class SolidCells(unittest.TestCase):
         cells = self.cells(merged(floor(0, 0, 256, 256, y=256, obj="Pit.001"),
                                   floor(256, 0, 512, 256, y=256, obj="Ground")))
         self.assertEqual("pit", cells[(0, 1, 0)])
-        self.assertEqual("ground", cells[(2, 1, 0)])
+        self.assertEqual("floor", cells[(2, 1, 0)])
 
     def test_pit_wins_where_they_share_a_cell(self):
         cells = self.cells(merged(floor(0, 0, 256, 256, y=256, obj="Ground"),
@@ -326,7 +336,7 @@ class CameraPath(unittest.TestCase):
 
     def path(self, mesh, start, step=256):
         cells = blendmap.solid_cells(mesh, self.SIZE, 128)
-        return blendmap.camera_path(mesh, cells, self.SIZE, 128, start, step)
+        return blendmap.camera_path(cells, self.SIZE, 128, start, step)
 
     def test_height_ignores_the_tops_of_walls(self):
         # a low wall running along z under crash's x: its top isn't somewhere to stand
@@ -359,9 +369,9 @@ class CameraPath(unittest.TestCase):
         z = next(z for z in heights if 2048 <= z - blendmap.CAM_LEAD < 4096)
         self.assertEqual(512 + blendmap.CAM_OFFSET[1], heights[z])
 
-    def test_picks_the_ground_nearest_the_last_height_under_a_ceiling(self):
-        ceiling = quad_mesh([(0, 2048, 0), (2048, 2048, 0), (2048, 2048, 8192), (0, 2048, 8192)])
-        points = self.path(merged(floor(0, 0, 2048, 8192, y=512), ceiling), (1024, 512, 5000))
+    def test_picks_the_ground_nearest_the_last_height(self):
+        upper = floor(0, 0, 2048, 8192, y=2048)  # an upper floor over the whole route
+        points = self.path(merged(floor(0, 0, 2048, 8192, y=512), upper), (1024, 512, 5000))
         self.assertEqual({512 + blendmap.CAM_OFFSET[1]}, {y for _, y, _ in points})
 
 
