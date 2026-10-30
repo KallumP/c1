@@ -63,6 +63,29 @@ class MapCfg(unittest.TestCase):
         self.assertEqual((1000, 270), generate_level_terrain.map_options(folder, 1000, None))
         self.assertEqual((2000, 0), generate_level_terrain.map_options(folder, None, 0))
 
+    def assert_cfg_error(self, cfg, *says):
+        """map.cfg holding cfg is a ValueError naming the file, and saying
+        each of says"""
+        with self.assertRaises(ValueError) as e:
+            generate_level_terrain.read_map_cfg(map_folder(cfg))
+        for said in ("map.cfg",) + says:
+            self.assertIn(said, str(e.exception))
+
+    def test_a_value_that_isnt_a_number_is_an_error(self):
+        self.assert_cfg_error("turn = 90\nscale = big\n", "line 2", "scale", "big")
+
+    def test_an_unknown_key_is_an_error(self):
+        self.assert_cfg_error("tilt = 90\n", "line 1", "tilt")
+
+    def test_a_line_without_a_value_is_an_error(self):
+        self.assert_cfg_error("scale\n", "line 1")
+
+    def test_a_bad_map_cfg_stops_with_a_message(self):
+        folder = map_folder("scale = big\n")
+        with open(os.path.join(folder, "x.obj"), "w") as f:
+            f.write("")
+        self.assertEqual(1, generate_level_terrain.main([folder]))
+
 
 if __name__ == "__main__":
     unittest.main()
