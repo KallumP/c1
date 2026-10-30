@@ -153,6 +153,28 @@ class Fit(unittest.TestCase):
             blendmap.fit(box_mesh(0, 0, 0, 20000, 10, 10), cell=128, headroom=0, margin=128)
         self.assertEqual((0, 20000 + 2 * 128, 16384), (e.exception.axis, e.exception.extent, e.exception.side_max))
 
+    def test_the_route_can_run_on_for_several_zones(self):
+        # along z (the route) the map is split into zones, so it only has to
+        # be whole zones long; across and up it still fits one
+        fit = blendmap.fit(box_mesh(0, 0, 0, 1000, 10, 40000), cell=128, headroom=0, margin=128, long_z=True)
+        self.assertEqual(3 * 16384, fit.size[2])
+        self.assertEqual(40000 + 128, max(v[2] for v in fit.mesh.verts))
+        with self.assertRaises(blendmap.TooBig):
+            blendmap.fit(box_mesh(0, 0, 0, 20000, 10, 40000), cell=128, headroom=0, margin=128, long_z=True)
+
+    def test_a_short_route_is_one_zone_as_before(self):
+        fit = blendmap.fit(box_mesh(0, 0, 0, 1000, 140, 5000), cell=128, headroom=0, long_z=True)
+        self.assertEqual((1024, 256, 8192), fit.size)
+
+
+class ZoneSpans(unittest.TestCase):
+    def test_a_short_map_is_one_zone(self):
+        self.assertEqual([(0, 8192)], blendmap.zone_spans(8192, 128))
+
+    def test_a_long_map_is_zones_of_128_cells_from_the_routes_start(self):
+        # the route runs along -z, so the first zone is the +z end
+        self.assertEqual([(32768, 49152), (16384, 32768), (0, 16384)], blendmap.zone_spans(49152, 128))
+
 
 def quad_mesh(corners, obj=None):
     """a mesh of one quad (corners anticlockwise seen from its front)"""
