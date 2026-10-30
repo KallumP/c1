@@ -569,6 +569,23 @@ class SortList(unittest.TestCase):
 @unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
                      "needs N. Sanity Beach in streams/")
 class RealLevel(unittest.TestCase):
+    def test_course_has_its_objects_and_their_code(self):
+        course = nslevel.make_course(nslevel.read_level(STREAMS, 9))
+        entries = {e.eid: e for p in course.pages for e in p.entries}
+        zone = entries[course.nsd.ldat.zone_spawn]
+        header = zone.items[0]
+        paths_idx, path_count, entity_count, _ = struct.unpack_from("<4I", header, nslevel.ZONE_PATHS_IDX)
+        kinds = [nslevel.entity_type(e) for e in zone.items[paths_idx + path_count:]]
+        self.assertEqual(entity_count, len(kinds))
+        self.assertEqual((0, 0), kinds[0])  # crash first
+        self.assertEqual(len(nslevel.COURSE_BOXES) + 1, sum(1 for k in kinds if k[0] == 34))
+        self.assertEqual(len(nslevel.COURSE_CRABS), kinds.count((31, 0)))
+        self.assertEqual(1, kinds.count((32, 1)))
+        execs = {nslevel.eid_to_str(e) for e in course.nsd.ldat.exec_map if e != nslevel.EID_NONE}
+        self.assertTrue({"WillC", "CrabC", "WarpC", "BoxsC"} <= execs, execs)
+        textures = [p for p in course.pages if p.type == nslevel.PAGE_TEXTURE]
+        self.assertEqual(len(textures), struct.unpack_from("<i", header, nslevel.ZONE_LOADLIST + 4)[0])
+
     def test_mock_level_is_one_zone_with_a_floor_and_crash(self):
         mock = nslevel.make_mock(nslevel.read_level(STREAMS, 9))
         self.assertEqual(nslevel.LID_TEST, mock.nsd.ldat.lid)

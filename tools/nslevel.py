@@ -335,8 +335,23 @@ ZONE_MIDI = ZONE_DISPLAY_FLAGS + 4 + 36
 ZONE_HEADER_SIZE = 888
 
 
+ZONE_LOADLIST_PAGES_MAX = 32
+
+
 def load_texture_pages(level, zone_eid):
-    pass
+    """make the zone's load list open every texture page in level: LevelUpdate
+    opens the pages in it (NSPageOpen), which is what puts a texture page in
+    vram, so a texture page nothing opens leaves the models using it blank.
+    page ids depend on where pages are, so this is done once they're laid out"""
+    pgids = [pgid(i) for i, page in enumerate(level.pages) if page.type == PAGE_TEXTURE]
+    if len(pgids) > ZONE_LOADLIST_PAGES_MAX:
+        raise ValueError("%d texture pages, more than a load list holds" % len(pgids))
+    zone = next(e for p in level.pages for e in p.entries if e.eid == zone_eid)
+    header = bytearray(zone.items[0])
+    struct.pack_into("<ii", header, ZONE_LOADLIST, 0, len(pgids))
+    struct.pack_into("<%dI" % ZONE_LOADLIST_PAGES_MAX, header, ZONE_LOADLIST + 8 + 32,
+                     *(pgids + [0] * (ZONE_LOADLIST_PAGES_MAX - len(pgids))))
+    zone.items[0] = bytes(header)
 
 
 OCTREE_NODES = 36    # zone_rect: x y z w h d unk, then root and max depths
@@ -720,6 +735,7 @@ def make_mock(level):
     mock.nsd.ldat.lid = LID_TEST
     mock.nsd.ldat.zone_spawn = zone_eid
     mock.nsd.ldat.path_idx_spawn = 0
+    load_texture_pages(mock, zone_eid)
     return mock
 
 
@@ -791,6 +807,7 @@ def assemble_level(level, templates, prefix, size, blocks, verts, polys, points,
     out.nsd.ldat.lid = LID_TEST
     out.nsd.ldat.zone_spawn = zone_eid
     out.nsd.ldat.path_idx_spawn = 0
+    load_texture_pages(out, zone_eid)
     return out
 
 
@@ -818,8 +835,11 @@ COURSE_PLATFORMS = [
 COURSE_GAPS = [(1024, 3072, 5120, 5760), (1024, 3072, 2816, 3328), (1024, 3072, 896, 1408)]
 COURSE_PIT = 128         # height of the deadly floor under each gap
 
-COURSE_BOXES = [(34, 2), (34, 6), (34, 9), (34, 10), (34, 13)]  # beach box subtypes, in a row
+# BoxsC (exec slot 34) subtypes: 2 plain, 3 arrow (bounce), 4 checkpoint, 5 steel,
+# 6 slatted, 7 '!', 8 life, 9 aku aku, 10 '?', 13 outline (appears after a '!' box)
+COURSE_BOXES = [(34, 2), (34, 10), (34, 3), (34, 9), (34, 8)]  # in a row
 COURSE_BOX_Z = 4480
+COURSE_CHECKPOINT = (2048, 3456)              # x, z of a checkpoint box on the top step
 COURSE_CRABS = [(2048, 2100), (2048, 1700)]   # centre x, z of each crab's patrol
 COURSE_WARP = (2048, 448)                     # x, z of the warp pad
 COURSE_CRASH = (2048, 6500)
@@ -835,7 +855,7 @@ def course_top(z):
 
 def make_course(level):
     """an obstacle course: gaps to jump (with a deadly floor below), steps
-    and a ledge, a row of boxes, crabs, and the warp pad at the end; built
+    and a ledge, a row of boxes, a checkpoint, crabs, and the warp pad at the end; built
     the same way as make_mock, from level (a real level such as N. Sanity
     Beach) for crash, the objects and the textures"""
     t = Templates(level)
@@ -859,6 +879,9 @@ def make_course(level):
         x = 2048 + (i - len(COURSE_BOXES) // 2) * 448
         entities.append(place_entity(t.entities[kind], next_id, (x, course_top(COURSE_BOX_Z), COURSE_BOX_Z)))
         next_id += 1
+    x, z = COURSE_CHECKPOINT
+    entities.append(place_entity(t.entities[(34, 4)], next_id, (x, course_top(z), z)))
+    next_id += 1
     crab = t.entities[(31, 0)]
     count = struct.unpack_from("<H", crab, ENTITY_POINT_COUNT)[0]
     xs = [struct.unpack_from("<h", crab, ENTITY_POINTS + 6 * i)[0] * 4 for i in range(count)]
