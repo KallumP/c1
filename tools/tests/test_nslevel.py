@@ -723,6 +723,30 @@ class Map(unittest.TestCase):
         self.assertEqual(["stone"], list(images))
         self.assertEqual((90, 90, 100), images["stone"].convert("RGB").getpixel((0, 0)))
 
+    def test_a_maps_folder_gives_its_obj_and_the_folders_name(self):
+        out = os.path.normpath(os.path.join(TOOLS, "..", "build", "test_map_source", "my_map"))
+        os.makedirs(out, exist_ok=True)
+        for name in os.listdir(out):
+            os.remove(os.path.join(out, name))
+        open(os.path.join(out, "level.obj"), "w").close()
+        open(os.path.join(out, "level.mtl"), "w").close()
+        self.assertEqual((os.path.join(out, "level.obj"), "my_map"), nslevel.map_source(out))
+        self.assertEqual((os.path.join(out, "level.obj"), "my_map"), nslevel.map_source(out + os.sep))
+
+    def test_a_maps_obj_gives_itself_and_its_name(self):
+        path = os.path.join("maps", "x", "level.obj")
+        self.assertEqual((path, "level"), nslevel.map_source(path))
+
+    def test_a_maps_folder_needs_one_obj(self):
+        out = os.path.join(TOOLS, "..", "build", "test_map_source", "two")
+        os.makedirs(out, exist_ok=True)
+        for name in ("a.obj", "b.obj"):
+            open(os.path.join(out, name), "w").close()
+        with self.assertRaises(ValueError):
+            nslevel.map_source(out)
+        with self.assertRaises(ValueError):
+            nslevel.map_source(os.path.join(TOOLS, "..", "build", "test_map_source"))  # none
+
     def test_map_is_one_zone_with_its_geometry_and_crash_only(self):
         level, entries, zone = self.make()
         self.assertEqual(nslevel.LID_TEST, level.nsd.ldat.lid)

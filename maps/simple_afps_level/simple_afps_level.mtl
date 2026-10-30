@@ -1,9 +1,9 @@
 # materials of simple_afps_level.obj; the images are the ones packed in the original level.blend
 newmtl ceiling
-map_Kd simple_afps_level/ceiling.png
+map_Kd ceiling.png
 
 newmtl floor
-map_Kd simple_afps_level/floor.png
+map_Kd floor.png
 
 newmtl wall
-map_Kd simple_afps_level/wall.png
+map_Kd wall.png

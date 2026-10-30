@@ -1013,6 +1013,19 @@ def map_textures(worlds, images, template):
     return out, ([p.eid for p in pages], texinfos, pages)
 
 
+def map_source(path):
+    """the .obj to make a map's level from, and the level's name, for path:
+    a map's folder (holding its one .obj, named after the folder) or a .obj
+    (named after the file)"""
+    path = os.path.normpath(path)
+    if not os.path.isdir(path):
+        return path, os.path.splitext(os.path.basename(path))[0]
+    objs = sorted(f for f in os.listdir(path) if f.lower().endswith(".obj"))
+    if len(objs) != 1:
+        raise ValueError("%s has %d .obj files; a map's folder needs exactly one" % (path, len(objs)))
+    return os.path.join(path, objs[0]), os.path.basename(path)
+
+
 def map_images(obj_path, text):
     """{material: PIL image} for a .obj (its path and text): each material's
     image from the .mtl files it names, next to it. missing files are
@@ -1090,9 +1103,6 @@ CUSTOM_LEVELS_DIR = os.path.join(ROOT, "custom_levels")
 USAGE = """usage:
   python tools/nslevel.py list <lid>         list a level's entries by type
   python tools/nslevel.py copy <lid> <name>  copy a level to custom_levels/<name>
-  python tools/nslevel.py map <file.obj> [name] [--scale <units per m>] [--turn <degrees>]
-                                             make a level from a map exported from blender
-                                             as custom_levels/<name> (the file's name)
   python tools/nslevel.py course [name]      make an obstacle course as custom_levels/<name> (course)
   python tools/nslevel.py mock [name]        make a level from scratch (a flat floor
                                              and crash) as custom_levels/<name> (mock)
@@ -1112,23 +1122,6 @@ def main(argv):
         level.nsd.ldat.lid = LID_TEST
         write_level(level, CUSTOM_LEVELS_DIR, argv[2])
         print("wrote %s" % os.path.join(CUSTOM_LEVELS_DIR, argv[2]))
-        return 0
-    if len(argv) >= 2 and argv[0] == "map":
-        args, options = [], {"--scale": MAP_SCALE, "--turn": 0}
-        rest = iter(argv[1:])
-        for arg in rest:
-            if arg in options:
-                options[arg] = int(next(rest, "x"))
-            else:
-                args.append(arg)
-        path = args[0]
-        name = args[1] if len(args) >= 2 else os.path.splitext(os.path.basename(path))[0]
-        with open(path) as f:
-            text = f.read()
-        images = map_images(path, text)
-        level = make_map(read_level(STREAMS_DIR, 9), text, options["--scale"], options["--turn"], images)
-        write_level(level, CUSTOM_LEVELS_DIR, name)
-        print("wrote %s" % os.path.join(CUSTOM_LEVELS_DIR, name))
         return 0
     if len(argv) >= 1 and argv[0] == "course":
         name = argv[1] if len(argv) >= 2 else "course"
