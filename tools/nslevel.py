@@ -4,6 +4,7 @@ table and level header) and an .nsf (64 KB pages of entries).
 
 The layouts mirror the structs in src/ns.h, which the game loads as is.
 """
+import copy
 import os
 import struct
 
@@ -264,15 +265,61 @@ CORE_EXEC_SLOTS = [0, 3, 4, 5, 29, 34]
 
 
 def references(entry, eids):
-    return set()
+    """the eids (of those given) that entry's items mention: any aligned
+    word that equals one counts, which may keep something unneeded but never
+    drops something needed"""
+    found = set()
+    for item in entry.items:
+        count = len(item) // 4
+        found.update(w for w in struct.unpack_from("<%dI" % count, item) if w in eids)
+    return found
+
+
+def page_size(entries):
+    return 16 + 4 * (len(entries) + 1) + sum(len(entry_bytes(e)) for e in entries)
 
 
 def pack_entries(entries):
-    return []
+    """entry pages holding entries, in order, starting a new page when one is full"""
+    pages, current = [], []
+    for entry in entries:
+        if current and page_size(current + [entry]) > PAGE_SIZE:
+            pages.append(Page(PAGE_ENTRIES, entries=current))
+            current = []
+        current.append(entry)
+    if current:
+        pages.append(Page(PAGE_ENTRIES, entries=current))
+    return pages
 
 
 def cut_level(level, keep):
-    return level
+    """a copy of level with only the entries reachable from the eids in keep
+    (texture and audio pages are kept whole if anything in them is used),
+    repacked into as few pages as they fit"""
+    entries = {e.eid: e for p in level.pages for e in p.entries}
+    page_of = {}
+    for page in level.pages:
+        if page.type == PAGE_TEXTURE:
+            page_of[page.eid] = page
+        elif page.type != PAGE_ENTRIES:
+            for e in page.entries:
+                page_of[e.eid] = page
+    all_eids = set(entries) | set(page_of)
+    kept, todo = set(), [eid for eid in keep if eid in all_eids]
+    while todo:
+        eid = todo.pop()
+        if eid in kept:
+            continue
+        kept.add(eid)
+        if eid in entries:
+            todo += references(entries[eid], all_eids) - kept
+    raw_pages = [p for p in level.pages if p.type != PAGE_ENTRIES
+                 and (p.eid in kept if p.type == PAGE_TEXTURE else any(e.eid in kept for e in p.entries))]
+    kept_entries = [e for p in level.pages if p.type == PAGE_ENTRIES
+                    for e in p.entries if e.eid in kept]
+    nsd = copy.deepcopy(level.nsd)
+    nsd.ldat.exec_map = [e if e in kept else EID_NONE for e in nsd.ldat.exec_map]
+    return Level(nsd, pack_entries(kept_entries) + raw_pages)
 
 
 def type_name(etype):
