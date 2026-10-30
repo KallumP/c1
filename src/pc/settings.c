@@ -12,7 +12,8 @@ pc_settings game_settings = {
   .skip_splash_screens = 0,
   .fix_model_draw_order = 0,
   .replay_inputs = 0,
-  .replay_speed = 1
+  .replay_speed = 1,
+  .boot_level = ""
 };
 
 /* restore the default settings */
@@ -24,6 +25,22 @@ void SettingsReset(pc_settings *s) {
   s->fix_model_draw_order = 0;
   s->replay_inputs = 0;
   s->replay_speed = 1;
+  s->boot_level[0] = 0;
+}
+
+/*
+ * parse a level name (letters, digits, _ and -, so it can't leave the
+ * custom_levels folder) into name; returns 0 if it isn't one
+ */
+static int SettingsParseLevelName(const char *value, char *name) {
+  const char *c;
+
+  if (*value == 0 || strlen(value) > SETTINGS_BOOT_LEVEL_MAX) { return 0; }
+  for (c = value; *c; c++) {
+    if (!SDL_isalnum(*c) && *c != '_' && *c != '-') { return 0; }
+  }
+  strcpy(name, value);
+  return 1;
 }
 
 /* parse "on"/"off" into flag; returns 0 for any other value */
@@ -65,6 +82,8 @@ static int SettingsApply(const char *name, const char *value, pc_settings *s) {
   if (SDL_strcasecmp(name, "replay_speed") == 0)
     return SettingsParseNumber(value, SETTINGS_REPLAY_SPEED_MAX,
       &s->replay_speed) ? 1 : -1;
+  if (SDL_strcasecmp(name, "boot_level") == 0)
+    return SettingsParseLevelName(value, s->boot_level) ? 1 : -1;
   return -1;
 }
 

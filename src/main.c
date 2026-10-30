@@ -79,7 +79,7 @@ void CoreLoop(lid_t lid);
 int main() {
   use_cd = 0;
   init();
-  CoreLoop(LID_BOOTLEVEL);
+  CoreLoop(boot_lid); /* LID_BOOTLEVEL, unless booting into a custom level */
   _kill();
   return 0;
 }
