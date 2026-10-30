@@ -523,6 +523,10 @@ def floor_grid(w, d, cell):
     return verts, polys
 
 
+def blocks_mesh(blocks, top_texture, side_texture, piece):
+    return [], []
+
+
 WGEO_HEADER = "<iiiIIIII"  # trans x y z, poly, vert, texinfo and tpag counts, is_backdrop
 
 

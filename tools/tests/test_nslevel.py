@@ -397,6 +397,36 @@ class BlockOctree(unittest.TestCase):
             nslevel.blocks_rect_bytes((0, 0, 0), self.SIZE, [(0, 0, 0, 100, 128, 128)], cell=128)
 
 
+class BlockMesh(unittest.TestCase):
+    TOP, SIDE = (593, 0), (110, 2)
+    BLOCK = (0, 0, 0, 512, 256, 768)
+
+    def mesh(self):
+        return nslevel.blocks_mesh([self.BLOCK], self.TOP, self.SIDE, piece=256)
+
+    def test_top_is_split_into_pieces(self):
+        verts, polys = self.mesh()
+        tops = [p for p in polys if p[3:] == self.TOP]
+        self.assertEqual(2 * 3 * 2, len(tops))  # 2x3 squares, 2 triangles each
+        self.assertEqual({256}, {verts[i][1] for p in tops for i in p[:3]})
+
+    def test_sides_use_the_side_texture_and_span_the_height(self):
+        verts, polys = self.mesh()
+        sides = [p for p in polys if p[3:] == self.SIDE]
+        # x sides are 3 pieces long, z sides 2; one piece high; 2 triangles each
+        self.assertEqual(2 * (3 + 3 + 2 + 2), len(sides))
+        self.assertEqual({0, 256}, {verts[i][1] for p in sides for i in p[:3]})
+
+    def test_every_vertex_is_on_the_block(self):
+        verts, _ = self.mesh()
+        for x, y, z in verts:
+            self.assertTrue(0 <= x <= 512 and 0 <= y <= 256 and 0 <= z <= 768)
+
+    def test_too_many_vertices_is_an_error(self):
+        with self.assertRaises(ValueError):
+            nslevel.blocks_mesh([(0, 0, 0, 8192, 128, 8192)], self.TOP, self.SIDE, piece=64)
+
+
 def decode_vertex(data):
     """(x, y, z, r, g, b) the way SwTransformWorlds reads a wgeo vertex"""
     def sx(v, bits):
