@@ -130,15 +130,19 @@ static void FindDataDir() {
 
 /*
  * replay the newest recording if replay_inputs is on, otherwise record this
- * run to a new file in recorded_inputs, named by its start time
+ * run to a new file in recorded_inputs (next to the executable), named by
+ * its start time
  */
 static void InitReplay() {
-  char path[256];
+  char dir[1024], path[1024], *base;
   time_t now;
 
+  base = SDL_GetBasePath();
+  snprintf(dir, sizeof(dir), "%s%s", base ? base : "", REPLAY_DIR);
+  SDL_free(base);
   if (game_settings.replay_inputs) {
-    if (!ReplayNewestFile(REPLAY_DIR, path, sizeof(path)))
-      fprintf(stderr, "no recordings in %s/ to replay\n", REPLAY_DIR);
+    if (!ReplayNewestFile(dir, path, sizeof(path)))
+      fprintf(stderr, "no recordings in %s to replay\n", dir);
     else if (ReplayStart(path, REPLAY_PLAY, LID_BOOTLEVEL, seed_a)) {
       fprintf(stderr, "replaying %s\n", path);
       TimeSetSpeed(game_settings.replay_speed);
@@ -147,12 +151,12 @@ static void InitReplay() {
       fprintf(stderr, "could not replay %s\n", path);
     return;
   }
-  if (!ReplayMakeDir(REPLAY_DIR)) {
-    fprintf(stderr, "could not make %s/ to record inputs\n", REPLAY_DIR);
+  if (!ReplayMakeDir(dir)) {
+    fprintf(stderr, "could not make %s to record inputs\n", dir);
     return;
   }
   now = time(0);
-  ReplayFileName(path, sizeof(path), REPLAY_DIR, localtime(&now));
+  ReplayFileName(path, sizeof(path), dir, localtime(&now));
   if (!ReplayStart(path, REPLAY_RECORD, LID_BOOTLEVEL, seed_a))
     fprintf(stderr, "could not open %s to record inputs\n", path);
 }
