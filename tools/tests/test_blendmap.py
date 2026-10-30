@@ -270,5 +270,78 @@ class WorldMeshes(unittest.TestCase):
         self.assertEqual(2 * 250 * 10, sum(len(polys) for _, polys in out))
 
 
+def moved(mesh, dx, dy, dz):
+    return blendmap.Mesh([(x + dx, y + dy, z + dz) for x, y, z in mesh.verts], mesh.tris)
+
+
+def cube(x, y, z, r, obj):
+    """a small closed cube centred on (x, y, z)"""
+    m = merged(floor(-r, -r, r, r, y=r), quad_mesh([(-r, -r, -r), (r, -r, -r), (r, -r, r), (-r, -r, r)]))
+    m = blendmap.Mesh(m.verts, [blendmap.Tri(t.verts, obj, None) for t in m.tris])
+    return moved(m, x, y, z)
+
+
+class Spawn(unittest.TestCase):
+    SIZE = (2048, 2048, 4096)
+
+    def test_spawn_object_puts_crash_on_the_ground_below_it(self):
+        mesh = merged(floor(0, 0, 2048, 4096, y=512), cube(1000, 900, 3000, 32, "Spawn"))
+        cells = blendmap.solid_cells(mesh, self.SIZE, 128)
+        self.assertEqual((1000, 512, 3000), blendmap.spawn(mesh, cells, self.SIZE, 128))
+
+    def test_spawn_object_is_not_drawn_or_solid(self):
+        marker = cube(1000, 900, 3000, 32, "spawn")
+        self.assertEqual({}, blendmap.solid_cells(marker, self.SIZE, 128))
+        self.assertEqual([], worlds(marker))
+
+    def test_without_a_spawn_object_crash_starts_on_the_ground_nearest_the_start(self):
+        # the route runs along -z, so the start is the +z end; nearest the middle across
+        mesh = merged(floor(0, 0, 2048, 2048, y=256), floor(1536, 2048, 2048, 2560, y=512))
+        cells = blendmap.solid_cells(mesh, self.SIZE, 128)
+        self.assertEqual((1536 + 64, 512, 2560 - 64), blendmap.spawn(mesh, cells, self.SIZE, 128))
+
+    def test_no_ground_is_an_error(self):
+        with self.assertRaises(ValueError):
+            blendmap.spawn(blendmap.Mesh([], []), {}, self.SIZE, 128)
+
+
+class CameraPath(unittest.TestCase):
+    SIZE = (2048, 4096, 8192)
+
+    def path(self, mesh, start, step=256):
+        cells = blendmap.solid_cells(mesh, self.SIZE, 128)
+        return blendmap.camera_path(cells, self.SIZE, 128, start, step)
+
+    def test_follows_crash_from_behind_along_minus_z(self):
+        points = self.path(floor(0, 0, 2048, 8192, y=512), (1024, 512, 5000))
+        lead, (dx, dy) = blendmap.CAM_LEAD, blendmap.CAM_OFFSET
+        self.assertEqual((1024 + dx, 512 + dy, 5000 + lead), points[0])
+        self.assertEqual([-256] * (len(points) - 1), [b[2] - a[2] for a, b in zip(points, points[1:])])
+        self.assertGreater(points[-1][2], 0)
+        self.assertLessEqual(points[-1][2], 256 + 200)
+
+    def test_starts_inside_the_zone(self):
+        points = self.path(floor(0, 0, 2048, 8192, y=512), (1024, 512, 8000))
+        self.assertLessEqual(points[0][2], 8192 - 200)
+
+    def test_height_follows_the_ground_ahead_of_the_camera(self):
+        mesh = merged(floor(0, 4096, 2048, 8192, y=512), floor(0, 0, 2048, 4096, y=1024))
+        points = self.path(mesh, (1024, 512, 6000))
+        for x, y, z in points:
+            ground = 1024 if z - blendmap.CAM_LEAD < 4096 else 512
+            self.assertEqual(ground + blendmap.CAM_OFFSET[1], y, z)
+
+    def test_height_is_kept_over_a_gap(self):
+        mesh = merged(floor(0, 4096, 2048, 8192, y=512), floor(0, 0, 2048, 2048, y=1024))
+        heights = {z: y for x, y, z in self.path(mesh, (1024, 512, 6000))}
+        z = next(z for z in heights if 2048 <= z - blendmap.CAM_LEAD < 4096)
+        self.assertEqual(512 + blendmap.CAM_OFFSET[1], heights[z])
+
+    def test_picks_the_ground_nearest_the_last_height_under_a_ceiling(self):
+        ceiling = quad_mesh([(0, 2048, 0), (2048, 2048, 0), (2048, 2048, 8192), (0, 2048, 8192)])
+        points = self.path(merged(floor(0, 0, 2048, 8192, y=512), ceiling), (1024, 512, 5000))
+        self.assertEqual({512 + blendmap.CAM_OFFSET[1]}, {y for _, y, _ in points})
+
+
 if __name__ == "__main__":
     unittest.main()
