@@ -6,7 +6,10 @@ path. tools/nslevel.py puts them together (python tools/nslevel.py map).
 the .obj is read as blender exports it by default: y up, so its x, y and z
 are the zone's x, y (up) and z.
 """
+import collections
 import os
+
+import tpage
 
 
 class Tri:
@@ -270,12 +273,58 @@ def snap(p):
     return tuple(int(round(c / 8)) * 8 for c in p)
 
 
-def world_meshes(mesh, piece, ground, side, tile=None):
+# a part of a material's tile on a polygon: the region (pixels of the tile)
+# and the corner layout (tpage.LAYOUTS) putting its corners on the polygon's
+TileRegion = collections.namedtuple("TileRegion", "material x y w h layout")
+
+
+def plane_coords(p, n):
+    """(u, v) of a point on a face with normal n, along the two axes across
+    the axis it faces most: x and z for floors, and z or x and y for walls,
+    with v down so the top of an image is up"""
+    facing = max(range(3), key=lambda i: abs(n[i]))
+    if facing == 1:
+        return p[0], p[2]
+    return (p[2] if facing == 0 else p[0]), -p[1]
+
+
+def aligned(lo, hi, step):
+    """(start, size) of the smallest region a side of a tile can have
+    (tpage.SIZES, starting on a multiple of its size and of step) that
+    covers lo..hi"""
+    for size in tpage.SIZES:
+        start = int(lo // size) * size
+        if size >= step and start + size >= hi - 1e-6:
+            return start, size
+    return 0, tpage.TILE
+
+
+def tile_region(points, n, repeat):
+    """(x, y, w, h, layout) for a triangle (points in zone units) on a face
+    with normal n, with the tile repeating every repeat units across the
+    face: the region of the tile under it, and the layout whose corners are
+    nearest its points"""
+    uv = [plane_coords(p, n) for p in points]
+    cell = [int(sum(c[i] for c in uv) / 3 // repeat) for i in (0, 1)]
+    px = [tuple(min(max((c[i] - cell[i] * repeat) * tpage.TILE / repeat, 0), tpage.TILE) for i in (0, 1))
+          for c in uv]
+    x, w = aligned(min(p[0] for p in px), max(p[0] for p in px), 8)  # 4 bit textures step 8 across
+    y, h = aligned(min(p[1] for p in px), max(p[1] for p in px), 4)
+    rel = [((p[0] - x) / w, (p[1] - y) / h) for p in px]
+
+    def miss(layout):
+        return sum((r[0] - c[0]) ** 2 + (r[1] - c[1]) ** 2 for r, c in zip(rel, tpage.LAYOUTS[layout]))
+    return x, y, w, h, min(range(len(tpage.LAYOUTS)), key=miss)
+
+
+def world_meshes(mesh, piece, ground, side, tile=None, textured=()):
     """world meshes for a mesh's faces, sliced every piece along z and every
     tile (piece by default) along x and y: a list of (vertices (x, y, z,
     colour), polygons (a, b, c, tinf, tpag)), with ground (tinf, tpag) on
-    faces facing up and side on the rest. faces facing down aren't drawn,
-    since the camera looks down on the level and they would hide it"""
+    faces facing up and side on the rest. faces of the textured materials
+    get (TileRegion, None) instead, their tile repeating every tile units.
+    faces facing down aren't drawn, since the camera looks down on the
+    level and they would hide it"""
     sizes = ((2, piece), (0, tile or piece), (1, tile or piece))
     meshes = []
     verts, polys, index = [], [], {}
@@ -307,6 +356,8 @@ def world_meshes(mesh, piece, ground, side, tile=None):
                 a, b, c = part[0], part[k], part[k + 1]
                 if cross(sub(b, a), sub(c, a)) == (0, 0, 0):
                     continue
+                if tri.mat in textured:
+                    texture = (TileRegion(tri.mat, *tile_region((a, b, c), n, tile or piece)), None)
                 add([v + (colour,) for v in (a, b, c)], texture)
     if polys:
         meshes.append((verts, polys))
