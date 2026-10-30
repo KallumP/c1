@@ -33,7 +33,7 @@ Then run the game. It starts in the level instead of the title screen. Remove `b
 
 ## Maps from Blender
 
-`python tools/nslevel.py map <file.obj> [name]` makes a level from a map modelled in Blender: its faces become the level's geometry and collision, and Crash starts on it. There are no enemies, fruit or crates. [`maps/`](../maps) has an example.
+`python tools/nslevel.py map <file.obj> [name]` makes a level from a map modelled in Blender: its faces become the level's geometry and collision, and Crash starts on it. There are no enemies, fruit or crates. [`maps/`](../maps) has an example, with its textures.
 
 In Blender:
 
@@ -43,7 +43,16 @@ In Blender:
 - Name an object `spawn` (it can be any small mesh) to put Crash on the floor below it. Without one he starts on the floor nearest the start of the route (the -Y end), in the middle.
 - Name objects `pit…` (e.g. `pit.001`) for floors that kill Crash when he lands on them.
 
-Export with File > Export > Wavefront (.obj), keeping the default axes (Forward -Z, Up Y). Materials, UVs and normals aren't used: floors get N. Sanity Beach's sand and walls another of its textures, shaded by which way they face.
+Export with File > Export > Wavefront (.obj), keeping the default axes (Forward -Z, Up Y), with materials on. Keep the `.mtl` it writes next to the `.obj`, and the images it names where it says (a path relative to the `.mtl`, or absolute). If your textures are packed in the `.blend`, unpack them first (File > External Data > Unpack Resources) so they're files the `.mtl` can point at.
+
+Textures:
+
+- Each material's image (its Base Color texture, `map_Kd` in the `.mtl`) goes on its faces. It's shrunk or scaled up to 64 x 64 pixels with 16 colours, as the game's own textures are.
+- The game can't use Blender's UVs: an image covers 1024 units (2.6 m) of a face and repeats, lined up with the zone, on floors from above and on walls upright.
+- Faces whose material has no image get N. Sanity Beach's sand (floors) or another of its textures (walls).
+- Faces are shaded by which way they face.
+- Up to 93 materials can have images.
+- The game puts each part of a texture on a triangle by its corners, so a face that isn't a rectangle lined up with the 2.6 m grid shows its texture a little stretched.
 
 If the route runs along X instead, add `--turn 90` (or 270) to turn the map a quarter about the up axis.
 
