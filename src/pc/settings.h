@@ -4,6 +4,7 @@
 #include "common.h"
 
 #define SETTINGS_LOADING_SCREEN_MAX_MS 60000
+#define SETTINGS_REPLAY_SPEED_MAX      16
 
 /* game settings (pc), read from settings.cfg */
 typedef struct {
