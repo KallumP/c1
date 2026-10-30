@@ -2,6 +2,8 @@
  * input recording and replay (pc)
  */
 #include "replay.h"
+#include "pad.h"
+#include "time.h"
 
 /* start recording to path; returns 0 if the file can't be opened */
 int ReplayRecordStart(replay_recorder *r, const char *path,
@@ -30,12 +32,31 @@ void ReplayRecordStop(replay_recorder *r) {
   r->file = 0;
 }
 
+static replay_recorder recorder = { 0 };
+
+/*
+ * start recording inputs to path, on the fixed clock so that every read of
+ * game time is the same on replay. returns 0 if the file can't be opened
+ */
 int ReplayStart(const char *path, int mode, uint32_t lid, uint32_t seed) {
-  return 0;
+  replay_header header;
+
+  header.lid = lid;
+  header.seed = seed;
+  header.start_ticks = GetTicksElapsed();
+  if (!ReplayRecordStart(&recorder, path, &header)) { return 0; }
+  TimeSetFixed(1);
+  return 1;
 }
 
+/* record this frame; call once per frame, after input is polled */
 void ReplayUpdate() {
+  ReplayRecordFrame(&recorder, GetTicksElapsed(), SwPadRead(0));
+  if (recorder.file)
+    fflush(recorder.file); /* keep what's recorded if the game crashes */
 }
 
 void ReplayStop() {
+  ReplayRecordStop(&recorder);
+  TimeSetFixed(0);
 }
