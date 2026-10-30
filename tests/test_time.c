@@ -79,6 +79,33 @@ UTEST(time, speed_is_normal_by_default) {
   ASSERT_EQ(1u, TimeGetSpeed());
 }
 
+/* 34 ticks a frame at about 30 frames a second: 34000000/32768 a second */
+UTEST(time, counter_converts_to_ticks) {
+  ASSERT_EQ(0, TimeTicksFromCount(0, 10000000));
+  ASSERT_EQ(1037, TimeTicksFromCount(10000000, 10000000)); /* a second */
+  ASSERT_EQ(1037, TimeTicksFromCount(3000000, 3000000)); /* at another frequency */
+}
+
+UTEST(time, counter_converts_long_after_the_machine_started) {
+  /* 10 hours of a 10 MHz performance counter overflowed 1000000*count*34
+     (int64) and gave negative ticks, so the first frame waited for hours */
+  int64_t freq = 10000000;
+
+  ASSERT_EQ(37353515, TimeTicksFromCount(36000LL*freq, freq)); /* 10 hours */
+  ASSERT_EQ(2141486389, TimeTicksFromCount(2063889LL*freq, freq)); /* nearly 24 days */
+}
+
+UTEST(time, real_clock_starts_near_0) {
+  /* ticks count from the game starting, not the machine, so they stay
+     small and positive however long it has been up */
+  int ticks;
+
+  TimeSetFixed(0);
+  ticks = TimeRealTicks();
+  ASSERT_GE(ticks, 0);
+  ASSERT_LT(ticks, 1037 * 60); /* within a minute of the tests starting */
+}
+
 UTEST(time, is_fixed_reports_the_mode) {
   TimeSetFixed(1);
   ASSERT_TRUE(TimeIsFixed());

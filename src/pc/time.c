@@ -2,33 +2,59 @@
 
 int32_t ticks_base = 0;
 
+/*
+ * a counter's count (at freq a second) as ticks: 34000000/0x8000 a second.
+ * whole seconds and the rest are converted apart, as 1000000*34*count
+ * overflows an int64 once count passes about 2.7e11 (7.5 hours of a
+ * 10 MHz counter)
+ */
+int32_t TimeTicksFromCount(int64_t count, int64_t freq) {
+  int64_t secs, rest;
+
+  secs = count / freq;
+  rest = count % freq;
+  return ((secs*34000000) + ((rest*34000000) / freq)) / 0x8000;
+}
+
 #ifdef _WIN32
 #include <windows.h>
-static inline int32_t GetTicks() {
+static inline int64_t GetCount(int64_t *freq) {
   LARGE_INTEGER _freq, _count;
-  int64_t freq, count;
-  int32_t ticks;
 
   QueryPerformanceFrequency(&_freq);
   QueryPerformanceCounter(&_count);
-  freq = _freq.QuadPart;
-  count = _count.QuadPart;
-
-  ticks = ((1000000*(count*34)) / 0x8000) / freq;
-  return ticks;
+  *freq = _freq.QuadPart;
+  return _count.QuadPart;
 }
 #elif __linux__
 #include <time.h>
-static inline int32_t GetTicks() {
+static inline int64_t GetCount(int64_t *freq) {
   struct timespec tp;
-  int32_t ticks;
 
   clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
-  ticks = ((((int64_t)tp.tv_sec*1000000000)+tp.tv_nsec) / 963765);
-  //printf("%i ticks elapsed\n", ticks);
-  return ticks;
+  *freq = 1000000000;
+  return ((int64_t)tp.tv_sec*1000000000)+tp.tv_nsec;
 }
 #endif
+
+/*
+ * ticks since the first call, so they stay small and positive however long
+ * the machine has been up (counted from its start, they went negative and
+ * the first frame waited for hours)
+ */
+static inline int32_t GetTicks() {
+  static int64_t start = -1;
+  int64_t freq, count;
+
+  count = GetCount(&freq);
+  if (start < 0)
+    start = count;
+  return TimeTicksFromCount(count - start, freq);
+}
+
+int32_t TimeRealTicks() {
+  return GetTicks();
+}
 
 /*
  * fixed clock (for recording and replaying inputs): game time only moves
