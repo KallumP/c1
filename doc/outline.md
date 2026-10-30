@@ -4,7 +4,7 @@ Following is a general outline of the game, starting at the entry point.
 
 The tree omits descendant functions which do not contribute to the 'game flow'.
 
-It follows the original game. Functions listed in `psx/` files were PS1-specific and are no longer in c1 (see [PS1 build](psx-build.md)); they can be found under `src/psx/` at the `psx-last` tag.
+It follows the original game. Functions listed in `psx/` files were PS1-specific and are no longer in c1x (see [PS1 build](psx-build.md)); they can be found under `src/psx/` at the `psx-last` tag.
 
 ```
 - main - main.c
