@@ -8,6 +8,8 @@ import struct
 import sys
 import unittest
 
+from PIL import Image
+
 TOOLS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, TOOLS)
 import nslevel  # noqa: E402
@@ -651,6 +653,65 @@ class Map(unittest.TestCase):
         level = nslevel.make_map(nslevel.read_level(STREAMS, 9), text, **kw)
         entries = {e.eid: e for p in level.pages for e in p.entries}
         return level, entries, entries[level.nsd.ldat.zone_spawn]
+
+    TEXTURED_OBJ = MAP_OBJ.replace("o Floor\n", "o Floor\nusemtl stone\n").replace("o Wall\n", "o Wall\nusemtl plain\n")
+
+    def stone(self):
+        return Image.new("RGB", (32, 32), (90, 90, 100))
+
+    def textures(self, level):
+        return [p for p in level.pages if p.type == nslevel.PAGE_TEXTURE]
+
+    def world(self, entries, zone):
+        return entries[struct.unpack_from("<I", zone.items[0], 4)[0]]
+
+    def test_material_images_become_a_texture_page_the_zone_loads(self):
+        plain, _, _ = self.make(self.TEXTURED_OBJ)
+        level, entries, zone = self.make(self.TEXTURED_OBJ, images={"stone": self.stone()})
+        self.assertEqual(len(self.textures(plain)) + 1, len(self.textures(level)))
+        tpags = struct.unpack_from("<8I", self.world(entries, zone).items[0], 32)
+        new = [p.eid for p in self.textures(level) if p.eid not in {q.eid for q in self.textures(plain)}]
+        self.assertIn(new[0], tpags)
+        header = zone.items[0]
+        self.assertEqual(len(self.textures(level)), struct.unpack_from("<i", header, nslevel.ZONE_LOADLIST + 4)[0])
+
+    def test_textured_polygons_use_their_materials_tile(self):
+        level, entries, zone = self.make(self.TEXTURED_OBJ, images={"stone": self.stone()})
+        world = self.world(entries, zone)
+        header = world.items[0]
+        fields = struct.unpack_from(nslevel.WGEO_HEADER, header, 0)
+        tpags = struct.unpack_from("<8I", header, 32)
+        page = next(p for p in self.textures(level) if p.eid == tpags[fields[6] - 1])
+        stone = nslevel.blendmap.tpage.colour_5551((90, 90, 100))
+        on_page = 0
+        for i in range(fields[3]):
+            w0 = struct.unpack_from("<I", world.items[1], 8 * i)[0]
+            tinf, tpag = (w0 >> 8) & 0xFFF, (w0 >> 5) & 7
+            if tpags[tpag] != page.eid:
+                continue
+            on_page += 1
+            self.assertLess(tinf + 1, fields[5])  # within the mesh's texture infos
+            rgn = struct.unpack_from("<I", header, 64 + 4 * tinf + 4)[0]
+            clut_y = (rgn >> 6) & 127
+            self.assertIn(stone, struct.unpack_from("<16H", page.data, clut_y * 512))
+        self.assertGreater(on_page, 0)
+
+    def test_materials_without_an_image_keep_n_sanity_beachs_textures(self):
+        level, entries, zone = self.make(self.TEXTURED_OBJ, images={"stone": self.stone()})
+        tpags = struct.unpack_from("<8I", self.world(entries, zone).items[0], 32)
+        used = {tpags[(struct.unpack_from("<I", self.world(entries, zone).items[1], 8 * i)[0] >> 5) & 7]
+                for i in range(len(self.world(entries, zone).items[1]) // 8)}
+        self.assertEqual(2, len(used))  # the stone page, and the beach's page for the wall
+
+    def test_map_images_are_read_from_the_mtl_next_to_the_obj(self):
+        out = os.path.join(TOOLS, "..", "build", "test_map_images")
+        os.makedirs(os.path.join(out, "textures"), exist_ok=True)
+        self.stone().save(os.path.join(out, "textures", "stone.png"))
+        with open(os.path.join(out, "level.mtl"), "w") as f:
+            f.write("newmtl stone\nmap_Kd textures/stone.png\nnewmtl plain\nKd 1 1 1\n")
+        images = nslevel.map_images(os.path.join(out, "level.obj"), "mtllib level.mtl\n" + self.TEXTURED_OBJ)
+        self.assertEqual(["stone"], list(images))
+        self.assertEqual((90, 90, 100), images["stone"].convert("RGB").getpixel((0, 0)))
 
     def test_map_is_one_zone_with_its_geometry_and_crash_only(self):
         level, entries, zone = self.make()
