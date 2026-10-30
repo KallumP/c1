@@ -10,6 +10,7 @@
 ### Fixed
 
 - landing on the warp pad at the end of a level skipped Crash's 'win level' animation and went straight to the level end screen
+- after a level with every box broken, the gem briefly showed small in the top left of the level end screen before flying in
 
 ## 2026-10-28
 
