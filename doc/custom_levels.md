@@ -29,7 +29,7 @@ A map modelled in Blender can become a level the game boots straight into: its f
 
    It writes `custom_levels/my_map` (the `.nsd` and `.nsf`), named after the folder. Add a name to save it as something else (`python tools/generate_level_terrain.py maps/my_map other_name`). It prints `wrote …` when it's done. It also takes a `.obj` instead of a folder, and names the level after the file.
    - If the route runs along X in Blender, add `--turn 90` (or `--turn 270` if Crash ends up facing backwards).
-   - If the map isn't modelled at 1 m to a Blender unit, or Crash looks too big or small in it, add `--scale <units per m>` (the default is 400). If the map is too big for the game at that scale, the tool says so and gives the largest scale that fits.
+   - If the map isn't modelled at 1 m to a Blender unit, or Crash looks too big or small in it, add `--scale <units per m>` (the default is 400). If the map is too wide or too tall for the game at that scale, the tool says so and gives the largest scale that fits.
    - A warning that a `.mtl` or image wasn't found means those faces get N. Sanity Beach's textures instead. Check the paths in the `.mtl`.
 7. **Setup which level to boot into** In `settings.cfg`:
 
@@ -67,6 +67,8 @@ Make a folder `maps/my_map/` for it and start at step 5. The `.obj` should have 
 
 - Collision is made of 128 unit cubes (about 30 cm), so a slope is a staircase of small steps. Crash walks up steps of up to about 240 units (0.6 m); anything higher he has to jump.
 - A wall hanging over a floor, such as the top of a doorway, isn't solid: the game would treat it as a wall all the way down.
-- Each side of the map can be at most 16,384 units, including a margin of 128 at each end (about 40 m at the default scale). The game's collision can't reach further in one zone.
+- Along the route, the map can be any length. A level is made of zones, as the game's own levels are, and the game's collision can't reach further than 16,384 units in one zone. So a longer map is split into a chain of zones, each 16,384 units long, that lead on to each other.
+- Across and up, the map has to fit in one zone: at most 16,384 units, including a margin of 128 at each side (about 40 m at the default scale).
+- On a long map, each zone can have at most 4 world meshes, because a zone also draws the next zone's meshes as the camera looks ahead into it. A zone that needs more is an error; use fewer faces there.
 - The game draws at most 1460 polygons at once, and faces are cut into pieces about 1.3 m long along the route and 2.6 m across, so a big, detailed map leaves out what's farthest from the camera.
 - The game has no depth test for level geometry: it draws faces farthest first, by the middle of each piece along the route. Where two big faces overlap at about the same distance, one can show through the other a little.
