@@ -18,12 +18,18 @@ USAGE = """usage:
   name   the level to write, custom_levels/<name> (the folder's or file's name)
   --scale  the game's units per blender metre (%d)
   --turn   degrees to turn the map about the up axis, e.g. 90 if its route
-           runs along x""" % nslevel.MAP_SCALE
+           runs along x
+
+  a map.cfg next to the .obj can set scale and turn for the map (one
+  "key = value" a line); --scale and --turn override it""" % nslevel.MAP_SCALE
+
+MAP_CFG = "map.cfg"
 
 
 def parse_args(argv):
-    """(map, name or None, scale, turn) from the command line"""
-    args, options = [], {"--scale": nslevel.MAP_SCALE, "--turn": 0}
+    """(map, name or None, scale or None, turn or None) from the command
+    line; scale and turn are None when not given"""
+    args, options = [], {"--scale": None, "--turn": None}
     rest = iter(argv)
     for arg in rest:
         if arg in options:
@@ -36,6 +42,34 @@ def parse_args(argv):
     if not 1 <= len(args) <= 2:
         raise ValueError("give a map, and optionally a name")
     return args[0], (args[1] if len(args) == 2 else None), options["--scale"], options["--turn"]
+
+
+def read_map_cfg(folder):
+    """{"scale": n, "turn": n} for the settings the map.cfg in folder gives
+    (none without one). blank lines and lines starting with # are skipped"""
+    path = os.path.join(folder, MAP_CFG)
+    if not os.path.exists(path):
+        return {}
+    settings = {}
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, _, value = line.partition("=")
+            settings[key.strip()] = int(value)
+    return settings
+
+
+def map_options(folder, scale, turn):
+    """(scale, turn) for the map in folder: scale and turn from the command
+    line if given, else from its map.cfg, else the defaults"""
+    settings = read_map_cfg(folder)
+    if scale is None:
+        scale = settings.get("scale", nslevel.MAP_SCALE)
+    if turn is None:
+        turn = settings.get("turn", 0)
+    return scale, turn
 
 
 def fitting_scale(scale, too_big):
@@ -54,6 +88,7 @@ def main(argv):
         return 1
     path, default_name = nslevel.map_source(source)
     name = name or default_name
+    scale, turn = map_options(os.path.dirname(path), scale, turn)
     with open(path) as f:
         text = f.read()
     images = nslevel.map_images(path, text)
