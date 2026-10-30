@@ -306,7 +306,7 @@ def spawn(mesh, cells, size, cell):
         if not tops:
             raise ValueError("there's no ground below the spawn object")
         return (int(round(x)), tops[-1], int(round(z)))
-    middle = size[0] / 2
+    middle = (min(i for i, _ in columns) + max(i for i, _ in columns) + 1) * cell / 2 if columns else 0
     for i, k in sorted(columns, key=lambda c: (-c[1], abs((c[0] + 0.5) * cell - middle))):
         tops = ground_tops(cells, floors, i, k, cell, HEADROOM)
         if tops:
