@@ -181,6 +181,14 @@ class SolidCells(unittest.TestCase):
         self.assertEqual({(5, j, k) for j in range(4) for k in (0, 1)},
                          {key for key, kind in cells.items() if kind == "wall" and key[0] == 5})
 
+    def test_a_wall_beside_a_floors_edge_with_nothing_under_it_is_kept(self):
+        # an outer wall: its cells are just past the floor's edge, so nothing is under them
+        floor_ = floor(0, 0, 1024, 256, y=512)
+        wall = quad_mesh([(0, 512, 256), (0, 1024, 256), (1024, 1024, 256), (1024, 512, 256)])  # facing -z
+        cells = self.cells(merged(floor_, wall))
+        self.assertEqual({(i, j, 2) for i in range(8) for j in (4, 5, 6, 7)},
+                         {key for key, kind in cells.items() if kind == "wall"})
+
     def test_ceilings_are_not_solid(self):
         # the game never stops a jump at the octree (FindCeilY in src/solid.c), so
         # crash would jump through a ceiling and land on top of it
