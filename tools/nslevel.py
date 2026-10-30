@@ -168,15 +168,94 @@ def read_level(streams_dir, lid):
 
 def read_level_files(path):
     """read path.nsd and path.nsf"""
-    return None
+    with open(path + ".nsd", "rb") as f:
+        nsd = read_nsd(f.read())
+    with open(path + ".nsf", "rb") as f:
+        pages = read_pages(f.read(), nsd.page_count, nsd.pages_offset)
+    return Level(nsd, pages)
+
+
+def pgid(index):
+    """the page id the loader gives the page at index (see NSInit)"""
+    return (index << 1) | 1
+
+
+def entry_bytes(entry):
+    """an entry: header, item offsets relative to the entry, then the items"""
+    offset = 16 + 4 * (len(entry.items) + 1)
+    offsets = []
+    for item in entry.items:
+        offsets.append(offset)
+        offset += len(item)
+    offsets.append(offset)
+    data = struct.pack("<IIii", MAGIC_ENTRY, entry.eid, entry.type, len(entry.items))
+    return data + struct.pack("<%dI" % len(offsets), *offsets) + b"".join(entry.items)
 
 
 def entry_page_bytes(entries, index):
-    return b""
+    """a 64 KB page holding entries; raises ValueError if they don't fit"""
+    blobs = [entry_bytes(e) for e in entries]
+    offset = 16 + 4 * (len(blobs) + 1)
+    offsets = []
+    for blob in blobs:
+        offsets.append(offset)
+        offset += len(blob)
+    offsets.append(offset)
+    if offset > PAGE_SIZE:
+        raise ValueError("entries take %d bytes, more than a page" % offset)
+    data = struct.pack("<HHIII", MAGIC_PAGE, PAGE_ENTRIES, pgid(index), len(blobs), 0)
+    data += struct.pack("<%dI" % len(offsets), *offsets) + b"".join(blobs)
+    return data.ljust(PAGE_SIZE, b"\0")
+
+
+def page_bytes(page, index):
+    if page.type == PAGE_ENTRIES:
+        return entry_page_bytes(page.entries, index)
+    return page.data  # texture and audio pages are kept as they are
+
+
+def eid_bucket(eid):
+    return (eid >> 15) & 0xFF
+
+
+def page_table(pages):
+    """(pgid, eid) for every entry and texture page, grouped by bucket, and
+    the offset of each bucket's first entry (NSProbe scans on from there)"""
+    table = []
+    for index, page in enumerate(pages):
+        eids = [page.eid] if page.type == PAGE_TEXTURE else [e.eid for e in page.entries]
+        table += [(pgid(index), eid) for eid in eids]
+    table.sort(key=lambda pte: eid_bucket(pte[1]))
+    ptb_offsets = [sum(1 for _, eid in table if eid_bucket(eid) < b) for b in range(NSD_PTB_COUNT)]
+    return table, ptb_offsets
+
+
+def nsd_bytes(nsd, pages):
+    table, ptb_offsets = page_table(pages)
+    data = struct.pack("<%dI" % NSD_PTB_COUNT, *ptb_offsets)
+    data += struct.pack(NSD_HEADER, len(pages), len(table), nsd.ldat_eid,
+                        nsd.has_loading_image, nsd.loading_image_width,
+                        nsd.loading_image_height, 0, 0)  # pages start the nsf, none compressed
+    data += struct.pack("<%dI" % NSD_COMPRESSED_PAGE_COUNT, *([0] * NSD_COMPRESSED_PAGE_COUNT))
+    for pte in table:
+        data += struct.pack("<II", *pte)
+    ldat = nsd.ldat
+    data += struct.pack(LDAT_HEADER, ldat.magic, ldat.lid, ldat.zone_spawn,
+                        ldat.path_idx_spawn, ldat.unk_10)
+    data += struct.pack("<%dI" % NSD_EXEC_COUNT, *ldat.exec_map)
+    data += struct.pack("<I", ldat.fov) + ldat.image.ljust(LDAT_IMAGE_SIZE, b"\0")
+    return data
 
 
 def write_level(level, out_dir, name):
-    pass
+    """write out_dir/name.nsd and out_dir/name.nsf"""
+    os.makedirs(out_dir, exist_ok=True)
+    base = os.path.join(out_dir, name)
+    with open(base + ".nsf", "wb") as f:
+        for index, page in enumerate(level.pages):
+            f.write(page_bytes(page, index))
+    with open(base + ".nsd", "wb") as f:
+        f.write(nsd_bytes(level.nsd, level.pages))
 
 
 def type_name(etype):
@@ -191,3 +270,37 @@ def count_by_type(pages):
         for name in names:
             counts[name] = counts.get(name, 0) + 1
     return counts
+
+
+LID_TEST = 0x1  # custom levels use the test level id (see src/common.h)
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+STREAMS_DIR = os.path.join(ROOT, "streams")
+CUSTOM_LEVELS_DIR = os.path.join(ROOT, "custom_levels")
+
+USAGE = """usage:
+  python tools/nslevel.py list <lid>         list a level's entries by type
+  python tools/nslevel.py copy <lid> <name>  copy a level to custom_levels/<name>
+  (lid is the hex level id, e.g. 9 for N. Sanity Beach)"""
+
+
+def main(argv):
+    if len(argv) >= 2 and argv[0] == "list":
+        level = read_level(STREAMS_DIR, int(argv[1], 16))
+        for name, count in sorted(count_by_type(level.pages).items()):
+            print("%s %d" % (name, count))
+        print("exec map: %s" % " ".join(eid_to_str(e) for e in level.nsd.ldat.exec_map
+                                       if e != EID_NONE))
+        return 0
+    if len(argv) >= 3 and argv[0] == "copy":
+        level = read_level(STREAMS_DIR, int(argv[1], 16))
+        level.nsd.ldat.lid = LID_TEST
+        write_level(level, CUSTOM_LEVELS_DIR, argv[2])
+        print("wrote %s" % os.path.join(CUSTOM_LEVELS_DIR, argv[2]))
+        return 0
+    print(USAGE)
+    return 1
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main(sys.argv[1:]))
