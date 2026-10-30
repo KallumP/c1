@@ -5,8 +5,6 @@ of a tile on a polygon. see src/pc/gfx/tex.c for how the game reads them.
 """
 import struct
 
-from PIL import Image
-
 TILE = 64     # tiles are TILE x TILE pixels, the largest texture region (uv_map in src/gfx.c)
 COLOURS = 16  # 4 bit textures: each tile has a palette of 16 colours
 
@@ -24,6 +22,7 @@ def tile(image):
     indices; palette, COLOURS 16 bit colours). a smaller image is scaled up
     without blurring, a bigger one scaled down smoothly; more than COLOURS
     colours are reduced to COLOURS"""
+    from PIL import Image  # only needed for maps with textures
     im = image.convert("RGB")
     upscale = im.width <= TILE and im.height <= TILE
     im = im.resize((TILE, TILE), Image.NEAREST if upscale else Image.LANCZOS)
