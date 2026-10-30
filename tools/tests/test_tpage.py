@@ -4,6 +4,7 @@ tests for tools/tpage.py
 run from the project root: python -m unittest discover -s tools/tests
 """
 import os
+import re
 import struct
 import sys
 import unittest
@@ -114,6 +115,59 @@ class Page(unittest.TestCase):
     def test_too_many_tiles_for_a_page_is_an_error(self):
         with self.assertRaises(ValueError):
             tpage.texture_page(EID, self.tiles(tpage.TILES_PER_PAGE + 1))
+
+
+def uv_map():
+    """the 600 quads of uv_map in src/gfx.c, as 8 numbers each"""
+    src = open(os.path.join(TOOLS, "..", "src", "gfx.c")).read()
+    body = src[src.index("uv_map[600] = {"):]
+    pair = r"\{\s*(\d+),\s*(\d+)\s*\}"
+    quads = re.findall(r"\{\s*" + r",\s*".join([pair] * 4) + r"\s*\}", body)[:600]
+    return [tuple(map(int, q)) for q in quads]
+
+
+def decode_texinfo(data):
+    """(colinfo fields, rgninfo fields) of an 8 byte texture info; bitfields
+    are listed high bits first in src/geom.h"""
+    r, g, b, flags, rgn = struct.unpack("<4BI", data)
+    col = dict(type=flags >> 7, semi_trans=(flags >> 5) & 3, no_cull=(flags >> 4) & 1, clut_x=flags & 15)
+    rgn = dict(uv_idx=rgn >> 22, color_mode=(rgn >> 20) & 3, segment=(rgn >> 18) & 3,
+               offs_x=(rgn >> 13) & 31, clut_y=(rgn >> 6) & 127, offs_y=rgn & 31)
+    return col, rgn
+
+
+class TextureInfo(unittest.TestCase):
+    def test_layouts_are_the_games(self):
+        quads = uv_map()
+        self.assertEqual(600, len(quads))
+        for layout, corners in enumerate(tpage.LAYOUTS):
+            q = quads[layout * 25 + 24]  # the 64x64 one
+            self.assertEqual(corners, tuple((q[2 * i] // 63, q[2 * i + 1] // 63) for i in range(3)))
+
+    def test_uv_idx_picks_the_layout_and_size(self):
+        quads = uv_map()
+        for layout in (0, 7, 23):
+            for w, h in ((4, 4), (32, 64), (64, 8)):
+                q = quads[tpage.uv_idx(layout, w, h)]
+                self.assertEqual((w - 1, h - 1), (max(q[0:8:2]), max(q[1:8:2])))
+                corners = tuple((q[2 * i] // (w - 1), q[2 * i + 1] // (h - 1)) for i in range(3))
+                self.assertEqual(tpage.LAYOUTS[layout], corners)
+
+    def test_texinfo_points_at_the_tiles_region_and_palette(self):
+        place = tpage.Place(1, 8, 16, 0, 5)  # x (32 + 8) * 8 = 320, y 64
+        col, rgn = decode_texinfo(tpage.texinfo_bytes(place, layout=3, region=(32, 16, 32, 16)))
+        self.assertEqual(dict(type=1, semi_trans=3, no_cull=0, clut_x=0), col)
+        self.assertEqual(tpage.uv_idx(3, 32, 16), rgn["uv_idx"])
+        self.assertEqual(0, rgn["color_mode"])  # 4 bit
+        self.assertEqual(320 + 32, (rgn["segment"] * 32 + rgn["offs_x"]) * 8)
+        self.assertEqual(64 + 16, rgn["offs_y"] * 4)
+        self.assertEqual(5, rgn["clut_y"])
+
+    def test_region_has_to_fit_the_games_steps(self):
+        place = tpage.Place(0, 8, 0, 0, 1)
+        for region in ((4, 0, 32, 32), (0, 2, 32, 32), (0, 0, 24, 32), (0, 0, 32, 2), (48, 0, 32, 32)):
+            with self.assertRaises(ValueError, msg=region):
+                tpage.texinfo_bytes(place, 0, region)
 
 
 if __name__ == "__main__":
