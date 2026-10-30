@@ -576,6 +576,95 @@ class SortList(unittest.TestCase):
         self.assertEqual((2 << 12) | 7, nslevel.poly_id(2, 7))
 
 
+class MapCells(unittest.TestCase):
+    def test_cells_become_blocks_with_their_leaf(self):
+        blocks = nslevel.cell_blocks({(1, 2, 3): "ground", (0, 0, 0): "pit"}, 128)
+        self.assertEqual(sorted([(128, 256, 384, 256, 384, 512, nslevel.LEAF_GROUND),
+                                 (0, 0, 0, 128, 128, 128, nslevel.LEAF_PIT)]), sorted(blocks))
+
+
+# a map as blender exports it: a floor 8 m by 16 m, a wall, and a spawn marker
+MAP_OBJ = """o Floor
+v -4 0 -8
+v -4 0 8
+v 4 0 8
+v 4 0 -8
+f 1 2 3 4
+o Wall
+v 4 0 -8
+v 4 2 -8
+v 4 2 8
+v 4 0 8
+f 5 6 7 8
+o Spawn
+v 0 1 5
+v 0.1 1 5
+v 0 1.1 5
+f 9 10 11
+"""
+
+
+@unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
+                     "needs N. Sanity Beach in streams/")
+class Map(unittest.TestCase):
+    def make(self, text=MAP_OBJ, **kw):
+        level = nslevel.make_map(nslevel.read_level(STREAMS, 9), text, **kw)
+        entries = {e.eid: e for p in level.pages for e in p.entries}
+        return level, entries, entries[level.nsd.ldat.zone_spawn]
+
+    def test_map_is_one_zone_with_its_geometry_and_crash_only(self):
+        level, entries, zone = self.make()
+        self.assertEqual(nslevel.LID_TEST, level.nsd.ldat.lid)
+        header = zone.items[0]
+        paths_idx, path_count, entity_count, _ = struct.unpack_from("<4I", header, nslevel.ZONE_PATHS_IDX)
+        self.assertEqual((1, 1), (path_count, entity_count))
+        self.assertEqual((0, 0), nslevel.entity_type(zone.items[paths_idx + 1]))  # crash
+        execs = [e for e in level.nsd.ldat.exec_map if e != nslevel.EID_NONE]
+        self.assertEqual(len(nslevel.CORE_EXEC_SLOTS), len(execs))
+        counts = nslevel.count_by_type(level.pages)
+        self.assertEqual(1, counts["ZDAT"])
+        self.assertEqual(1, counts["SLST"])
+        self.assertEqual(struct.unpack_from("<I", header, 0)[0], counts["WGEO"])
+
+    def test_crash_starts_on_the_ground_at_the_spawn_marker(self):
+        level, entries, zone = self.make(scale=256)
+        paths_idx = struct.unpack_from("<I", zone.items[0], nslevel.ZONE_PATHS_IDX)[0]
+        crash = zone.items[paths_idx + 1]
+        x, y, z = (c * 4 for c in struct.unpack_from("<3h", crash, nslevel.ENTITY_POINTS))
+        # the floor's corner is at the zone's corner plus a cell of margin
+        self.assertEqual((128 + 4 * 256, 128 + 5 * 256 + 8 * 256), (x, z))
+        self.assertGreater(y, 128)
+        self.assertLessEqual(y, 128 + 128)
+
+    def test_world_meshes_are_its_faces(self):
+        level, entries, zone = self.make()
+        header = zone.items[0]
+        world = entries[struct.unpack_from("<I", header, 4)[0]]
+        _, _, _, polys, verts = struct.unpack_from("<iiiII", world.items[0], 0)
+        self.assertGreater(polys, 4)  # floor and wall, sliced
+        self.assertEqual(polys * 8, len(world.items[1]))
+
+    def test_a_bigger_map_gets_several_world_meshes(self):
+        rows = []
+        for k in range(60):
+            for i in range(60):
+                rows.append("v %d 0 %d
+v %d 0 %d
+v %d 0 %d
+f -3 -2 -1" % (
+                    i, k, i, k + 1, i + 1, k + 1))
+        level, entries, zone = self.make("o Floor
+" + "
+".join(rows), scale=96)
+        self.assertGreater(struct.unpack_from("<I", zone.items[0], 0)[0], 1)
+
+    def test_turn_runs_the_map_along_z(self):
+        # turned a quarter, the 16 m long floor runs along x
+        level, entries, zone = self.make(scale=256, turn=90)
+        w, h, d = struct.unpack_from("<III", zone.items[1], 12)
+        self.assertGreater(w, d)
+
+
 @unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
                      "needs N. Sanity Beach in streams/")
 class RealLevel(unittest.TestCase):

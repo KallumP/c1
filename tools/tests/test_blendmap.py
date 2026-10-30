@@ -265,6 +265,7 @@ class WorldMeshes(unittest.TestCase):
         for verts, polys in out:
             self.assertLessEqual(len(verts), 4096)
             self.assertLessEqual(len(polys), 4096)
+            self.assertLessEqual(len(verts) + len(polys), blendmap.WGEO_ITEMS_MAX)  # fits in a page
             for p in polys:
                 self.assertTrue(all(0 <= i < len(verts) for i in p[:3]))
         self.assertEqual(2 * 250 * 10, sum(len(polys) for _, polys in out))
