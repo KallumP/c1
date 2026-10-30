@@ -353,7 +353,8 @@ def tile_region(points, n, repeat):
     return x, y, w, h, min(range(len(tpage.LAYOUTS)), key=miss)
 
 
-def world_meshes(mesh, piece, ground, side, tile=None, textured=(), regions_max=None):
+def world_meshes(mesh, piece, ground, side, tile=None, textured=(), regions_max=None,
+                 span=None, worlds_max=WORLDS_MAX):
     """world meshes for a mesh's faces, sliced every piece along z and every
     tile (piece by default) along x and y: a list of (vertices (x, y, z,
     colour), polygons (a, b, c, tinf, tpag)), with ground (tinf, tpag) on
@@ -364,7 +365,10 @@ def world_meshes(mesh, piece, ground, side, tile=None, textured=(), regions_max=
 
     a mesh's tile regions become texinfos in its header (8 bytes each, like
     a vertex), so they count towards fitting it in a page, and a mesh has at
-    most regions_max of them"""
+    most regions_max of them.
+
+    with span (z0, z1, a zone's, on multiples of piece), only the pieces in
+    it, relative to it; there are at most worlds_max meshes"""
     sizes = ((2, piece), (0, tile or piece), (1, tile or piece))
     meshes = []
     verts, polys, index, regions = [], [], {}, set()
@@ -396,18 +400,22 @@ def world_meshes(mesh, piece, ground, side, tile=None, textured=(), regions_max=
         colour = shade(n)
         for part in slices([mesh.verts[i] for i in tri.verts], sizes):
             part = [snap(p) for p in part]
+            if span and not span[0] <= sum(p[2] for p in part) / len(part) < span[1]:
+                continue
             for k in range(1, len(part) - 1):
                 a, b, c = part[0], part[k], part[k + 1]
                 if cross(sub(b, a), sub(c, a)) == (0, 0, 0):
                     continue
                 if tri.mat in textured:
                     texture = (TileRegion(tri.mat, *tile_region((a, b, c), n, tile or piece)), None)
+                if span:
+                    a, b, c = ((v[0], v[1], v[2] - span[0]) for v in (a, b, c))
                 add([v + (colour,) for v in (a, b, c)], texture)
     if polys:
         meshes.append((verts, polys))
-    if len(meshes) > WORLDS_MAX:
-        raise ValueError("the map needs %d world meshes, more than %d; use fewer faces"
-                         % (len(meshes), WORLDS_MAX))
+    if len(meshes) > worlds_max:
+        raise ValueError("the map needs %d world meshes%s, more than %d; use fewer faces"
+                         % (len(meshes), " in a zone" if span else "", worlds_max))
     return meshes
 
 
