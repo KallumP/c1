@@ -384,8 +384,75 @@ def floor_rect_bytes(x, y, z, w, h, d, depth):
     return pad4(data)
 
 
+def log2_exact(n, what):
+    depth = n.bit_length() - 1
+    if n <= 0 or 1 << depth != n:
+        raise ValueError("%s (%d) has to be a power of two times the cell size" % (what, n))
+    return depth
+
+
 def blocks_rect_bytes(origin, size, blocks, cell):
-    return b""
+    """zone bounds and a collision octree where the given blocks are solid
+    ground and the rest is empty. size (w, h, d) and the blocks ((x0, y0, z0,
+    x1, y1, z1), zone units relative to origin) have to be on a grid of cell
+    sized cells, and each side of size a power of two times cell.
+
+    a region is split where it's partly solid, and a solid region is also
+    split while it's wider than FLOOR_CELL_MAX (see floor_rect_bytes); the
+    same subtree is only stored once, so large regions cost nothing"""
+    w, h, d = size
+    nx, ny, nz = w // cell, h // cell, d // cell
+    mx, my, mz = log2_exact(nx, "w"), log2_exact(ny, "h"), log2_exact(nz, "d")
+    if (nx * cell, ny * cell, nz * cell) != (w, h, d):
+        raise ValueError("size has to be a multiple of the cell size")
+    for block in blocks:
+        if any(v % cell for v in block) or not (0 <= block[0] < block[3] <= w and
+                                                0 <= block[1] < block[4] <= h and
+                                                0 <= block[2] < block[5] <= d):
+            raise ValueError("block %r isn't on the %d grid inside the zone" % (block, cell))
+
+    # prefix sums of solid cells, so any region's solid count is a lookup
+    solid = [[[0] * nz for _ in range(ny)] for _ in range(nx)]
+    for x0, y0, z0, x1, y1, z1 in blocks:
+        for i in range(x0 // cell, x1 // cell):
+            for j in range(y0 // cell, y1 // cell):
+                for k in range(z0 // cell, z1 // cell):
+                    solid[i][j][k] = 1
+    sums = [[[0] * (nz + 1) for _ in range(ny + 1)] for _ in range(nx + 1)]
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                sums[i + 1][j + 1][k + 1] = (solid[i][j][k] + sums[i][j + 1][k + 1] + sums[i + 1][j][k + 1]
+                                             + sums[i + 1][j + 1][k] - sums[i][j][k + 1] - sums[i][j + 1][k]
+                                             - sums[i + 1][j][k] + sums[i][j][k])
+
+    def count(i0, j0, k0, i1, j1, k1):
+        return (sums[i1][j1][k1] - sums[i0][j1][k1] - sums[i1][j0][k1] - sums[i1][j1][k0]
+                + sums[i0][j0][k1] + sums[i0][j1][k0] + sums[i1][j0][k0] - sums[i0][j0][k0])
+
+    nodes = bytearray()
+    shared = {}
+
+    def build(level, i0, j0, k0, ni, nj, nk):
+        n = count(i0, j0, k0, i0 + ni, j0 + nj, k0 + nk)
+        if n == 0:
+            return 0
+        if n == ni * nj * nk and ni * cell <= FLOOR_CELL_MAX and nk * cell <= FLOOR_CELL_MAX:
+            return LEAF_GROUND
+        fx, fy, fz = level < mx, level < my, level < mz
+        si, sj, sk = (ni // 2 if fx else ni), (nj // 2 if fy else nj), (nk // 2 if fz else nk)
+        children = tuple(build(level + 1, i0 + i * si, j0 + j * sj, k0 + k * sk, si, sj, sk)
+                         for i in range(1 + fx) for j in range(1 + fy) for k in range(1 + fz))
+        if children not in shared:
+            shared[children] = OCTREE_NODES + len(nodes)
+            nodes.extend(pad4(struct.pack("<%dH" % len(children), *children)))
+            if shared[children] > 0xFFFF:
+                raise ValueError("octree is too big for 16 bit node offsets")
+        return shared[children]
+
+    root = build(0, 0, 0, 0, nx, ny, nz)
+    data = struct.pack("<iiiIIII", origin[0], origin[1], origin[2], w, h, d, 0)
+    return pad4(data + struct.pack("<4H", root, mx, my, mz) + bytes(nodes))
 
 
 def floor_top(h, depth):
