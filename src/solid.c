@@ -906,12 +906,8 @@ int StopAtWalls(vec *trans, int x, int z, int *adj_x, int *adj_z, gool_object *o
   return 0;
 }
 
-/* for psx builds, the default implementations for these functions are in
-   psx/r3000a.s.
-   if noasm is enabled for a psx build then the below implementations are
-   used in place of the pure asm ones; they are referenced in psx/r3000a.c
-   for pc builds these are the default
-*/
+/* C versions of functions the original implements in assembly (see
+   src/psx/r3000a.s at the psx-last tag) */
 static void ZoneQueryOctreeR(
   zone_rect *zone_rect,
   uint16_t node,
