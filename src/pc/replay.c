@@ -167,8 +167,9 @@ int ReplayHeld(uint32_t *held) {
   return 1;
 }
 
+/* is a recording being replayed (as opposed to recorded, or finished)? */
 int ReplayIsPlaying() {
-  return 0;
+  return replay_file != 0;
 }
 
 void ReplayStop() {

@@ -15,6 +15,7 @@
 #include "pc/gfx/gl.h"
 #include "pc/settings.h"
 #include "pc/speed.h"
+#include "pc/replay.h"
 
 extern ns_struct ns;
 extern gool_handle handles[8];
@@ -678,24 +679,35 @@ void GuiUpdate() {
   }
 }
 
-/* crash's speed in the top right corner, when speed_display is on in settings.cfg */
-static void GuiSpeedOverlay() {
+/*
+ * text in the top right corner: REPLAYING while replaying recorded inputs,
+ * and crash's speed when speed_display is on in settings.cfg
+ */
+static void GuiCornerOverlay() {
   static speed_tracker crash_speed;
   gool_object *obj;
   uint32_t speed;
-  char text[96];
+  char text[128];
+  int len;
 
-  if (!game_settings.speed_display) { return; }
-  obj = game_state == GAME_STATE_PLAYING ? crash : 0;
-  /* same frame time as GoolObjectPhysics, so open running matches velocity */
-  speed = SpeedTrack(&crash_speed, obj, obj ? &obj->trans : 0,
-    min(context.ticks_per_frame, 0x66));
-  /* total horizontal speed, then the signed speed along each axis (y is up) */
-  snprintf(text, sizeof(text), "speed %6u\nx     %6d\ny     %6d\nz     %6d",
-    speed, crash_speed.x, crash_speed.y, crash_speed.z);
-  GuiIgCornerText(text);
+  len = 0;
+  text[0] = 0;
+  if (ReplayIsPlaying())
+    len += snprintf(text, sizeof(text), "REPLAYING");
+  if (game_settings.speed_display) {
+    obj = game_state == GAME_STATE_PLAYING ? crash : 0;
+    /* same frame time as GoolObjectPhysics, so open running matches velocity */
+    speed = SpeedTrack(&crash_speed, obj, obj ? &obj->trans : 0,
+      min(context.ticks_per_frame, 0x66));
+    /* total horizontal speed, then the signed speed along each axis (y is up) */
+    snprintf(&text[len], sizeof(text) - len,
+      "%sspeed %6u\nx     %6d\ny     %6d\nz     %6d", len ? "\n" : "",
+      speed, crash_speed.x, crash_speed.y, crash_speed.z);
+  }
+  if (text[0])
+    GuiIgCornerText(text);
 }
 
 void GuiDraw() {
-  GuiIgDraw(root, GuiSpeedOverlay);
+  GuiIgDraw(root, GuiCornerOverlay);
 }
