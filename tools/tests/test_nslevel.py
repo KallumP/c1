@@ -549,18 +549,28 @@ class SortList(unittest.TestCase):
     CAM_ZS = [1000, 800, 600]
 
     def test_one_full_list_per_point_and_one_more_for_the_last(self):
-        items = nslevel.slst_items(self.POLY_ZMAX, self.CAM_ZS, step=200, near=50)
+        items = nslevel.slst_items([self.POLY_ZMAX], self.CAM_ZS, step=200, near=50)
         self.assertEqual(len(self.CAM_ZS) + 1, len(items))
         self.assertEqual({0}, {slst_list(item)[0] for item in items})  # copied as is, either way
 
     def test_each_point_lists_only_polygons_in_front_of_the_camera(self):
         # in front for the whole step to the next point: zmax < cam z - step - near
-        items = nslevel.slst_items(self.POLY_ZMAX, self.CAM_ZS, step=200, near=50)
+        items = nslevel.slst_items([self.POLY_ZMAX], self.CAM_ZS, step=200, near=50)
         ids = [nslevel.poly_id(0, i) for i in range(3)]
         self.assertEqual(ids[:2], slst_list(items[0])[1])  # under 1000-250: 100 and 500
         self.assertEqual(ids[:2], slst_list(items[1])[1])  # under 800-250: 100 and 500
         self.assertEqual(ids[:1], slst_list(items[2])[1])  # under 600-250: 100
         self.assertEqual(slst_list(items[2]), slst_list(items[3]))  # last point again
+
+    def test_lists_polygons_of_every_world_mesh(self):
+        items = nslevel.slst_items([[100, 900], [200]], [1000], step=200, near=50)
+        self.assertEqual([nslevel.poly_id(0, 0), nslevel.poly_id(1, 0)], slst_list(items[0])[1])
+
+    def test_more_polygons_than_the_game_can_list_is_an_error(self):
+        # the game's lists hold at most 1460 polygons (SlstInit in src/slst.c)
+        with self.assertRaises(ValueError):
+            nslevel.slst_items([[0] * 1461], [1000], step=200, near=50)
+        nslevel.slst_items([[0] * 1460], [1000], step=200, near=50)
 
     def test_poly_id_layout(self):
         self.assertEqual((2 << 12) | 7, nslevel.poly_id(2, 7))
