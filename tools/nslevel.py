@@ -610,18 +610,26 @@ def poly_id(world_idx, poly_idx):
     return (world_idx << 12) | poly_idx  # flag:1, world_idx:3, poly_idx:12
 
 
-def slst_items(poly_zmax, cam_zs, step, near):
+POLY_IDS_MAX = 1460  # polygons the game can list (SlstInit in src/slst.c)
+
+
+def slst_items(world_zmax, cam_zs, step, near):
     """a sort list for a camera path along -z (cameras at z cam_zs): for each
-    point, the polygons (of world 0, by their largest z) that stay in front
-    of the camera all the way to the next point, so none is ever drawn from
-    behind the camera, which the renderer would project mirrored.
+    point, the polygons (of each world, by their largest z, one list per
+    world) that stay in front of the camera all the way to the next point,
+    so none is ever drawn from behind the camera, which the renderer would
+    project mirrored.
 
     every item is a full list rather than a delta (the game copies an even
     type item as is, whichever way the camera moves). LevelUpdate reads
     item k on reaching point k, and item N (one past the last point) when
     starting in the second half of the path, so that repeats the last."""
     def full_list(cam_z):
-        ids = [poly_id(0, i) for i, zmax in enumerate(poly_zmax) if zmax < cam_z - step - near]
+        ids = [poly_id(w, i) for w, poly_zmax in enumerate(world_zmax)
+               for i, zmax in enumerate(poly_zmax) if zmax < cam_z - step - near]
+        if len(ids) > POLY_IDS_MAX:
+            raise ValueError("%d polygons in front of the camera, more than the game can list (%d)"
+                             % (len(ids), POLY_IDS_MAX))
         return pad4(struct.pack("<HH%dH" % len(ids), len(ids), 0, *ids))
     items = [full_list(z) for z in cam_zs]
     return items + [items[-1]]
@@ -718,7 +726,7 @@ def make_mock(level):
     path = path_bytes(slst_eid, points, cam_mode=5, zoom=1700, avg_node_dist=MOCK_PATH_STEP,
                       direction=(0, 0, -4096))
     poly_zmax = [max(verts[a][2], verts[b][2], verts[c][2]) for a, b, c in polys]
-    slst = Entry(slst_eid, 4, slst_items(poly_zmax, [p[2] for p in points], MOCK_PATH_STEP, MOCK_NEAR))
+    slst = Entry(slst_eid, 4, slst_items([poly_zmax], [p[2] for p in points], MOCK_PATH_STEP, MOCK_NEAR))
 
     crash = bytearray(crash)  # entity location is in units of 4 zone units
     struct.pack_into("<3h", crash, 20, crash_x // 4, (top + 100) // 4, crash_z // 4)
@@ -793,7 +801,7 @@ def assemble_level(level, templates, prefix, size, blocks, verts, polys, points,
     path = path_bytes(slst_eid, cam_points, cam_mode=5, zoom=1700,
                       avg_node_dist=step, direction=(0, 0, -4096))
     poly_zmax = [max(verts[a][2], verts[b][2], verts[c][2]) for a, b, c, _, _ in polys]
-    slst = Entry(slst_eid, 4, slst_items(poly_zmax, [p[2] for p in points], step, MOCK_NEAR))
+    slst = Entry(slst_eid, 4, slst_items([poly_zmax], [p[2] for p in points], step, MOCK_NEAR))
     zone = Entry(zone_eid, 7, [
         zone_header_bytes(t.header, zone_eid, [(world_eid, (x0, y0, z0))], 1, len(entities)),
         blocks_rect_bytes(t.origin, size, blocks, COURSE_CELL),
