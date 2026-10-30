@@ -280,16 +280,19 @@ def page_size(entries):
 
 
 def pack_entries(entries):
-    """entry pages holding entries, in order, starting a new page when one is full"""
+    """entry pages holding entries, in order, starting a new page when one
+    is full. each page lists its entries in bucket order, since the loader
+    (NSPageUpdateEntries) finds them by scanning the page table forward from
+    the bucket of the page's first entry"""
     pages, current = [], []
     for entry in entries:
         if current and page_size(current + [entry]) > PAGE_SIZE:
-            pages.append(Page(PAGE_ENTRIES, entries=current))
+            pages.append(current)
             current = []
         current.append(entry)
     if current:
-        pages.append(Page(PAGE_ENTRIES, entries=current))
-    return pages
+        pages.append(current)
+    return [Page(PAGE_ENTRIES, entries=sorted(p, key=lambda e: eid_bucket(e.eid))) for p in pages]
 
 
 def cut_level(level, keep):
@@ -332,20 +335,62 @@ ZONE_MIDI = ZONE_DISPLAY_FLAGS + 4 + 36
 ZONE_HEADER_SIZE = 888
 
 
+OCTREE_NODES = 36    # zone_rect: x y z w h d unk, then root and max depths
+LEAF_GROUND = 1      # leaf (low bit) with value 0: plain solid ground
+FLOOR_CELL_MAX = 1024  # largest floor cell (zone units); see floor_rect_bytes
+
+
+def pad4(data):
+    return data + b"\0" * (-len(data) % 4)
+
+
 def floor_rect_bytes(x, y, z, w, h, d, depth):
-    return b""
+    """zone bounds (zone units) and an octree that only splits along y, depth
+    times, with the bottom cell solid ground and everything above it empty;
+    so the floor's top is floor_top(h, depth) above the zone's bottom"""
+    nodes = b""
+    for level in range(depth):
+        lower = OCTREE_NODES + 4 * (level + 1) if level < depth - 1 else LEAF_GROUND
+        nodes += struct.pack("<HH", lower, 0)  # children: lower half, upper half
+    root = OCTREE_NODES if depth else LEAF_GROUND
+    data = struct.pack("<iiiIIII", x, y, z, w, h, d, 0)
+    data += struct.pack("<4H", root, 0, depth, 0) + nodes
+    return pad4(data)
 
 
 def floor_top(h, depth):
-    return 0
+    return h >> depth
 
 
 def zone_header_bytes(template, self_eid, worlds, path_count, entity_count):
-    return b""
+    """a zone header from a real one, with the given worlds ((wgeo eid,
+    (x, y, z)) pairs), its own paths and entities, itself as its only
+    neighbor, an empty load list and no music"""
+    h = bytearray(template)
+    struct.pack_into("<I", h, 0, len(worlds))
+    for i in range(8):
+        world = b"\0" * ZONE_WORLD_SIZE
+        if i < len(worlds):
+            eid, trans = worlds[i]
+            world = struct.pack("<I3i", eid, *trans).ljust(ZONE_WORLD_SIZE, b"\0")
+        h[4 + i * ZONE_WORLD_SIZE:4 + (i + 1) * ZONE_WORLD_SIZE] = world
+    struct.pack_into("<4I", h, ZONE_PATHS_IDX, 2, path_count, entity_count, 1)
+    struct.pack_into("<8I", h, ZONE_NEIGHBORS, self_eid, *([0] * 7))
+    h[ZONE_LOADLIST:ZONE_DISPLAY_FLAGS] = b"\0" * (ZONE_DISPLAY_FLAGS - ZONE_LOADLIST)
+    struct.pack_into("<I", h, ZONE_DISPLAY_FLAGS, 0)
+    struct.pack_into("<I", h, ZONE_MIDI, EID_NONE)
+    return bytes(h)
 
 
-def path_bytes(slst, points, cam_mode, zoom, avg_node_dist):
-    return b""
+def path_bytes(slst, points, cam_mode, zoom, avg_node_dist, direction=(0, 0, 0)):
+    """a camera path with no neighbors; points are (x, y, z, rot_y, rot_x,
+    rot_z) in zone units"""
+    data = struct.pack("<III", slst, 0, 0) + b"\0" * 16
+    data += struct.pack("<BBHHhh", 0, 0, len(points), cam_mode, avg_node_dist, zoom)
+    data += struct.pack("<3h3h", 0, 0, 0, *direction)
+    for point in points:
+        data += struct.pack("<6h", *point)
+    return pad4(data)
 
 
 def type_name(etype):

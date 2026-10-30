@@ -276,11 +276,23 @@ def octree_leaves(rect):
 
 
 class Zone(unittest.TestCase):
-    def test_floor_octree_is_one_solid_leaf_at_the_bottom(self):
+    def test_floor_octree_is_solid_ground_along_the_bottom(self):
         rect = nslevel.floor_rect_bytes(100, 200, 300, 4096, 2048, 4096, depth=3)
         self.assertEqual((100, 200, 300, 4096, 2048, 4096),
                          struct.unpack_from("<iiiIII", rect, 0))
-        self.assertEqual([(3, 0.0, 0)], octree_leaves(rect))  # bottom eighth, plain ground
+        leaves = octree_leaves(rect)
+        self.assertTrue(leaves)
+        self.assertEqual({(0.0, 0)}, {(y, value) for _, y, value in leaves})  # bottom, plain ground
+
+    def test_floor_cells_are_small_enough_to_query(self):
+        # ZoneQueryOctree stores a cell's position relative to the query as
+        # int16 (>> 4), so cells have to be within about 2047 zone units
+        rect = nslevel.floor_rect_bytes(0, 0, 0, 4801, 3200, 6563, depth=3)
+        _, mdx, mdy, mdz = struct.unpack_from("<4H", rect, 28)
+        self.assertLessEqual(4801 >> mdx, nslevel.FLOOR_CELL_MAX)
+        self.assertLessEqual(6563 >> mdz, nslevel.FLOOR_CELL_MAX)
+        self.assertEqual(3, mdy)
+        self.assertEqual(2 ** (mdx + mdz), len(octree_leaves(rect)))
 
     def test_floor_top_is_a_fraction_of_the_height(self):
         self.assertEqual(256, nslevel.floor_top(2048, depth=3))
