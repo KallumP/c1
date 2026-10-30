@@ -623,6 +623,17 @@ def slst_items(world_zmax, cam_zs, step, near, world_zmid=None):
 # entities (zone_entity in src/formats/zdat.h): parent zone, spawn flags,
 # group, id, point count, 3 init flags, type, subtype, then the points, in
 # units of 4 zone units relative to the zone
+def zone_slst_items(listed, cam_zs, step):
+    """slst_items for a zone's path (cameras at z cam_zs) over the meshes it
+    lists: (vertices, polygons, z offset into the zone's frame) each, its
+    own (offset 0) and the next zone's, further along -z"""
+    world_zmax = [[max(verts[a][2], verts[b][2], verts[c][2]) + dz for a, b, c, *_ in polys]
+                  for verts, polys, dz in listed]
+    world_zmid = [[(verts[a][2] + verts[b][2] + verts[c][2]) / 3 + dz for a, b, c, *_ in polys]
+                  for verts, polys, dz in listed]
+    return slst_items(world_zmax, cam_zs, step, SLST_NEAR, world_zmid)
+
+
 ENTITY_TYPE = 18
 ENTITY_POINTS = 20
 

@@ -500,3 +500,18 @@ def camera_path(cells, size, cell, start, step):
             height = min(tops, key=lambda t: abs(t - height))
         points.append((x + CAM_OFFSET[0], height + CAM_OFFSET[1], cz))
     return points
+
+
+def zone_paths(points, spans):
+    """camera path points (x, y, z) split into each zone span's path, by the
+    zone crash is in (CAM_LEAD ahead, along -z, as on n. sanity beach), with
+    z relative to it (past either end of the map, the end zone's); zones
+    before crash's start have none"""
+    paths = [[] for _ in spans]
+    for x, y, z in points:
+        crash = min(max(z - CAM_LEAD, spans[-1][0]), spans[0][1] - 1)
+        for path, (z0, z1) in zip(paths, spans):
+            if z0 <= crash < z1:
+                path.append((x, y, z - z0))
+                break
+    return paths
