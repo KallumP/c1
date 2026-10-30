@@ -6,6 +6,7 @@ path. tools/nslevel.py puts them together (python tools/nslevel.py map).
 the .obj is read as blender exports it by default: y up, so its x, y and z
 are the zone's x, y (up) and z.
 """
+import os
 
 
 class Tri:
@@ -19,8 +20,9 @@ class Tri:
 
 
 class Mesh:
-    def __init__(self, verts, tris):
+    def __init__(self, verts, tris, mtllibs=()):
         self.verts, self.tris = verts, tris
+        self.mtllibs = list(mtllibs)  # the .mtl files the .obj names
 
 
 def turned(x, z, turn):
@@ -38,7 +40,7 @@ def read_obj(text, scale, turn=0):
     ignored"""
     if turn % 90:
         raise ValueError("turn (%d) has to be a multiple of 90 degrees" % turn)
-    verts, tris = [], []
+    verts, tris, mtllibs = [], [], []
     obj, mat = None, None
     for line_no, line in enumerate(text.splitlines(), 1):
         fields = line.split()
@@ -52,6 +54,8 @@ def read_obj(text, scale, turn=0):
             obj = " ".join(fields[1:])
         elif fields[0] == "usemtl":
             mat = " ".join(fields[1:])
+        elif fields[0] == "mtllib":
+            mtllibs.append(" ".join(fields[1:]))
         elif fields[0] == "f":
             idx = []
             for f in fields[1:]:
@@ -62,7 +66,32 @@ def read_obj(text, scale, turn=0):
                 idx.append(i)
             for k in range(1, len(idx) - 1):
                 tris.append(Tri((idx[0], idx[k], idx[k + 1]), obj, mat))
-    return Mesh(verts, tris)
+    return Mesh(verts, tris, mtllibs)
+
+
+# options map_Kd can have before its file, and how many values each takes
+MAP_OPTIONS = {"-blendu": 1, "-blendv": 1, "-bm": 1, "-boost": 1, "-cc": 1, "-clamp": 1,
+               "-imfchan": 1, "-mm": 2, "-o": 3, "-s": 3, "-t": 3, "-texres": 1}
+
+
+def read_mtl(text, base_dir):
+    """{material: image file} from the text of a .mtl: each material's
+    diffuse image (map_Kd), relative to base_dir (where the .mtl is) unless
+    absolute. materials without one are left out"""
+    images, mat = {}, None
+    for line in text.splitlines():
+        fields = line.split()
+        if not fields:
+            continue
+        if fields[0] == "newmtl":
+            mat = " ".join(fields[1:])
+        elif fields[0] == "map_Kd" and mat is not None:
+            rest = fields[1:]
+            while rest and rest[0] in MAP_OPTIONS:
+                rest = rest[1 + MAP_OPTIONS[rest[0]]:]
+            path = " ".join(rest)
+            images[mat] = path if os.path.isabs(path) else os.path.join(base_dir, path)
+    return images
 
 
 VERTEX_MAX = 32760  # world mesh vertices are 13 bits of multiples of 8 (src/formats/wgeo.h)
