@@ -7,7 +7,8 @@ __pycache__/
 # user files
 streams/*
 custom_levels/
-maps/
+maps/*
+!maps/tide_ruins/
 imgui.ini
 controls.cfg
 settings.cfg
