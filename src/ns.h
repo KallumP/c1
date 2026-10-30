@@ -252,6 +252,7 @@ extern char NSAlphaNumChar(int idx);
 extern int NSAlphaNumIndex(char c);
 extern char *NSGetFilename(int type, uint32_t lid);
 extern char *NSGetFilename2(int type, uint32_t lid, char *path, char *subdir);
+extern void NSSetCustomLevel(const char *name);
 extern int NSAtoi(int type, char *str);
 extern char *NSGetFilenameStr(int type, char *str);
 

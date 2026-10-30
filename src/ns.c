@@ -138,6 +138,9 @@ char *NSGetFilename(int type, uint32_t lid) {
   return NSGetFilename2(type, lid, 0, 0);
 }
 
+void NSSetCustomLevel(const char *name) {
+}
+
 //----- (800128A4) --------------------------------------------------------
 char *NSGetFilename2(int type, uint32_t lid, char *path, char *subdir) {
   /* path and subdir args unused/ignored */

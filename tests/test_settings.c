@@ -216,6 +216,35 @@ UTEST(settings, fix_model_draw_order_on_and_off) {
   ASSERT_EQ(1, s.fix_model_draw_order);
 }
 
+UTEST(settings, boot_level_is_empty_by_default) {
+  pc_settings s;
+
+  strcpy(s.boot_level, "x");
+  SettingsReset(&s);
+  ASSERT_STREQ("", s.boot_level);
+}
+
+UTEST(settings, boot_level_takes_a_level_name) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, SettingsParseLine("boot_level = mock", &s));
+  ASSERT_STREQ("mock", s.boot_level);
+  ASSERT_EQ(1, SettingsParseLine("boot_level = beach_copy-2", &s));
+  ASSERT_STREQ("beach_copy-2", s.boot_level);
+}
+
+UTEST(settings, boot_level_rejects_names_that_could_leave_the_folder) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(-1, SettingsParseLine("boot_level = ../streams/s0000009", &s));
+  ASSERT_EQ(-1, SettingsParseLine("boot_level = a/b", &s));
+  ASSERT_EQ(-1, SettingsParseLine("boot_level = a.nsd", &s));
+  ASSERT_EQ(-1, SettingsParseLine("boot_level = abcdefghijabcdefghijabcdefghijabc", &s)); /* 33 */
+  ASSERT_STREQ("", s.boot_level);
+}
+
 /* inputs are always recorded unless replay_inputs is on */
 UTEST(settings, record_inputs_is_not_a_setting) {
   pc_settings s;
