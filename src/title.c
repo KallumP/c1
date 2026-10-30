@@ -23,11 +23,9 @@ int title_once = 1;                            /* 80056500; gp[0x41] */
 /* .sbss */
 int title_not_seen;                            /* 80056678; gp[0x9F] */
 title_struct *title;                           /* 800566E0; gp[0xB9] */
-#ifndef PSX
 uint8_t image[512*256*2];
 uint32_t image_cvt[512*240];
 uint16_t *cluts[480];
-#endif
 
 extern ns_struct ns;
 extern page_struct texture_pages[16];
@@ -35,16 +33,11 @@ extern int paused;
 extern int pause_status;
 extern lid_t cur_lid;
 
-#ifdef PSX
-#include "psx/gpu.h"
-extern gfx_context_db context;
-#else
 #include "pc/gfx/gl.h"
 #include "pc/gfx/tex.h"
 #include "pc/loading.h"
 #include "pc/settings.h"
 extern gl_context context;
-#endif
 
 //----- (80031BAC) --------------------------------------------------------
 int TitleInit() {
@@ -61,7 +54,6 @@ int TitleLoadNextState() {
   title_once = 0;
   if (cur_lid != LID_TITLE) { return 0; }
   next_display_flags = (next_display_flags & ~GOOL_FLAG_DISPANIM_ALL) | GOOL_FLAG_DISPLAY_IMAGES;
-#ifndef PSX
   if (title_not_seen && game_settings.skip_splash_screens) {
     /* skip the scea/universal and naughty dog screens on first boot and go
        straight to the main menu, as when returning to the title */
@@ -72,7 +64,6 @@ int TitleLoadNextState() {
     TitleLoadState();
     return 0;
   }
-#endif
   if (!title_not_seen) { /* already saw the scea/universal screens? */
     switch (game_state) {
     case GAME_STATE_GAMEOVER:
@@ -279,12 +270,8 @@ int TitleKill() {
 
 //----- (800322CC) --------------------------------------------------------
 int TitleLoading(lid_t lid, uint8_t *image_data, nsd *nsd) {
-#ifdef PSX
-  rect216 rect;
-#else
   dim2 dim;
   rect2 rect;
-#endif
   int32_t x, y;
   uint32_t w, h;
   uint8_t *buf;
@@ -302,31 +289,6 @@ int TitleLoading(lid_t lid, uint8_t *image_data, nsd *nsd) {
   w = nsd->loading_image_width;
   h = nsd->loading_image_height;
   buf = malloc(0x4000);
-#ifdef PSX
-  DrawSync(0);
-  for (i=0;i<2;i++) {
-    palette = (uint16_t*)&image_data[0];
-    src = (uint16_t*)&image_data[512]; /* skip palette */
-    dst = (uint16_t*)buf;
-    GpuFillDisplay();
-    x = context.c2_p->draw.clip.x - (w/2) - 256;
-    y = context.c2_p->draw.clip.y - (h/2) + 108;
-    for (j=0;j<h/8;j++) { /* load the image in w x 8 pixel blocks */
-      for (k=0;k<8;k++) {
-        for (l=0;l<w;l++)
-          *(dst++) = palette[*(src++)];
-      }
-      rect.x = x;
-      rect.y = y;
-      rect.w = w;
-      rect.h = 8;
-      LoadImage((RECT*)&rec, buf);
-      DrawSync(0);
-      y += 8;
-    }
-    GpuSwapBuffers();
-  }
-#else
   /*
    * convert the paletted image and show it now, rather than on the next
    * frame, unless turned off in settings.cfg
@@ -338,7 +300,6 @@ int TitleLoading(lid_t lid, uint8_t *image_data, nsd *nsd) {
     GLShowImage(&dim, (uint8_t*)image_cvt);
     LoadingShown();
   }
-#endif
   ns.draw_skip_counter = 2;
   free(buf);
   return SUCCESS;
@@ -374,25 +335,18 @@ transition states
 
 //----- (800326D8) --------------------------------------------------------
 int TitleUpdate(void *ot) {
-#ifdef PSX
-  SPRT_16 *sprite;
-  DR_MODE *dr_mode;
-#else
   uint32_t tile_cvt[16*16];
   uint32_t *subimage;
   rect2 rect;
   dim2 sdim, ddim;
   pnt2 dloc;
   int x, y;
-#endif
   tileinfo *cur;
   int transition_state;
   int i, ii;
 
-#ifndef PSX
   sdim.w=1024;sdim.h=256;
   ddim.w=512;ddim.h=240;
-#endif
   transition_state = title->transition_state;
   switch (transition_state) {
   case 0: /* start of game? */
@@ -418,24 +372,6 @@ int TitleUpdate(void *ot) {
     for (i=0;i<15;i++) { /* draw the tiled splash screen image */
       for (ii=0;ii<32;ii++) {
         cur = &title->tileinfos[i+(ii*16)];
-#ifdef PSX
-        sprite = (SPRT_16*)context.cur->prims_tail;
-        context.cur->prims_tail += sizeof(SPRT_16);
-        SetSprt16(sprite);
-        sprite->r = 128;
-        sprite->g = 128;
-        sprite->b = 128;
-        sprite->x0 = (cur->x_idx*16) - title->x_offs - 256;
-        sprite->y0 = (cur->y_idx*16) - title->y_offs - 120;
-        sprite->u0 = cur->u_idx*16;
-        sprite->v0 = cur->v_idx*16;
-        sprite->clut = title->clut_ids[cur->clut_idx];
-        AddPrim(ot, (void*)sprite);
-        dr_mode = (DR_MODE*)context.cur->prims_tail;
-        context.cur->prims_tail += sizeof(DR_MODE);
-        *dr_mode = title->dr_modes[cur->type];
-        AddPrim(ot, (void*)dr_mode);
-#else
         rect.w=16;rect.h=16;
         rect.x=cur->x;
         rect.y=cur->y;
@@ -444,21 +380,14 @@ int TitleUpdate(void *ot) {
         /* src, dst, src dim, dst dim, src rect, dst loc, ... */
         TextureCopy(image, (uint8_t*)image_cvt, &sdim, &ddim,
           &rect, &dloc, cluts[cur->clut_idx], 2, 1, 3);
-#endif
       }
     }
-#ifndef PSX
     GLDrawImage(&ddim, (uint8_t*)image_cvt, 0);
-#endif
   }
   if (title->transition_state == 5 && fade_counter == 0) { /* currently fading out and fade counter has reached 0? */
     title->transition_state = 7; /* change transition state to 'finished fading out' */
     next_display_flags &= ~(GOOL_FLAG_DISPLAY | GOOL_FLAG_ANIMATE);
-#ifdef PSX
-    GpuDrawOverlay(255); /* draw semi-trans overlay that will cause primitive to fade */
-#else
     GLDrawOverlay(255);
-#endif
   }
   else if (title->transition_state == 6 && fade_counter == 0) { /* currently fading in and fade counter has reached 0? */
     title->transition_state = 3; /* change transition state to 'finished fading in' */
@@ -472,11 +401,7 @@ int TitleUpdate(void *ot) {
       TitleLoadEntries(title->state, 0, -1); /* close entries opened in this title state */
     title->transition_state = 1; /* change transition state to 'blank screen' */
     title->state = title->next_state; /* go to the next title state */
-#ifdef PSX
-    GpuDrawOverlay(255); /* draw semi-trans overlay that will cause primitives to fade */
-#else
     GLDrawOverlay(255);
-#endif
     TitleLoadState(); /* load the next state */
   }
   if (title->next_state != title_state) { /* pending request to change (to next) state? */
@@ -530,22 +455,6 @@ void TitleCalcTiles(title_struct *ts, int x_offs, int y_offs) {
   int i, ii, idx;
 
   TitleCalcUvs(ts->uvinfos);
-#ifdef PSX
-  RECT tw;
-  ts->tpage_ids[0] = GetTPage(1, 1, 256, 256);
-  ts->tpage_ids[1] = GetTPage(1, 1, 384, 256);
-  ts->tpage_ids[2] = GetTPage(1, 1, 512, 256);
-  ts->tpage_ids[3] = GetTPage(1, 1, 640, 256);
-  tw.w = 256; tw.h = 256;
-  tw.x = 256; tw.y = 256;
-  SetDrawMode(&ts->dr_modes[0], 1, 1, ts->tpage_ids[0], &tw);
-  tw.x = 384; tw.y = 256;
-  SetDrawMode(&ts->dr_modes[1], 1, 1, ts->tpage_ids[1], &tw);
-  tw.x = 512; tw.y = 256;
-  SetDrawMode(&ts->dr_modes[2], 1, 1, ts->tpage_ids[2], &tw);
-  tw.x = 768; tw.y = 256;
-  SetDrawMode(&ts->dr_modes[3], 1, 1, ts->tpage_ids[3], &tw);
-#endif
   for (i=0;i<16;i++) {
     for (ii=0;ii<33;ii++,idx++) {
       tileinfo = &ts->tileinfos[i+(ii*16)];
@@ -582,11 +491,7 @@ void TitleLoadImages(timginfo *info, int x_offs, int y_offs) {
   rect216 rect;
   int x_idx, y_idx, w_idx, h_idx;
   int i, ii, idx;
-#ifdef PSX
-  DrawSync(0);
-#else
   int x, y;
-#endif
   w_idx = title->w_idx;
   h_idx = title->h_idx;
   for (i=0;i<15;i++) { /* y */
@@ -603,20 +508,12 @@ void TitleLoadImages(timginfo *info, int x_offs, int y_offs) {
       imag = NSLookup(&header->imags[x_idx]);
       tile = (imag_tile*)imag->items[y_idx];
       tileinfo->clut_idx = tile->clut_id;
-#ifdef PSX
-      rect.x = (uvinfo->u_idx*8)+256; /* color mode 1; actual memory size of pixel region is half that of 16 bit pixel region */
-      rect.y = (uvinfo->v_idx*16)+256;
-      rect.w = 8; /* color mode 1 */
-      rect.h = 16;
-      LoadImage((RECT*)&rect, &tile->data);
-#else
       uint8_t *subimage;
       subimage = &image[tileinfo->x+(tileinfo->y*1024)];
       for (y=0;y<16;y++) {
         for (x=0;x<16;x++)
           subimage[x+(y*1024)] = tile->data[x+(y*16)];
       }
-#endif
     }
   }
 }
@@ -689,12 +586,7 @@ void TitleLoadEntries(int state, int flag, int count) {
           clut_idx = 0;
           line_idx++;
         }
-#ifdef PSX
-        clut_id = LoadClut(clut, line->clut_x, line->clut_y + clut_idx);
-        title->clut_ids[i] = clut_id;
-#else
         cluts[i] = (uint16_t*)clut; /* ??? */
-#endif
         ++clut_idx;
       }
       if (header->ipals[ipal_idx] != EID_NONE)
@@ -702,33 +594,6 @@ void TitleLoadEntries(int state, int flag, int count) {
     }
 
   }
-#ifdef PSX
-  /* ensure that texture pages are reserved for the allocated cluts */
-  NSTexturePageFree(9);
-  texture_pages[9].state = 30;
-  NSTexturePageFree(10);
-  texture_pages[10].state = 30;
-  NSTexturePageFree(13);
-  texture_pages[13].state = 30;
-  if (header->ipal_count > 160) {
-    NSTexturePageFree(8);
-    texture_pages[8].state = 30;
-  }
-  else if (texture_pages[8].state == 30)
-    texture_pages[8].state = 1;
-  if (header->ipal_count > 288) {
-    NSTexturePageFree(12);
-    texture_pages[12].state = 30;
-  }
-  else if (texture_pages[12].state == 30)
-    texture_pages[12].state = 1;
-  if (header->ipal_count >= 417) {
-    NSTexturePageFree(14);
-    texture_pages[14].state = 30;
-  }
-  else if (texture_pages[14].state == 30)
-    texture_pages[14].state = 1;
-#endif
   /* pre-load the imag entries */
   for (i=0;i<header->w_idx;i++) {
     if (header->imags[i] == EID_NONE) { continue; }
