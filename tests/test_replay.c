@@ -135,6 +135,20 @@ UTEST(replay, ending_a_replay_goes_back_to_normal_speed) {
   ASSERT_EQ(1u, TimeGetSpeed());
 }
 
+UTEST(replay, is_playing_only_while_replaying) {
+  SDL_Scancode held[1] = { 0 };
+
+  Record(0x19, held, 1);
+  ASSERT_FALSE(ReplayIsPlaying());
+  ASSERT_EQ(1, ReplayStart(TEST_REPLAY, REPLAY_RECORD, 0x19, 12345));
+  ASSERT_FALSE(ReplayIsPlaying()); /* recording isn't replaying */
+  ReplayStop();
+  ASSERT_EQ(1, ReplayStart(TEST_REPLAY, REPLAY_PLAY, 0x19, 12345));
+  ASSERT_TRUE(ReplayIsPlaying());
+  ReplayUpdate(); /* nothing recorded, so this is past the end */
+  ASSERT_FALSE(ReplayIsPlaying());
+}
+
 UTEST(replay, replay_refuses_a_recording_from_another_boot_level) {
   SDL_Scancode held[1] = { 0 };
 

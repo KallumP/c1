@@ -46,6 +46,7 @@ extern int ReplayStart(const char *path, int mode, uint32_t lid,
   uint32_t seed);
 extern void ReplayUpdate();
 extern int ReplayHeld(uint32_t *held);
+extern int ReplayIsPlaying();
 extern void ReplayStop();
 
 #endif /* _PC_REPLAY_H_ */

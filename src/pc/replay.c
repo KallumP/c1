@@ -167,6 +167,10 @@ int ReplayHeld(uint32_t *held) {
   return 1;
 }
 
+int ReplayIsPlaying() {
+  return 0;
+}
+
 void ReplayStop() {
   ReplayRecordStop(&recorder);
   if (replay_file) {
