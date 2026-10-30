@@ -181,6 +181,29 @@ class WriteLevel(unittest.TestCase):
             nslevel.entry_page_bytes([big], 0)
 
 
+class SharedItems(unittest.TestCase):
+    A, B = b"AAAA" * 3, b"BBBB"
+
+    def test_identical_items_are_stored_once(self):
+        entry = nslevel.Entry(nslevel.str_to_eid("TestS"), 4, [self.A, self.B, self.A, self.A])
+        data = nslevel.entry_bytes(entry)
+        self.assertEqual(16 + 4 * 5 + len(self.A) + len(self.B), len(data))
+
+    def test_each_items_offset_points_at_its_data(self):
+        # the loader makes each item offset a pointer on its own (NSPageStruct in src/ns.c)
+        items = [self.A, self.B, self.A, self.B, b""]
+        data = nslevel.entry_bytes(nslevel.Entry(nslevel.str_to_eid("TestS"), 4, items))
+        offsets = struct.unpack_from("<6I", data, 16)
+        for item, offset in zip(items, offsets):
+            self.assertEqual(item, data[offset:offset + len(item)])
+        self.assertEqual(len(data), offsets[-1])
+
+    def test_shared_items_read_back(self):
+        items = [self.A, self.B, self.A, self.A, self.B]
+        data = nslevel.entry_bytes(nslevel.Entry(nslevel.str_to_eid("TestS"), 4, items))
+        self.assertEqual(items, nslevel.read_entry(data, 0).items)
+
+
 def entry_page(entries):
     return nslevel.Page(nslevel.PAGE_ENTRIES, entries=entries)
 
