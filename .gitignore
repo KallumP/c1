@@ -8,7 +8,7 @@ streams/*
 imgui.ini
 controls.cfg
 settings.cfg
-inputs.rec
+recorded_inputs/
 !README.MD
 
 # claude code plans and project skills
