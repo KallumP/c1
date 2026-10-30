@@ -648,14 +648,9 @@ class Map(unittest.TestCase):
         rows = []
         for k in range(60):
             for i in range(60):
-                rows.append("v %d 0 %d
-v %d 0 %d
-v %d 0 %d
-f -3 -2 -1" % (
+                rows.append("v %d 0 %d\nv %d 0 %d\nv %d 0 %d\nf -3 -2 -1" % (
                     i, k, i, k + 1, i + 1, k + 1))
-        level, entries, zone = self.make("o Floor
-" + "
-".join(rows), scale=96)
+        level, entries, zone = self.make("o Floor\n" + "\n".join(rows), scale=96)
         self.assertGreater(struct.unpack_from("<I", zone.items[0], 0)[0], 1)
 
     def test_turn_runs_the_map_along_z(self):
