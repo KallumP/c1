@@ -90,7 +90,7 @@ def read_mtl(text, base_dir):
             while rest and rest[0] in MAP_OPTIONS:
                 rest = rest[1 + MAP_OPTIONS[rest[0]]:]
             path = " ".join(rest)
-            images[mat] = path if os.path.isabs(path) else os.path.join(base_dir, path)
+            images[mat] = path if os.path.isabs(path) else os.path.normpath(os.path.join(base_dir, path))
     return images
 
 
