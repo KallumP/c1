@@ -159,6 +159,7 @@ def solid_cells(mesh, size, cell):
 # nslevel.py), split into meshes of at most WGEO_MAX vertices and polygons
 
 WGEO_MAX = 4096   # polygon and vertex indices are 12 bits
+WGEO_ITEMS_MAX = 7500  # vertices and polygons (8 bytes each) a mesh fits in a page beside its header
 WORLDS_MAX = 8    # world meshes in a zone
 FACING = 0.5      # a face whose normal's y is over this faces up (under -FACING, down)
 LIGHT = (0.3, 0.8, 0.5)  # towards the light: above, a little to the side and towards the camera
@@ -218,7 +219,8 @@ def world_meshes(mesh, piece, ground, side):
     def add(tri, texture):
         nonlocal verts, polys, index
         new = [v for v in tri if v not in index]
-        if len(verts) + len(set(new)) > WGEO_MAX or len(polys) + 1 > WGEO_MAX:
+        if (len(verts) + len(set(new)) > WGEO_MAX or len(polys) + 1 > WGEO_MAX
+                or len(verts) + len(set(new)) + len(polys) + 1 > WGEO_ITEMS_MAX):
             meshes.append((verts, polys))
             verts, polys, index = [], [], {}
         ids = []

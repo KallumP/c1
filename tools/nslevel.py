@@ -8,6 +8,8 @@ import copy
 import os
 import struct
 
+import blendmap
+
 MAGIC_PAGE = 0x1234
 MAGIC_ENTRY = 0x100FFFF
 PAGE_SIZE = 0x10000
@@ -279,6 +281,12 @@ def page_size(entries):
     return 16 + 4 * (len(entries) + 1) + sum(len(entry_bytes(e)) for e in entries)
 
 
+class EntryTooBig(ValueError):
+    def __init__(self, entry):
+        super().__init__("%s takes %d bytes, more than a page" % (eid_to_str(entry.eid), page_size([entry])))
+        self.entry = entry
+
+
 def pack_entries(entries):
     """entry pages holding entries, in order, starting a new page when one
     is full. each page lists its entries in bucket order, since the loader
@@ -286,6 +294,8 @@ def pack_entries(entries):
     the bucket of the page's first entry"""
     pages, current = [], []
     for entry in entries:
+        if page_size([entry]) > PAGE_SIZE:
+            raise EntryTooBig(entry)
         if current and page_size(current + [entry]) > PAGE_SIZE:
             pages.append(current)
             current = []
@@ -618,18 +628,18 @@ def slst_items(world_zmax, cam_zs, step, near):
     point, the polygons (of each world, by their largest z, one list per
     world) that stay in front of the camera all the way to the next point,
     so none is ever drawn from behind the camera, which the renderer would
-    project mirrored.
+    project mirrored. a list holds at most the POLY_IDS_MAX nearest.
 
     every item is a full list rather than a delta (the game copies an even
     type item as is, whichever way the camera moves). LevelUpdate reads
     item k on reaching point k, and item N (one past the last point) when
     starting in the second half of the path, so that repeats the last."""
     def full_list(cam_z):
-        ids = [poly_id(w, i) for w, poly_zmax in enumerate(world_zmax)
-               for i, zmax in enumerate(poly_zmax) if zmax < cam_z - step - near]
-        if len(ids) > POLY_IDS_MAX:
-            raise ValueError("%d polygons in front of the camera, more than the game can list (%d)"
-                             % (len(ids), POLY_IDS_MAX))
+        front = [(zmax, poly_id(w, i)) for w, poly_zmax in enumerate(world_zmax)
+                 for i, zmax in enumerate(poly_zmax) if zmax < cam_z - step - near]
+        if len(front) > POLY_IDS_MAX:  # too many to list: leave out the farthest
+            front = sorted(front, key=lambda f: -f[0])[:POLY_IDS_MAX]
+        ids = sorted(f[1] for f in front)
         return pad4(struct.pack("<HH%dH" % len(ids), len(ids), 0, *ids))
     items = [full_list(z) for z in cam_zs]
     return items + [items[-1]]
@@ -783,27 +793,34 @@ class Templates:
         self.crash = self.entities[(0, 0)]
 
 
-def assemble_level(level, templates, prefix, size, blocks, verts, polys, points, step, entities):
+GREY = (128, 128, 128)  # unshaded vertex colour
+
+
+def assemble_level(level, templates, prefix, size, blocks, worlds, points, step, entities):
     """a custom level from a real level: one zone of size (w, h, d) at the
-    template zone's origin, with collision from blocks, a world mesh of
-    verts and polys (a, b, c, tinf, tpag) relative to the zone, one follow
-    camera path through points (x, y, z) step apart going along -z, and entities (crash
-    first). keeps crash, the hud and core objects, and the code for the
-    entities' types, from level"""
+    template zone's origin, with collision from blocks, world meshes (each
+    vertices (x, y, z, colour) and polygons (a, b, c, tinf, tpag) relative
+    to the zone), one follow camera path through points (x, y, z) step
+    apart going along -z, and entities (crash first). keeps crash, the hud
+    and core objects, and the code for the entities' types, from level"""
     t = templates
-    zone_eid, world_eid, slst_eid = (str_to_eid(prefix + c) for c in "ZWS")
+    zone_eid, slst_eid = str_to_eid(prefix + "Z"), str_to_eid(prefix + "S")
+    world_eids = [str_to_eid(prefix + ("W" if i == 0 else str(i))) for i in range(len(worlds))]
     x0, y0, z0 = t.origin
-    world = Entry(world_eid, 3, [
+    world_entries = [Entry(eid, 3, [
         world_header_bytes(t.world.items[0], (x0, y0, z0), len(polys), len(verts)),
         b"".join(world_polygon_bytes(a, b, c, tinf, tpag) for a, b, c, tinf, tpag in polys),
-        b"".join(world_vertex_bytes(x, y, z, (128, 128, 128)) for x, y, z in verts)])
+        b"".join(world_vertex_bytes(x, y, z, colour) for x, y, z, colour in verts)])
+        for eid, (verts, polys) in zip(world_eids, worlds)]
     cam_points = [(x, y, z, -181, 1, 0) for x, y, z in points]
     path = path_bytes(slst_eid, cam_points, cam_mode=5, zoom=1700,
                       avg_node_dist=step, direction=(0, 0, -4096))
-    poly_zmax = [max(verts[a][2], verts[b][2], verts[c][2]) for a, b, c, _, _ in polys]
-    slst = Entry(slst_eid, 4, slst_items([poly_zmax], [p[2] for p in points], step, MOCK_NEAR))
+    world_zmax = [[max(verts[a][2], verts[b][2], verts[c][2]) for a, b, c, _, _ in polys]
+                  for verts, polys in worlds]
+    slst = Entry(slst_eid, 4, slst_items(world_zmax, [p[2] for p in points], step, MOCK_NEAR))
     zone = Entry(zone_eid, 7, [
-        zone_header_bytes(t.header, zone_eid, [(world_eid, (x0, y0, z0))], 1, len(entities)),
+        zone_header_bytes(t.header, zone_eid, [(eid, (x0, y0, z0)) for eid in world_eids],
+                          1, len(entities)),
         blocks_rect_bytes(t.origin, size, blocks, COURSE_CELL),
         path] + list(entities))
     tpags = struct.unpack_from("<8I", t.world.items[0], 32)
@@ -811,7 +828,7 @@ def assemble_level(level, templates, prefix, size, blocks, verts, polys, points,
     slots = set(CORE_EXEC_SLOTS) | {entity_type(e)[0] for e in entities}
     keep = [exec_map[i] for i in slots] + [tp for tp in tpags if tp]
     out = cut_level(level, keep)
-    out.pages = pack_entries([zone, world, slst]) + out.pages
+    out.pages = pack_entries([zone, slst] + world_entries) + out.pages
     out.nsd.ldat.lid = LID_TEST
     out.nsd.ldat.zone_spawn = zone_eid
     out.nsd.ldat.path_idx_spawn = 0
@@ -899,8 +916,50 @@ def make_course(level):
         next_id += 1
     x, z = COURSE_WARP
     entities.append(place_entity(t.entities[(32, 1)], next_id, (x, course_top(z), z)))
-    return assemble_level(level, t, "Cour", COURSE_SIZE, blocks, verts, polys, points,
+    worlds = [([v + (GREY,) for v in verts], polys)]
+    return assemble_level(level, t, "Cour", COURSE_SIZE, blocks, worlds, points,
                           COURSE_PATH_STEP, entities)
+
+
+# maps modelled in blender (see tools/blendmap.py)
+
+MAP_SCALE = 400        # zone units per blender metre: crash is a little over 2 m tall
+MAP_PIECE = 512        # the world meshes are sliced along z this often
+MAP_PATH_STEP = 128    # camera path points; doubled while the sort list doesn't fit in a page
+MAP_HEADROOM = 1024    # room above the map
+
+
+def cell_blocks(cells, cell):
+    """blocks (see blocks_rect_bytes) for collision cells ({(i, j, k):
+    "ground" or "pit"})"""
+    leaves = {"ground": LEAF_GROUND, "pit": LEAF_PIT}
+    return [(i * cell, j * cell, k * cell, (i + 1) * cell, (j + 1) * cell, (k + 1) * cell, leaves[kind])
+            for (i, j, k), kind in cells.items()]
+
+
+def make_map(level, text, scale=MAP_SCALE, turn=0):
+    """a level from a map exported from blender as .obj (its text): its
+    faces as the world meshes and collision, and crash, with nothing else;
+    built like make_course from level (a real level such as N. Sanity
+    Beach) for crash and the textures"""
+    t = Templates(level)
+    fit = blendmap.fit(blendmap.read_obj(text, scale, turn), COURSE_CELL, MAP_HEADROOM, margin=COURSE_CELL)
+    mesh = fit.mesh
+    cells = blendmap.solid_cells(mesh, fit.size, COURSE_CELL)
+    worlds = blendmap.world_meshes(mesh, MAP_PIECE, t.textures[0], t.textures[1])
+    start = blendmap.spawn(mesh, cells, fit.size, COURSE_CELL)
+    crash = bytearray(t.crash)
+    struct.pack_into("<3h", crash, ENTITY_POINTS, start[0] // 4, (start[1] + 100) // 4, start[2] // 4)
+    step = MAP_PATH_STEP
+    while True:
+        points = blendmap.camera_path(cells, fit.size, COURSE_CELL, start, step)
+        try:
+            return assemble_level(level, t, "BMap", fit.size, cell_blocks(cells, COURSE_CELL), worlds,
+                                  points, step, [bytes(crash)])
+        except EntryTooBig as e:
+            if e.entry.type != 4 or step >= MAP_PIECE:  # only the sort list shrinks
+                raise
+            step *= 2  # fewer points, so a smaller sort list
 
 
 def type_name(etype):
@@ -925,6 +984,9 @@ CUSTOM_LEVELS_DIR = os.path.join(ROOT, "custom_levels")
 USAGE = """usage:
   python tools/nslevel.py list <lid>         list a level's entries by type
   python tools/nslevel.py copy <lid> <name>  copy a level to custom_levels/<name>
+  python tools/nslevel.py map <file.obj> [name] [--scale <units per m>] [--turn <degrees>]
+                                             make a level from a map exported from blender
+                                             as custom_levels/<name> (the file's name)
   python tools/nslevel.py course [name]      make an obstacle course as custom_levels/<name> (course)
   python tools/nslevel.py mock [name]        make a level from scratch (a flat floor
                                              and crash) as custom_levels/<name> (mock)
@@ -944,6 +1006,22 @@ def main(argv):
         level.nsd.ldat.lid = LID_TEST
         write_level(level, CUSTOM_LEVELS_DIR, argv[2])
         print("wrote %s" % os.path.join(CUSTOM_LEVELS_DIR, argv[2]))
+        return 0
+    if len(argv) >= 2 and argv[0] == "map":
+        args, options = [], {"--scale": MAP_SCALE, "--turn": 0}
+        rest = iter(argv[1:])
+        for arg in rest:
+            if arg in options:
+                options[arg] = int(next(rest, "x"))
+            else:
+                args.append(arg)
+        path = args[0]
+        name = args[1] if len(args) >= 2 else os.path.splitext(os.path.basename(path))[0]
+        with open(path) as f:
+            text = f.read()
+        level = make_map(read_level(STREAMS_DIR, 9), text, options["--scale"], options["--turn"])
+        write_level(level, CUSTOM_LEVELS_DIR, name)
+        print("wrote %s" % os.path.join(CUSTOM_LEVELS_DIR, name))
         return 0
     if len(argv) >= 1 and argv[0] == "course":
         name = argv[1] if len(argv) >= 2 else "course"
