@@ -170,6 +170,14 @@ def solid_cells(mesh, size, cell):
         for key in behind(mesh, tri, n, cell):
             if inside(key, size, cell) and RANK[kind] >= RANK[cells.get(key, "wall")]:
                 cells[key] = kind
+    # walls can't hang over a floor: the game blocks crash at a wall cell
+    # whose top is above his feet however high it hangs (PlotNodeWalls in
+    # src/solid.c), so a lintel over a doorway would close it
+    for key in sorted(cells, key=lambda key: key[1]):
+        i, j, k = key
+        if cells[key] == "wall" and j > 0 and (i, j - 1, k) not in cells and any(
+                cells.get((i, below, k)) in ("floor", "pit") for below in range(j - 1)):
+            del cells[key]
     return cells
 
 
