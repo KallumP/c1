@@ -109,6 +109,21 @@ UTEST(replay, replay_starts_on_the_fixed_clock_at_the_recorded_time) {
   ReplayStop();
 }
 
+UTEST(replay, keyboard_and_real_clock_take_over_at_the_end_of_the_recording) {
+  SDL_Scancode held[1] = { SDL_SCANCODE_Z };
+
+  Record(0x19, held, 1);
+  ASSERT_EQ(1, ReplayStart(TEST_REPLAY, REPLAY_PLAY, 0x19, 12345));
+  ReplayUpdate(); /* the only recorded frame */
+  ASSERT_EQ((uint32_t)PAD_CROSS << 16, SwPadRead(0));
+  TimeWaitFrame(34);
+  keys[SDL_SCANCODE_LEFT] = 1;
+  ReplayUpdate(); /* past the end */
+  ASSERT_EQ((uint32_t)PAD_LEFT << 16, SwPadRead(0));
+  ASSERT_FALSE(TimeIsFixed());
+  keys[SDL_SCANCODE_LEFT] = 0;
+}
+
 UTEST(replay, replay_refuses_a_recording_from_another_boot_level) {
   SDL_Scancode held[1] = { 0 };
 
