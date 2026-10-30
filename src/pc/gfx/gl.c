@@ -20,6 +20,7 @@ static PFNGLBLENDEQUATIONPROC pglBlendEquation;
 #include "pc/gfx/gldepth.h"
 #include "pc/settings.h"
 #include "pc/time.h"
+#include "pc/replay.h"
 
 #ifdef CFLAGS_GUI
 #include "ext/gui.h"
@@ -517,6 +518,7 @@ void GLUpdate() {
 
   if (callbacks.pre_update)
     (*callbacks.pre_update)();
+  ReplayUpdate(); /* record (or replay) the buttons for the next frame */
   if (callbacks.input) {
     (*callbacks.input)(&gl_input);
   }
@@ -530,12 +532,16 @@ void GLUpdate() {
   AudioUpdate();
   ticks_elapsed = GetTicksElapsed();
   context.sync_stamp = ticks_elapsed;
-  if (pbak_state == 0)
+  if (pbak_state == 0 && !TimeIsFixed())
     ticks_cur_frame = ticks_elapsed - context.draw_stamp; /* time elapsed between current sync and previous draw  */
   else
     ticks_cur_frame = 17; /* default to 17 */
-  while (ticks_elapsed - context.draw_stamp < 34) {
-    ticks_elapsed = GetTicksElapsed();
+  if (TimeIsFixed()) /* recording or replaying inputs? */
+    TimeWaitFrame(34);
+  else {
+    while (ticks_elapsed - context.draw_stamp < 34) {
+      ticks_elapsed = GetTicksElapsed();
+    }
   }
   if (pbak_state == 2)
     SetTicksElapsed(cur_pbak_frame->ticks_elapsed);

@@ -1,6 +1,7 @@
 #include <SDL2/SDL.h>
 #include "pc/pad.h"
 #include "pc/config.h"
+#include "pc/replay.h"
 
 extern uint8_t keys[512]; /* indexed by SDL scancode */
 
@@ -62,6 +63,7 @@ uint32_t SwPadRead(int idx) {
 
   held = 0;
   if (idx != 0) { return held; } /* pad 1 only for now */
+  if (ReplayHeld(&held)) { return held; } /* replaying recorded inputs */
   if (!pad_mappings_set) { PadResetBindings(); }
   count = pad_mapping_count;
   for (i=0;i<count;i++) {

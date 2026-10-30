@@ -124,13 +124,17 @@ UTEST(settings, example_settings_file_matches_defaults) {
   game_settings.speed_display = !defaults.speed_display;
   game_settings.skip_splash_screens = !defaults.skip_splash_screens;
   game_settings.fix_model_draw_order = !defaults.fix_model_draw_order;
+  game_settings.replay_inputs = !defaults.replay_inputs;
+  game_settings.replay_speed = defaults.replay_speed + 1;
   /* run from the project root */
-  ASSERT_EQ(5, SettingsLoad("settings.example.cfg"));
+  ASSERT_EQ(7, SettingsLoad("settings.example.cfg"));
   ASSERT_EQ(defaults.loading_screen, game_settings.loading_screen);
   ASSERT_EQ(defaults.loading_screen_min_ms, game_settings.loading_screen_min_ms);
   ASSERT_EQ(defaults.speed_display, game_settings.speed_display);
   ASSERT_EQ(defaults.skip_splash_screens, game_settings.skip_splash_screens);
   ASSERT_EQ(defaults.fix_model_draw_order, game_settings.fix_model_draw_order);
+  ASSERT_EQ(defaults.replay_inputs, game_settings.replay_inputs);
+  ASSERT_EQ(defaults.replay_speed, game_settings.replay_speed);
   SettingsReset(&game_settings);
 }
 
@@ -210,4 +214,55 @@ UTEST(settings, fix_model_draw_order_on_and_off) {
   ASSERT_EQ(1, s.fix_model_draw_order);
   ASSERT_EQ(-1, SettingsParseLine("fix_model_draw_order = 1", &s));
   ASSERT_EQ(1, s.fix_model_draw_order);
+}
+
+/* inputs are always recorded unless replay_inputs is on */
+UTEST(settings, record_inputs_is_not_a_setting) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(-1, SettingsParseLine("record_inputs = on", &s));
+}
+
+UTEST(settings, replay_speed_is_normal_by_default) {
+  pc_settings s;
+
+  s.replay_speed = 7;
+  SettingsReset(&s);
+  ASSERT_EQ(1u, s.replay_speed);
+}
+
+UTEST(settings, replay_speed_takes_0_to_16) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, SettingsParseLine("replay_speed = 4", &s));
+  ASSERT_EQ(4u, s.replay_speed);
+  ASSERT_EQ(1, SettingsParseLine("replay_speed = 0", &s));
+  ASSERT_EQ(0u, s.replay_speed);
+  ASSERT_EQ(1, SettingsParseLine("replay_speed = 16", &s));
+  ASSERT_EQ(16u, s.replay_speed);
+  ASSERT_EQ(-1, SettingsParseLine("replay_speed = 17", &s));
+  ASSERT_EQ(-1, SettingsParseLine("replay_speed = fast", &s));
+  ASSERT_EQ(16u, s.replay_speed);
+}
+
+UTEST(settings, replay_inputs_is_off_by_default) {
+  pc_settings s;
+
+  s.replay_inputs = 1;
+  SettingsReset(&s);
+  ASSERT_EQ(0, s.replay_inputs);
+}
+
+UTEST(settings, replay_inputs_on_and_off) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, SettingsParseLine("replay_inputs = on", &s));
+  ASSERT_EQ(1, s.replay_inputs);
+  ASSERT_EQ(1, SettingsParseLine("replay_inputs = off", &s));
+  ASSERT_EQ(0, s.replay_inputs);
+  ASSERT_EQ(-1, SettingsParseLine("replay_inputs = 1", &s));
+  ASSERT_EQ(0, s.replay_inputs);
 }

@@ -30,13 +30,65 @@ static inline int32_t GetTicks() {
 }
 #endif
 
+/*
+ * fixed clock (for recording and replaying inputs): game time only moves
+ * when TimeAdvance is called, so every read of it is the same on replay
+ */
+static int fixed_clock = 0;
+static int32_t fixed_ticks = 0;
+
 void SetTicksElapsed(int32_t ticks) {
+  if (fixed_clock) { fixed_ticks = ticks; return; }
   ticks_base = GetTicks() - ticks;
 }
 
 int GetTicksElapsed() {
   int32_t ticks;
 
+  if (fixed_clock) { return fixed_ticks; }
   ticks = GetTicks() - ticks_base;
   return ticks;
+}
+
+/* switch between the fixed and real clocks, carrying on from the current time */
+void TimeSetFixed(int fixed) {
+  int32_t ticks;
+
+  ticks = GetTicksElapsed();
+  fixed_clock = fixed;
+  SetTicksElapsed(ticks);
+}
+
+int TimeIsFixed() {
+  return fixed_clock;
+}
+
+/* move the fixed clock on */
+void TimeAdvance(int32_t ticks) {
+  fixed_ticks += ticks;
+}
+
+static uint32_t speed = 1; /* times normal speed, 0 = as fast as possible */
+
+/*
+ * wait until a frame's worth of real time (divided by the speed) has passed
+ * since the last call, then move the fixed clock on that frame. a slow frame
+ * isn't made up for, so game time only ever moves a whole frame at a time
+ */
+void TimeWaitFrame(int32_t ticks) {
+  static int32_t real_stamp = 0;
+
+  if (speed)
+    while (GetTicks() - real_stamp < ticks / (int32_t)speed);
+  real_stamp = GetTicks();
+  fixed_ticks += ticks;
+}
+
+/* how fast TimeWaitFrame lets the fixed clock run, for replays */
+void TimeSetSpeed(uint32_t new_speed) {
+  speed = new_speed;
+}
+
+uint32_t TimeGetSpeed() {
+  return speed;
 }

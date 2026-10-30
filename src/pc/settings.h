@@ -4,6 +4,7 @@
 #include "common.h"
 
 #define SETTINGS_LOADING_SCREEN_MAX_MS 60000
+#define SETTINGS_REPLAY_SPEED_MAX      16
 
 /* game settings (pc), read from settings.cfg */
 typedef struct {
@@ -12,6 +13,8 @@ typedef struct {
   int speed_display;              /* show crash's speed in the top right */
   int skip_splash_screens;        /* boot straight to the main menu */
   int fix_model_draw_order;       /* depth test 3d models against each other */
+  int replay_inputs;              /* replay the newest recording instead of recording */
+  uint32_t replay_speed;          /* times normal speed, 0 = as fast as possible */
 } pc_settings;
 
 extern pc_settings game_settings;
