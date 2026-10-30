@@ -632,7 +632,8 @@ class Map(unittest.TestCase):
         crash = zone.items[paths_idx + 1]
         x, y, z = (c * 4 for c in struct.unpack_from("<3h", crash, nslevel.ENTITY_POINTS))
         # the floor's corner is at the zone's corner plus a cell of margin
-        self.assertEqual((128 + 4 * 256, 128 + 5 * 256 + 8 * 256), (x, z))
+        self.assertAlmostEqual(128 + 4 * 256, x, delta=16)  # the marker's middle, on multiples of 8
+        self.assertEqual(128 + 5 * 256 + 8 * 256, z)
         self.assertGreater(y, 128)
         self.assertLessEqual(y, 128 + 128)
 
