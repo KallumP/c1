@@ -40,3 +40,13 @@ int GetTicksElapsed() {
   ticks = GetTicks() - ticks_base;
   return ticks;
 }
+
+void TimeSetFixed(int fixed) {
+}
+
+int TimeIsFixed() {
+  return 0;
+}
+
+void TimeAdvance(int32_t ticks) {
+}

@@ -5,5 +5,8 @@
 
 extern void SetTicksElapsed(int32_t ticks);
 extern int GetTicksElapsed();
+extern void TimeSetFixed(int fixed);
+extern int TimeIsFixed();
+extern void TimeAdvance(int32_t ticks);
 
 #endif /* _TIME_H_ */
