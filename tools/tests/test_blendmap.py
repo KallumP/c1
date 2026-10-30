@@ -555,6 +555,9 @@ class ZonePaths(unittest.TestCase):
         self.assertEqual([[(1, 2, 40000 - 32768), (1, 2, lead)], [(1, 2, 16383 + lead)], [(1, 2, 1000)]],
                          blendmap.zone_paths(points, self.SPANS))
 
+    def test_the_zone_a_point_is_in(self):
+        self.assertEqual([0, 1, 1, 2], [blendmap.zone_index(self.SPANS, z) for z in (40000, 32767, 16384, 0)])
+
     def test_zones_before_the_start_have_no_points(self):
         self.assertEqual([[], [(1, 2, 20000 - 16384)], [(1, 2, 1000)]],
                          blendmap.zone_paths([(1, 2, 20000), (1, 2, 1000)], self.SPANS))
