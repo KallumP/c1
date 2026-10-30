@@ -297,6 +297,16 @@ class Zone(unittest.TestCase):
         self.assertEqual((0, 0), struct.unpack_from("<ii", h, nslevel.ZONE_LOADLIST))
         self.assertEqual(nslevel.EID_NONE, struct.unpack_from("<I", h, nslevel.ZONE_MIDI)[0])
 
+    def test_path_links_to_the_paths_either_side(self):
+        # as on n. sanity beach: (relation, neighbor zone index, path index,
+        # goal); relation 1 the path before, arriving at its end (goal 2),
+        # relation 2 the path after, arriving at its start (goal 1)
+        links = [(1, 1, 0, 2), (2, 2, 0, 1)]
+        p = nslevel.path_bytes(0, [(0, 0, 0, 0, 0, 0)], cam_mode=5, zoom=1700, avg_node_dist=128, links=links)
+        self.assertEqual(2, struct.unpack_from("<I", p, 8)[0])
+        self.assertEqual(links, [struct.unpack_from("<4B", p, 12 + 4 * i) for i in range(2)])
+        self.assertEqual(1, struct.unpack_from("<H", p, 30)[0])  # the rest is where it was
+
     def test_zone_header_lists_itself_then_its_neighbors(self):
         # as on n. sanity beach: itself, the zone before, the zone after
         self_eid, before, after = (nslevel.str_to_eid(n) for n in ("Bm01Z", "Bm00Z", "Bm02Z"))
