@@ -1,6 +1,6 @@
 # Custom levels
 
-A map modelled in Blender can become a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. There are no objects yet (eg: enemies, fruit or crates). [`maps/`](../maps) has an example, with its textures; make it with `python tools/generate_level_terrain.py maps/simple_afps_level --turn 90`.
+A map modelled in Blender can become a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. There are no objects yet (eg: enemies, fruit or crates). Maps go in `maps/`, a folder each; like `custom_levels/`, it's ignored by git.
 
 ## From Blender to the game
 
@@ -38,7 +38,7 @@ A map modelled in Blender can become a level the game boots straight into: its f
    ```
 8. **Run the game** (`build/c1.exe`). It starts in your map. Crash runs with the camera behind him, looking along the route. If the level named in `boot_level` doesn't exist, the game says so in the console and starts normally. Remove `boot_level` to start at the title screen again.
 
-Levels are made from your copy of the game, so `custom_levels/` is ignored by git; commit the map's files instead.
+Levels are made from your copy of the game, so `custom_levels/` is ignored by git, and so is `maps/`.
 
 To change the map, edit it in Blender, export over the old files, and run step 6 again. `settings.cfg` doesn't need changing, and you don't need to rebuild the game.
 
