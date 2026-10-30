@@ -301,6 +301,15 @@ class Spawn(unittest.TestCase):
         cells = blendmap.solid_cells(mesh, self.SIZE, 128)
         self.assertEqual((1536 + 64, 512, 2560 - 64), blendmap.spawn(mesh, cells, self.SIZE, 128))
 
+    def test_crash_starts_on_a_floor_not_on_top_of_a_wall(self):
+        # a wall across the +z end, nearest the start, whose top is solid with room above
+        wall = quad_mesh([(0, 0, 2048), (0, 1024, 2048), (2048, 1024, 2048), (2048, 0, 2048)])
+        mesh = merged(floor(0, 0, 2048, 2048, y=256), wall)
+        cells = blendmap.solid_cells(mesh, self.SIZE, 128)
+        x, y, z = blendmap.spawn(mesh, cells, self.SIZE, 128)
+        self.assertEqual(256, y)
+        self.assertLess(z, 2048)
+
     def test_no_ground_is_an_error(self):
         with self.assertRaises(ValueError):
             blendmap.spawn(blendmap.Mesh([], []), {}, self.SIZE, 128)
@@ -311,7 +320,13 @@ class CameraPath(unittest.TestCase):
 
     def path(self, mesh, start, step=256):
         cells = blendmap.solid_cells(mesh, self.SIZE, 128)
-        return blendmap.camera_path(cells, self.SIZE, 128, start, step)
+        return blendmap.camera_path(mesh, cells, self.SIZE, 128, start, step)
+
+    def test_height_ignores_the_tops_of_walls(self):
+        # a low wall running along z under crash's x: its top isn't somewhere to stand
+        wall = quad_mesh([(1024, 0, 0), (1024, 1024, 0), (1024, 1024, 8192), (1024, 0, 8192)])
+        points = self.path(merged(floor(0, 0, 2048, 8192, y=512), wall), (1024, 512, 5000))
+        self.assertEqual({512 + blendmap.CAM_OFFSET[1]}, {y for _, y, _ in points})
 
     def test_follows_crash_from_behind_along_minus_z(self):
         points = self.path(floor(0, 0, 2048, 8192, y=512), (1024, 512, 5000))
