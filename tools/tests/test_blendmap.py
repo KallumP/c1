@@ -162,12 +162,12 @@ class SolidCells(unittest.TestCase):
         self.assertEqual({(i, 8, k) for i in range(2) for k in range(2)}, set(self.cells(ceiling)))
 
     def test_slope_is_a_staircase(self):
-        # rises 256 over 512 along -z
-        slope = quad_mesh([(0, 0, 512), (128, 0, 512), (128, 256, 0), (0, 256, 0)])
+        # rises from 256 to 512 over 512 along -z
+        slope = quad_mesh([(0, 256, 512), (128, 256, 512), (128, 512, 0), (0, 512, 0)])
         cells = set(self.cells(slope))
-        self.assertIn((0, 1, 0), cells)  # top step, under the high end
-        self.assertIn((0, 0, 3), cells)  # bottom step
-        self.assertNotIn((0, 1, 3), cells)
+        self.assertIn((0, 3, 0), cells)  # top step, under the high end
+        self.assertIn((0, 1, 3), cells)  # bottom step
+        self.assertNotIn((0, 3, 3), cells)
 
     def test_pit_objects_are_deadly(self):
         cells = self.cells(merged(floor(0, 0, 256, 256, y=256, obj="Pit.001"),
