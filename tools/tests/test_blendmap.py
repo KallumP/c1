@@ -325,7 +325,7 @@ class CameraPath(unittest.TestCase):
     def test_height_ignores_the_tops_of_walls(self):
         # a low wall running along z under crash's x: its top isn't somewhere to stand
         wall = quad_mesh([(1024, 0, 0), (1024, 1024, 0), (1024, 1024, 8192), (1024, 0, 8192)])
-        points = self.path(merged(floor(0, 0, 2048, 8192, y=512), wall), (1024, 512, 5000))
+        points = self.path(merged(floor(0, 0, 2048, 8192, y=512), wall), (960, 512, 5000))
         self.assertEqual({512 + blendmap.CAM_OFFSET[1]}, {y for _, y, _ in points})
 
     def test_follows_crash_from_behind_along_minus_z(self):
