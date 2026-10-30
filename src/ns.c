@@ -138,9 +138,21 @@ char *NSGetFilename(int type, uint32_t lid) {
   return NSGetFilename2(type, lid, 0, 0);
 }
 
+/* custom level the test level id loads (pc), or "" for none */
+static char custom_level[32] = "";
+
+void NSSetCustomLevel(const char *name) {
+  snprintf(custom_level, sizeof(custom_level), "%s", name);
+}
+
 //----- (800128A4) --------------------------------------------------------
 char *NSGetFilename2(int type, uint32_t lid, char *path, char *subdir) {
   /* path and subdir args unused/ignored */
+  if (!use_cd && lid == LID_TEST && custom_level[0] && (type == 0 || type == 1)) {
+    sprintf(ns_filename, "%scustom_levels/%s.%s", NS_PATH, custom_level,
+      type == 0 ? "nsd" : "nsf");
+    return ns_filename;
+  }
   if (type == 0) { /* type 0? (NSD) */
     if (use_cd)
       sprintf(ns_filename, "\\S%X\\S%07X.NSD", lid >> 4, lid);

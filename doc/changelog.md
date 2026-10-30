@@ -6,6 +6,7 @@
 
 - `fix_model_draw_order` setting (default off): 3D models are depth tested against each other, so a model behind another (e.g. a crate behind Crash) can't be drawn over it, which the original game's draw order sometimes allows
 - every run records the buttons held each frame to its own `.inputs` file in `build/recorded_inputs/`, for reproducing bugs; the `replay_inputs` setting (default off) plays the newest recording back instead, and `replay_speed` plays it back faster. Game time now moves exactly one frame per frame drawn, so that replays play out the same
+- `boot_level` setting to boot straight into a level from `custom_levels/`, and `tools/nslevel.py` to make them: a copy of a real level, or levels built from scratch: a mock level (a flat floor, a follow camera and Crash) and an obstacle course (gaps, steps, boxes, a checkpoint, crabs and the warp pad)
 
 ### Fixed
 

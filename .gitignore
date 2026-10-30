@@ -2,9 +2,11 @@
 *.o
 c1
 build/
+__pycache__/
 
 # user files
 streams/*
+custom_levels/
 imgui.ini
 controls.cfg
 settings.cfg

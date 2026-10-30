@@ -97,7 +97,10 @@ Project structure is listed below, including descriptions for each file.
 │   ├── test_speed.c         # crash's speed measurement and tracking
 │   └── test_sf2.c           # soundfont record struct sizes
 ├── tools                    # helper scripts
-│   └── extract_streams.py   # extracts game assets from a disc image
+│   ├── extract_streams.py   # extracts game assets from a disc image
+│   ├── nslevel.py           # reads, writes and makes levels (custom_levels/)
+│   └── tests                # nslevel.py's tests (python -m unittest discover -s tools/tests)
+├── custom_levels            # levels made with tools/nslevel.py, to boot into with boot_level
 ├── controls.example.cfg     # example key bindings (copy to controls.cfg to change the controls)
 ├── settings.example.cfg     # example settings (copy to settings.cfg to change the settings)
 ├── Makefile                 # project makefile

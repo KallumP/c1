@@ -128,6 +128,25 @@ static void FindDataDir() {
   SDL_free(base);
 }
 
+lid_t boot_lid = LID_BOOTLEVEL; /* level the game starts in */
+
+/*
+ * boot into custom_levels/<boot_level> (as the test level) if boot_level is
+ * set and the level's files are there
+ */
+static void InitBootLevel() {
+  char path[128];
+
+  if (!game_settings.boot_level[0]) { return; }
+  snprintf(path, sizeof(path), "custom_levels/%s.nsd", game_settings.boot_level);
+  if (access(path, 0) != 0) {
+    fprintf(stderr, "no custom level %s, starting normally\n", path);
+    return;
+  }
+  NSSetCustomLevel(game_settings.boot_level);
+  boot_lid = LID_TEST;
+}
+
 /*
  * replay the newest recording if replay_inputs is on, otherwise record this
  * run to a new file in recorded_inputs (next to the executable), named by
@@ -143,7 +162,7 @@ static void InitReplay() {
   if (game_settings.replay_inputs) {
     if (!ReplayNewestFile(dir, path, sizeof(path)))
       fprintf(stderr, "no recordings in %s to replay\n", dir);
-    else if (ReplayStart(path, REPLAY_PLAY, LID_BOOTLEVEL, seed_a)) {
+    else if (ReplayStart(path, REPLAY_PLAY, boot_lid, seed_a)) {
       fprintf(stderr, "replaying %s\n", path);
       TimeSetSpeed(game_settings.replay_speed);
     }
@@ -157,7 +176,7 @@ static void InitReplay() {
   }
   now = time(0);
   ReplayFileName(path, sizeof(path), dir, localtime(&now));
-  if (!ReplayStart(path, REPLAY_RECORD, LID_BOOTLEVEL, seed_a))
+  if (!ReplayStart(path, REPLAY_RECORD, boot_lid, seed_a))
     fprintf(stderr, "could not open %s to record inputs\n", path);
 }
 
@@ -178,6 +197,7 @@ int init() {
   callbacks.input = SDLInput;
   GLInit(&callbacks);
   sranda2();
+  InitBootLevel();
   InitReplay();
   for (i=1;i<4;i++)
     insts[i] = EID_NONE;

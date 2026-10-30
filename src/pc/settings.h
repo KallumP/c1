@@ -5,6 +5,7 @@
 
 #define SETTINGS_LOADING_SCREEN_MAX_MS 60000
 #define SETTINGS_REPLAY_SPEED_MAX      16
+#define SETTINGS_BOOT_LEVEL_MAX        31
 
 /* game settings (pc), read from settings.cfg */
 typedef struct {
@@ -15,6 +16,7 @@ typedef struct {
   int fix_model_draw_order;       /* depth test 3d models against each other */
   int replay_inputs;              /* replay the newest recording instead of recording */
   uint32_t replay_speed;          /* times normal speed, 0 = as fast as possible */
+  char boot_level[SETTINGS_BOOT_LEVEL_MAX+1]; /* custom level to boot into, or "" */
 } pc_settings;
 
 extern pc_settings game_settings;
