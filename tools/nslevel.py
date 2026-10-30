@@ -489,10 +489,16 @@ def zone_header_bytes(template, self_eid, worlds, path_count, entity_count, neig
     return bytes(h)
 
 
-def path_bytes(slst, points, cam_mode, zoom, avg_node_dist, direction=(0, 0, 0)):
-    """a camera path with no neighbors; points are (x, y, z, rot_y, rot_x,
-    rot_z) in zone units"""
-    data = struct.pack("<III", slst, 0, 0) + b"\0" * 16
+PATH_LINKS_MAX = 4  # neighbor_paths in zone_path (src/formats/zdat.h)
+
+
+def path_bytes(slst, points, cam_mode, zoom, avg_node_dist, direction=(0, 0, 0), links=()):
+    """a camera path; points are (x, y, z, rot_y, rot_x, rot_z) in zone
+    units, links the paths it leads on to (zone_neighbor_path: relation, 1
+    before or 2 after; the zone's index in its neighbors; the path's index
+    in that zone; goal, 1 its start or 2 its end)"""
+    data = struct.pack("<III", slst, 0, len(links))
+    data += b"".join(struct.pack("<4B", *link) for link in links).ljust(4 * PATH_LINKS_MAX, b"\0")
     data += struct.pack("<BBHHhh", 0, 0, len(points), cam_mode, avg_node_dist, zoom)
     data += struct.pack("<3h3h", 0, 0, 0, *direction)
     for point in points:
