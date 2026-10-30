@@ -1,8 +1,8 @@
 # PS1 build
 
-As of 30 October 2026, c1 no longer supports building for the PS1.
+As of 30 October 2026, c1x no longer supports building for the PS1.
 
-c1 contained the code for a PS1 build alongside the PC one, selected with the `PSX` flag (`#ifdef PSX` branches, and `src/psx/` with the original's annotated assembly in `r3000a.s`). It couldn't be compiled for the PS1 the way the original game was: every shared source file failed with a compiler of the era, for the reasons below. So the `PSX` flag and PS1-specific code were removed. This page records what was tried and why it failed.
+c1x contained the code for a PS1 build alongside the PC one, selected with the `PSX` flag (`#ifdef PSX` branches, and `src/psx/` with the original's annotated assembly in `r3000a.s`). It couldn't be compiled for the PS1 the way the original game was: every shared source file failed with a compiler of the era, for the reasons below. So the `PSX` flag and PS1-specific code were removed. This page records what was tried and why it failed.
 
 The last version with the PS1 code is tagged `psx-last`. File names and examples below refer to that version.
 
@@ -10,7 +10,7 @@ The last version with the PS1 code is tagged `psx-last`. File names and examples
 
 The original game was built with Psy-Q, Sony's PS1 SDK, whose C compiler is a version of GCC from around 1996. The check uses the community's rebuilds of those compilers ([decompals/old-gcc](https://github.com/decompals/old-gcc): `gcc-2.6.3-psx` and `gcc-2.7.2-psx`), the same tools matching-decompilation projects use, and runs them in Docker:
 
-- a modern `cpp` for preprocessing, since c1's headers use C99 variadic macros the old preprocessor can't read (preprocessing doesn't affect the generated code)
+- a modern `cpp` for preprocessing, since c1x's headers use C99 variadic macros the old preprocessor can't read (preprocessing doesn't affect the generated code)
 - the old `cc1` with Psy-Q-style options (`-O2 -G0 -mips1`)
 - [maspsx](https://github.com/mkst/maspsx) and MIPS binutils to assemble the result
 - empty stand-ins for the Psy-Q SDK headers (`LIBGTE.H`, `LIBGPU.H` and so on), which are proprietary and not in the repository, plus a header that defines `int8_t` to `uint64_t`, `size_t` and `NULL`
@@ -25,7 +25,7 @@ In order of impact. The counts are compiler errors with GCC 2.7.2. Many are knoc
 
 About 1,890 errors (`union has no member named 'x'`, `structure has no member named ...`, `request for member ...`).
 
-c1's data structures use members without a name in two forms:
+c1x's data structures use members without a name in two forms:
 
 - **unnamed nested structs and unions** (119, mostly in `geom.h`, `ns.h` and `gool.h`). For example, `vec` in `geom.h` lets `v.x` reach into an unnamed struct:
 
@@ -98,4 +98,4 @@ Starting from the `psx-last` tag:
 5. Fix the undeclared names and prototype mismatches in the PS1-only code.
 6. Build against the Psy-Q SDK headers and link with its libraries.
 
-Even then, c1 is a functional decompilation: it was written to behave like the original, not to compile to the same instructions, so a successful build would differ from the original executable in its instruction order and register use.
+Even then, c1x is a functional decompilation: it was written to behave like the original, not to compile to the same instructions, so a successful build would differ from the original executable in its instruction order and register use.

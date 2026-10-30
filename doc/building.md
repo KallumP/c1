@@ -4,7 +4,7 @@ As of currently, compilation has only been tested on Ubuntu/Debian and on Window
 
 Note that only 32-bit target executables are currently supported. If you are not already running a 32-bit OS, you will need multilib versions of gcc and g++ and 32-bit versions of the dependencies.
 
-To compile c1, install the dependencies listed below, `cd` into the main project directory, and run `make`.
+To compile c1x, install the dependencies listed below, `cd` into the main project directory, and run `make`.
 
 ## Dependencies
 
@@ -32,7 +32,7 @@ Windows (MSYS2):
 `c1.exe` links dynamically against SDL2, FluidSynth (and its audio codec dependencies) and the GCC runtime. Windows only looks for DLLs next to the executable or on `PATH`, so outside the MINGW32 shell the game fails to start with an error such as *"libfluidsynth-3.dll was not found"*. To avoid this, the Windows build has an extra `dlls` step that runs after linking. It recursively follows `c1.exe`'s imports and copies each one found in the MinGW32 `bin` directory (currently 17 DLLs) into `build/`. To re-copy them on their own, run `make dlls`. The `build` directory is ignored by git, and `make clean` removes it. To run the game on another machine, copy the `build` directory with the `streams` directory beside it (or inside it), and your `controls.cfg` and `settings.cfg` (if you have them) next to `streams`.
 
 ### psx
-As of 30 October 2026, c1 no longer supports building for the PS1, and the `PSX` flag and PS1-specific code have been removed (the last version with them is tagged `psx-last`). See [PS1 build](psx-build.md) for why.
+As of 30 October 2026, c1x no longer supports building for the PS1, and the `PSX` flag and PS1-specific code have been removed (the last version with them is tagged `psx-last`). See [PS1 build](psx-build.md) for why.
 
 ## Tests
 
