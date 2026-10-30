@@ -4,7 +4,7 @@
 
 - colors are slightly different from psx (map differently?)
 - a few sfx are very loud and distorted (ex. warp sound, also when entering a bonus round)
-- in some instances, game transitions occur too early (ex. game immediately jumps to win level screen when player lands on a warp platform, without playing either of crash's 'win level' animation sequences; some death sequences are cut short)
+- some death sequences are cut short (not rechecked since the fix for the instant level end, which had the same symptom)
 - main death sequence camera behavior is incorrect
 - title sequence background images become too bright in some instances
 - it is sometimes (but rarely) possible to jump in mid-air when beside walls

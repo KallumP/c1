@@ -6,6 +6,10 @@
 
 - `fix_model_draw_order` setting (default off): 3D models are depth tested against each other, so a model behind another (e.g. a crate behind Crash) can't be drawn over it, which the original game's draw order sometimes allows
 
+### Fixed
+
+- landing on the warp pad at the end of a level skipped Crash's 'win level' animation and went straight to the level end screen
+
 ## 2026-10-28
 
 ### Added
