@@ -598,6 +598,14 @@ def slst_items(poly_zmax, cam_zs, step, near):
     return items + [items[-1]]
 
 
+def entity_type(item):
+    return 0, 0
+
+
+def place_entity(item, entity_id, pos):
+    return item
+
+
 # the mock level
 
 MOCK_SIZE = (4096, 3200, 8192)   # zone w, h, d (zone units)

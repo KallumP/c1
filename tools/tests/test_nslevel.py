@@ -427,6 +427,38 @@ class BlockMesh(unittest.TestCase):
             nslevel.blocks_mesh([(0, 0, 0, 8192, 128, 8192)], self.TOP, self.SIDE, piece=64)
 
 
+def entity(type, subtype, id, points):
+    """an entity as stored in a zone: parent zone, spawn flags, group, id,
+    point count, 3 init flags, type, subtype, then the points (units of 4)"""
+    data = struct.pack("<IHHHHhhhBB", 0, 0x18, 3, id, len(points), 1, 2, 3, type, subtype)
+    for p in points:
+        data += struct.pack("<3h", *p)
+    return nslevel.pad4(data)
+
+
+class Entities(unittest.TestCase):
+    def test_placed_entity_has_the_new_id_and_first_point(self):
+        crab = entity(31, 0, 14, [(100, 50, 200), (110, 50, 200), (120, 50, 210)])
+        placed = nslevel.place_entity(crab, 42, (400, 128, 800))
+        self.assertEqual(42, struct.unpack_from("<H", placed, 8)[0])
+        points = [struct.unpack_from("<3h", placed, 20 + 6 * i) for i in range(3)]
+        self.assertEqual([(100, 32, 200), (110, 32, 210), (120, 32, 220)][0], points[0])
+
+    def test_placed_entity_keeps_its_path_shape(self):
+        crab = entity(31, 0, 14, [(100, 50, 200), (110, 50, 200), (120, 50, 210)])
+        placed = nslevel.place_entity(crab, 42, (400, 128, 800))
+        points = [struct.unpack_from("<3h", placed, 20 + 6 * i) for i in range(3)]
+        self.assertEqual([(100, 32, 200), (110, 32, 200), (120, 32, 210)], points)
+
+    def test_placed_entity_keeps_everything_else(self):
+        box = entity(34, 6, 6, [(1, 2, 3)])
+        placed = nslevel.place_entity(box, 7, (0, 0, 0))
+        self.assertEqual(box[:8] + box[10:20], placed[:8] + placed[10:20])
+
+    def test_entity_type_and_subtype(self):
+        self.assertEqual((34, 6), nslevel.entity_type(entity(34, 6, 1, [(0, 0, 0)])))
+
+
 def decode_vertex(data):
     """(x, y, z, r, g, b) the way SwTransformWorlds reads a wgeo vertex"""
     def sx(v, bits):
