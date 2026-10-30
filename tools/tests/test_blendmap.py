@@ -256,18 +256,18 @@ class WorldMeshes(unittest.TestCase):
         self.assertAlmostEqual(1024 * 768, sum(area(verts, p) for p in polys))
 
     def test_slicing_leaves_no_cracks_along_shared_edges(self):
-        # two triangles sharing a slanted edge: wherever a slice cuts it, both sides get the same vertex
-        mesh = blendmap.Mesh([(0, 0, 0), (512, 0, 1000), (0, 0, 1000), (512, 0, 0)],
+        # two triangles sharing a slanted edge (x = z / 2, so every cut along it is on
+        # a multiple of 8): wherever a slice cuts it, both sides get the same vertex
+        mesh = blendmap.Mesh([(0, 0, 0), (512, 0, 1024), (0, 0, 1024), (512, 0, 0)],
                              [blendmap.Tri((0, 2, 1), None, None), blendmap.Tri((0, 1, 3), None, None)])
         [(verts, polys)] = worlds(mesh)
 
-        def on_edge(v):  # within the rounding to multiples of 8
-            return abs(v[2] * 512 - v[0] * 1000) <= 8 * 1000
+        def on_edge(v):
+            return v[2] == 2 * v[0]
 
         sides = [set(), set()]
         for p in polys:
-            xs = [verts[i][0] for i in p[:3]]
-            left = sum(xs) * 1000 < sum(verts[i][2] for i in p[:3]) * 512  # centre left of the edge
+            left = sum(2 * verts[i][0] for i in p[:3]) < sum(verts[i][2] for i in p[:3])  # centre left of the edge
             sides[left] |= {verts[i][:3] for i in p[:3] if on_edge(verts[i])}
         self.assertEqual(sides[0], sides[1])
         self.assertGreater(len(sides[0]), 2)
