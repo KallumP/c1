@@ -98,6 +98,17 @@ def read_mtl(text, base_dir):
 
 
 VERTEX_MAX = 32760  # world mesh vertices are 13 bits of multiples of 8 (src/formats/wgeo.h)
+SIDE_CELLS_MAX = 128  # the game's octree queries keep a cell's depth in 3 bits (zone_query_result
+                      # in src/level.h), so a side halves 7 times at most (as in the game's levels)
+
+
+class TooBig(ValueError):
+    """a map longer along axis (0 x, 1 y, 2 z) than a zone side can be:
+    extent zone units, fixed of them margin or headroom, which don't scale"""
+    def __init__(self, axis, extent, side_max, fixed=0):
+        ValueError.__init__(self, "the map is %d zone units along %s, more than a zone's %d"
+                            % (extent, "xyz"[axis], side_max))
+        self.axis, self.extent, self.side_max, self.fixed = axis, extent, side_max, fixed
 
 
 class Fit:
@@ -108,23 +119,47 @@ class Fit:
         self.mesh, self.size, self.offset = mesh, size, offset
 
 
-def fit(mesh, cell, headroom, margin=0):
+def fit(mesh, cell, headroom, margin=0, long_z=False):
     """mesh moved so its lowest corner is margin (zone units) in from the
     zone's, with each side of the zone a power of two cells, margin to
-    spare along x and z, and headroom above it"""
+    spare along x and z, and headroom above it. a side is at most
+    SIDE_CELLS_MAX cells (TooBig); with long_z, z (the route) can run on
+    for whole zones of that (zone_spans)"""
     lo = [min(v[i] for v in mesh.verts) - margin for i in range(3)]
     verts = [tuple(int(round((v[i] - lo[i]) / 8)) * 8 for i in range(3)) for v in mesh.verts]
     size = []
+    zone_max = cell * SIDE_CELLS_MAX
     for i in range(3):
         extent = max(v[i] for v in verts)
-        if extent > VERTEX_MAX:
+        long = long_z and i == 2 and extent + margin > zone_max
+        if extent > VERTEX_MAX and not long:  # a long route's meshes are each relative to their zone
             raise ValueError("the map is %d zone units along %s, more than %d; scale it down"
                              % (extent, "xyz"[i], VERTEX_MAX))
+        if long:
+            size.append(-(-(extent + margin) // zone_max) * zone_max)
+            continue
         side = cell
         while side < extent + (headroom if i == 1 else margin):
             side *= 2
+        if side > zone_max:
+            fixed = (headroom + margin) if i == 1 else 2 * margin  # margin below too, and on both ends
+            raise TooBig(i, extent + (headroom if i == 1 else margin), cell * SIDE_CELLS_MAX, fixed)
         size.append(side)
     return Fit(Mesh(verts, mesh.tris), tuple(size), tuple(lo))
+
+
+def zone_spans(depth, cell):
+    """the zones (z0, z1) a fitted map depth long along z is split into,
+    SIDE_CELLS_MAX cells each, from the route's start (the +z end)"""
+    zone = min(depth, cell * SIDE_CELLS_MAX)
+    return [(z, z + zone) for z in range(depth - zone, -1, -zone)]
+
+
+def zone_cells(cells, span, cell):
+    """the collision cells ({(i, j, k): kind}) in a zone span (z0, z1),
+    relative to the zone"""
+    k0, k1 = span[0] // cell, span[1] // cell
+    return {(i, j, k - k0): kind for (i, j, k), kind in cells.items() if k0 <= k < k1}
 
 
 # collision: the game's collision is an octree of solid cells (see
@@ -220,7 +255,8 @@ def solid_cells(mesh, size, cell):
 # vertices and polygons
 
 WGEO_MAX = 4096   # polygon and vertex indices are 12 bits
-WGEO_ITEMS_MAX = 7500  # vertices and polygons (8 bytes each) a mesh fits in a page beside its header
+WGEO_ITEMS_MAX = 7500  # vertices, polygons and texinfos (8 bytes each) a mesh fits in a page
+                       # beside its header
 WORLDS_MAX = 8    # world meshes in a zone
 LIGHT = (0.3, 0.8, 0.5)  # towards the light: above, a little to the side and towards the camera
 LIGHT_LEN = sum(c * c for c in LIGHT) ** 0.5
@@ -317,25 +353,37 @@ def tile_region(points, n, repeat):
     return x, y, w, h, min(range(len(tpage.LAYOUTS)), key=miss)
 
 
-def world_meshes(mesh, piece, ground, side, tile=None, textured=()):
+def world_meshes(mesh, piece, ground, side, tile=None, textured=(), regions_max=None,
+                 span=None, worlds_max=WORLDS_MAX):
     """world meshes for a mesh's faces, sliced every piece along z and every
     tile (piece by default) along x and y: a list of (vertices (x, y, z,
     colour), polygons (a, b, c, tinf, tpag)), with ground (tinf, tpag) on
     faces facing up and side on the rest. faces of the textured materials
     get (TileRegion, None) instead, their tile repeating every tile units.
     faces facing down aren't drawn, since the camera looks down on the
-    level and they would hide it"""
+    level and they would hide it.
+
+    a mesh's tile regions become texinfos in its header (8 bytes each, like
+    a vertex), so they count towards fitting it in a page, and a mesh has at
+    most regions_max of them.
+
+    with span (z0, z1, a zone's, on multiples of piece), only the pieces in
+    it, relative to it; there are at most worlds_max meshes"""
     sizes = ((2, piece), (0, tile or piece), (1, tile or piece))
     meshes = []
-    verts, polys, index = [], [], {}
+    verts, polys, index, regions = [], [], {}, set()
 
     def add(tri, texture):
-        nonlocal verts, polys, index
+        nonlocal verts, polys, index, regions
         new = [v for v in tri if v not in index]
+        region = {texture[0]} - regions if texture[1] is None else set()
         if (len(verts) + len(set(new)) > WGEO_MAX or len(polys) + 1 > WGEO_MAX
-                or len(verts) + len(set(new)) + len(polys) + 1 > WGEO_ITEMS_MAX):
+                or len(verts) + len(set(new)) + len(polys) + 1 + len(regions) + len(region) > WGEO_ITEMS_MAX
+                or (regions_max is not None and len(regions) + len(region) > regions_max)):
             meshes.append((verts, polys))
-            verts, polys, index = [], [], {}
+            verts, polys, index, regions = [], [], {}, set()
+        if texture[1] is None:
+            regions.add(texture[0])
         ids = []
         for v in tri:
             if v not in index:
@@ -352,18 +400,22 @@ def world_meshes(mesh, piece, ground, side, tile=None, textured=()):
         colour = shade(n)
         for part in slices([mesh.verts[i] for i in tri.verts], sizes):
             part = [snap(p) for p in part]
+            if span and not span[0] <= sum(p[2] for p in part) / len(part) < span[1]:
+                continue
             for k in range(1, len(part) - 1):
                 a, b, c = part[0], part[k], part[k + 1]
                 if cross(sub(b, a), sub(c, a)) == (0, 0, 0):
                     continue
                 if tri.mat in textured:
                     texture = (TileRegion(tri.mat, *tile_region((a, b, c), n, tile or piece)), None)
+                if span:
+                    a, b, c = ((v[0], v[1], v[2] - span[0]) for v in (a, b, c))
                 add([v + (colour,) for v in (a, b, c)], texture)
     if polys:
         meshes.append((verts, polys))
-    if len(meshes) > WORLDS_MAX:
-        raise ValueError("the map needs %d world meshes, more than %d; use fewer faces"
-                         % (len(meshes), WORLDS_MAX))
+    if len(meshes) > worlds_max:
+        raise ValueError("the map needs %d world meshes%s, more than %d; use fewer faces"
+                         % (len(meshes), " in a zone" if span else "", worlds_max))
     return meshes
 
 
@@ -383,10 +435,35 @@ def ground_tops(cells, i, k, cell, headroom=1):
             if not any((i, j + h, k) in cells for h in range(1, headroom + 1))]
 
 
+def walk_starts(cells, i, cell):
+    """where the longest walk along the route (-z) down column i starts, as
+    (top, k): from ground to the next cell's ground a cell up or down at
+    most, so not over walls, gaps or drops. the +z most of the longest"""
+    tops = {}
+    for (ci, _, k), kind in cells.items():
+        if ci == i and kind == "floor" and k not in tops:
+            tops[k] = ground_tops(cells, i, k, cell, HEADROOM)
+    run, nxt = {}, {}  # (k, top): cells walked from there along -z (itself included), and the next
+    for k in sorted(tops):
+        for t in tops[k]:
+            steps = [u for u in tops.get(k - 1, []) if abs(u - t) <= cell]
+            best = max(steps, key=lambda u: run[(k - 1, u)], default=None)
+            run[(k, t)] = 1 + (run[(k - 1, best)] if best is not None else 0)
+            nxt[(k, t)] = (k - 1, best) if best is not None else None
+    if not run:
+        return None
+    k, t = max(run, key=lambda kt: (run[kt], kt[0]))
+    # on along the walk until the camera, CAM_LEAD behind, is over it too
+    for _ in range(min(-(-CAM_LEAD // cell), run[(k, t)] // 2)):
+        k, t = nxt[(k, t)]
+    return t, k
+
+
 def spawn(mesh, cells, size, cell):
     """where crash starts, (x, y, z): on the ground below the middle of an
-    object named spawn..., or without one, on the ground nearest the start
-    of the route (the +z end), nearest the middle across"""
+    object named spawn..., or without one, where the longest walk along the
+    route (-z) starts, down the middle across (walk_starts), so not behind
+    something he can't get past"""
     marker = {i for tri in mesh.tris if is_spawn(tri) for i in tri.verts}
     columns = {(i, k) for (i, _, k), kind in cells.items() if kind == "floor"}
     if marker:
@@ -399,10 +476,11 @@ def spawn(mesh, cells, size, cell):
             raise ValueError("there's no ground below the spawn object")
         return (int(round(x)), tops[-1], int(round(z)))
     middle = (min(i for i, _ in columns) + max(i for i, _ in columns) + 1) * cell / 2 if columns else 0
-    for i, k in sorted(columns, key=lambda c: (-c[1], abs((c[0] + 0.5) * cell - middle))):
-        tops = ground_tops(cells, i, k, cell, HEADROOM)
-        if tops:
-            return (i * cell + cell // 2, tops[-1], k * cell + cell // 2)
+    for i in sorted({i for i, _ in columns}, key=lambda i: abs((i + 0.5) * cell - middle)):
+        start = walk_starts(cells, i, cell)
+        if start:
+            top, k = start
+            return (i * cell + cell // 2, top, k * cell + cell // 2)
     raise ValueError("the map has no ground for crash to start on")
 
 
@@ -422,3 +500,20 @@ def camera_path(cells, size, cell, start, step):
             height = min(tops, key=lambda t: abs(t - height))
         points.append((x + CAM_OFFSET[0], height + CAM_OFFSET[1], cz))
     return points
+
+
+def zone_index(spans, z):
+    """which zone span z is in (past either end of the map, the end one)"""
+    z = min(max(z, spans[-1][0]), spans[0][1] - 1)
+    return next(i for i, (z0, z1) in enumerate(spans) if z0 <= z < z1)
+
+
+def zone_paths(points, spans):
+    """camera path points (x, y, z) split into each zone span's path, by the
+    zone crash is in (CAM_LEAD ahead, along -z, as on n. sanity beach), with
+    z relative to it; zones before crash's start have none"""
+    paths = [[] for _ in spans]
+    for x, y, z in points:
+        i = zone_index(spans, z - CAM_LEAD)
+        paths[i].append((x, y, z - spans[i][0]))
+    return paths

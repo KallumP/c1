@@ -144,6 +144,44 @@ class Fit(unittest.TestCase):
         with self.assertRaises(ValueError):
             blendmap.fit(box_mesh(0, 0, 0, 40000, 10, 10), cell=128, headroom=0)
 
+    def test_a_side_is_at_most_128_cells(self):
+        # the game's octree queries keep a cell's depth in 3 bits
+        # (zone_query_result in src/level.h), so 7 halvings at most: deeper
+        # cells were misplaced and crash fell through the floor
+        self.assertEqual(16384, blendmap.fit(box_mesh(0, 0, 0, 16000, 10, 10), cell=128, headroom=0).size[0])
+        with self.assertRaises(blendmap.TooBig) as e:
+            blendmap.fit(box_mesh(0, 0, 0, 20000, 10, 10), cell=128, headroom=0, margin=128)
+        self.assertEqual((0, 20000 + 2 * 128, 16384), (e.exception.axis, e.exception.extent, e.exception.side_max))
+
+    def test_the_route_can_run_on_for_several_zones(self):
+        # along z (the route) the map is split into zones, so it only has to
+        # be whole zones long; across and up it still fits one
+        fit = blendmap.fit(box_mesh(0, 0, 0, 1000, 10, 40000), cell=128, headroom=0, margin=128, long_z=True)
+        self.assertEqual(3 * 16384, fit.size[2])
+        self.assertEqual(40000 + 128, max(v[2] for v in fit.mesh.verts))
+        with self.assertRaises(blendmap.TooBig):
+            blendmap.fit(box_mesh(0, 0, 0, 20000, 10, 40000), cell=128, headroom=0, margin=128, long_z=True)
+
+    def test_a_short_route_is_one_zone_as_before(self):
+        fit = blendmap.fit(box_mesh(0, 0, 0, 1000, 140, 5000), cell=128, headroom=0, long_z=True)
+        self.assertEqual((1024, 256, 8192), fit.size)
+
+
+class ZoneSpans(unittest.TestCase):
+    def test_a_short_map_is_one_zone(self):
+        self.assertEqual([(0, 8192)], blendmap.zone_spans(8192, 128))
+
+    def test_a_long_map_is_zones_of_128_cells_from_the_routes_start(self):
+        # the route runs along -z, so the first zone is the +z end
+        self.assertEqual([(32768, 49152), (16384, 32768), (0, 16384)], blendmap.zone_spans(49152, 128))
+
+    def test_a_zones_cells_are_the_ones_in_it_relative_to_it(self):
+        cells = {(1, 2, 0): "floor", (1, 2, 127): "wall", (1, 2, 128): "pit", (3, 0, 172): "floor",
+                 (3, 0, 300): "floor"}
+        self.assertEqual({(1, 2, 0): "pit", (3, 0, 44): "floor"},
+                         blendmap.zone_cells(cells, (16384, 32768), 128))
+        self.assertEqual({(1, 2, 0): "floor", (1, 2, 127): "wall"}, blendmap.zone_cells(cells, (0, 16384), 128))
+
 
 def quad_mesh(corners, obj=None):
     """a mesh of one quad (corners anticlockwise seen from its front)"""
@@ -395,6 +433,33 @@ class TileRegions(unittest.TestCase):
         region = next(p[3] for p in polys if p[4] is None)
         self.assertEqual("stone", region.material)
 
+    def test_a_zones_meshes_are_the_pieces_in_it_relative_to_it(self):
+        mesh = floor(0, 0, 1024, 4096, y=256)
+        [(verts, polys)] = blendmap.world_meshes(mesh, 512, GROUND, SIDE, span=(2048, 4096))
+        self.assertAlmostEqual(1024 * 2048, sum(area(verts, p) for p in polys))  # half of it along z
+        self.assertEqual((0, 2048), (min(v[2] for v in verts), max(v[2] for v in verts)))
+
+    def test_too_many_meshes_for_a_zone_is_an_error(self):
+        floors = [floor(0, k * 256, 256, k * 256 + 256, y=(k % 7) * 8) for k in range(250)]
+        mesh = merged(*[merged(*[blendmap.Mesh([(x + i * 256, y, z) for x, y, z in f.verts], f.tris)
+                                 for i in range(10)]) for f in floors])
+        with self.assertRaises(ValueError):
+            blendmap.world_meshes(mesh, 256, GROUND, SIDE, worlds_max=1)
+
+    def test_meshes_split_before_their_texture_regions_overflow(self):
+        # each region a mesh uses is a texinfo (8 bytes) in its header, so
+        # it counts towards fitting a page, and a header's texinfo indices
+        # only reach so far
+        f = floor(0, 0, 2048, 1024, y=0)
+        mesh = blendmap.Mesh(f.verts, [blendmap.Tri(t.verts, None, "stone") for t in f.tris])
+        out = blendmap.world_meshes(mesh, 512, GROUND, SIDE, 1024, textured={"stone"}, regions_max=4)
+        self.assertGreater(len(out), 1)
+        for verts, polys in out:
+            regions = {p[3] for p in polys}
+            self.assertLessEqual(len(regions), 4)
+            self.assertLessEqual(len(verts) + len(polys) + len(regions), blendmap.WGEO_ITEMS_MAX)
+        self.assertEqual(2 * 2 * 2, sum(len(polys) for _, polys in out))  # 1024 across, 512 along
+
 
 def wall_mesh():
     return quad_mesh([(512, 0, 0), (512, 256, 0), (512, 256, 256), (512, 0, 256)])
@@ -424,11 +489,41 @@ class Spawn(unittest.TestCase):
         self.assertEqual({}, blendmap.solid_cells(marker, self.SIZE, 128))
         self.assertEqual([], worlds(marker))
 
-    def test_without_a_spawn_object_crash_starts_on_the_ground_nearest_the_start(self):
-        # the route runs along -z, so the start is the +z end; nearest the middle across
-        mesh = merged(floor(0, 0, 2048, 2048, y=256), floor(1536, 2048, 2048, 2560, y=512))
+    def test_without_a_spawn_object_crash_starts_where_the_longest_walk_along_the_route_starts(self):
+        # the route runs along -z; down the middle, a short strip at the +z
+        # end, then a block too tall to climb, then a long floor: crash
+        # starts at the long floor's +z end, not behind the block
+        floors = merged(floor(0, 0, 2048, 3328, y=256), floor(0, 3712, 2048, 4096, y=256))
+        block = merged(floor(0, 3328, 2048, 3712, y=1536),
+                       quad_mesh([(0, 256, 3328), (2048, 256, 3328), (2048, 1536, 3328), (0, 1536, 3328)]),
+                       quad_mesh([(0, 256, 3712), (0, 1536, 3712), (2048, 1536, 3712), (2048, 256, 3712)]))
+        mesh = merged(floors, block)
         cells = blendmap.solid_cells(mesh, self.SIZE, 128)
-        self.assertEqual((1536 + 64, 512, 2560 - 64), blendmap.spawn(mesh, cells, self.SIZE, 128))
+        x, y, z = blendmap.spawn(mesh, cells, self.SIZE, 128)
+        self.assertEqual(256, y)
+        self.assertLess(z, 3328)  # in front of the block (how far: the next test)
+        self.assertIn(x, (960, 1088))  # the middle across
+
+    def test_the_camera_behind_crash_starts_over_the_walk_too(self):
+        # the camera follows CAM_LEAD behind (+z of) crash, so he starts that
+        # far along the walk, and it isn't inside the block before the walk
+        floors = merged(floor(0, 0, 2048, 3328, y=256), floor(0, 3712, 2048, 4096, y=256))
+        block = merged(floor(0, 3328, 2048, 3712, y=1536),
+                       quad_mesh([(0, 256, 3328), (2048, 256, 3328), (2048, 1536, 3328), (0, 1536, 3328)]),
+                       quad_mesh([(0, 256, 3712), (0, 1536, 3712), (2048, 1536, 3712), (2048, 256, 3712)]))
+        mesh = merged(floors, block)
+        cells = blendmap.solid_cells(mesh, self.SIZE, 128)
+        x, y, z = blendmap.spawn(mesh, cells, self.SIZE, 128)
+        self.assertLess(z + blendmap.CAM_LEAD, 3328)
+        self.assertGreater(z + blendmap.CAM_LEAD, 3328 - 3 * 128)
+
+    def test_the_walk_goes_up_and_down_gentle_steps(self):
+        # steps of a cell are walked (a ramp), so the walk runs from the +z
+        # end, and crash starts the camera's lead (in whole cells) along it
+        steps = merged(*[floor(0, k * 512, 2048, k * 512 + 512, y=256 + 128 * (k % 2)) for k in range(8)])
+        cells = blendmap.solid_cells(steps, self.SIZE, 128)
+        x, y, z = blendmap.spawn(steps, cells, self.SIZE, 128)
+        self.assertEqual(4096 - 64 - 12 * 128, z)
 
     def test_middle_across_is_the_middle_of_the_floors_not_of_the_zone(self):
         mesh = floor(0, 0, 768, 2048, y=256)  # the zone is 2048 wide
@@ -448,6 +543,24 @@ class Spawn(unittest.TestCase):
     def test_no_ground_is_an_error(self):
         with self.assertRaises(ValueError):
             blendmap.spawn(blendmap.Mesh([], []), {}, self.SIZE, 128)
+
+
+class ZonePaths(unittest.TestCase):
+    SPANS = [(32768, 49152), (16384, 32768), (0, 16384)]
+
+    def test_each_point_goes_to_the_zone_crash_is_in_relative_to_it(self):
+        # crash is CAM_LEAD ahead (-z) of the camera, as on n. sanity beach
+        lead = blendmap.CAM_LEAD
+        points = [(1, 2, 40000), (1, 2, 32768 + lead), (1, 2, 32767 + lead), (1, 2, 1000)]
+        self.assertEqual([[(1, 2, 40000 - 32768), (1, 2, lead)], [(1, 2, 16383 + lead)], [(1, 2, 1000)]],
+                         blendmap.zone_paths(points, self.SPANS))
+
+    def test_the_zone_a_point_is_in(self):
+        self.assertEqual([0, 1, 1, 2], [blendmap.zone_index(self.SPANS, z) for z in (40000, 32767, 16384, 0)])
+
+    def test_zones_before_the_start_have_no_points(self):
+        self.assertEqual([[], [(1, 2, 20000 - 16384)], [(1, 2, 1000)]],
+                         blendmap.zone_paths([(1, 2, 20000), (1, 2, 1000)], self.SPANS))
 
 
 class CameraPath(unittest.TestCase):

@@ -297,6 +297,24 @@ class Zone(unittest.TestCase):
         self.assertEqual((0, 0), struct.unpack_from("<ii", h, nslevel.ZONE_LOADLIST))
         self.assertEqual(nslevel.EID_NONE, struct.unpack_from("<I", h, nslevel.ZONE_MIDI)[0])
 
+    def test_path_links_to_the_paths_either_side(self):
+        # as on n. sanity beach: (relation, neighbor zone index, path index,
+        # goal); relation 1 the path before, arriving at its end (goal 2),
+        # relation 2 the path after, arriving at its start (goal 1)
+        links = [(1, 1, 0, 2), (2, 2, 0, 1)]
+        p = nslevel.path_bytes(0, [(0, 0, 0, 0, 0, 0)], cam_mode=5, zoom=1700, avg_node_dist=128, links=links)
+        self.assertEqual(2, struct.unpack_from("<I", p, 8)[0])
+        self.assertEqual(links, [struct.unpack_from("<4B", p, 12 + 4 * i) for i in range(2)])
+        self.assertEqual(1, struct.unpack_from("<H", p, 30)[0])  # the rest is where it was
+
+    def test_zone_header_lists_itself_then_its_neighbors(self):
+        # as on n. sanity beach: itself, the zone before, the zone after
+        self_eid, before, after = (nslevel.str_to_eid(n) for n in ("Bm01Z", "Bm00Z", "Bm02Z"))
+        h = nslevel.zone_header_bytes(bytes(nslevel.ZONE_HEADER_SIZE), self_eid, [], path_count=1,
+                                      entity_count=0, neighbors=[before, after])
+        self.assertEqual(3, struct.unpack_from("<I", h, nslevel.ZONE_PATHS_IDX + 12)[0])
+        self.assertEqual((self_eid, before, after, 0), struct.unpack_from("<4I", h, nslevel.ZONE_NEIGHBORS))
+
     def test_load_list_opens_every_texture_page(self):
         # a zone's texture pages are only put in vram when its load list
         # opens them (LevelUpdate, NSPageOpen)
@@ -464,25 +482,149 @@ def slst_list(item):
     return type, list(struct.unpack_from("<%dH" % length, item, 4))
 
 
+class _Nodes:
+    """slst_context in src/slst.c, reading add or remove nodes"""
+    def __init__(self, nodes, start, end):
+        self.nodes, self.i, self.end = nodes, start, end
+        self.idx = self.len = self.count = self.poly = 0
+
+    def word(self):
+        w = self.nodes[self.i] if self.i < len(self.nodes) else 0xFFFF
+        self.i += 1
+        return w
+
+    def next(self):  # SlstRemNext / SlstAddNext
+        if self.len > 0:
+            self.poly = self.word()
+            self.idx += self.poly >> 15
+        else:
+            node = self.word()
+            if self.i < self.end and node != 0xFFFF:
+                self.idx, self.len = node & 0xFFF, ((node & 0xF000) >> 12) + 1
+            else:
+                self.idx, self.len = 0xFFFF00, 0
+            if self.len > 0:
+                self.poly = self.word()
+
+
+def slst_words(item):
+    """a sort list item's 16 bit words after its length and type: a delta's
+    split_idx, swaps_idx and nodes (slst_delta in src/formats/slst.h)"""
+    length, type = struct.unpack_from("<HH", item, 0)
+    return length, type, list(struct.unpack_from("<%dH" % length, item, 4))
+
+
+def slst_decode(item, src, forward):
+    """SlstUpdate (src/slst.c) on src, a list of poly ids: a full list is
+    copied, a delta applied forward (SlstDecodeForward) or backward
+    (SlstDecodeBackward). the deltas here have no swaps"""
+    length, type, nodes = slst_words(item)
+    if not type & 1:
+        return nodes
+    split, swaps = nodes[0], nodes[1]
+    assert swaps == length, "no swaps"
+    if forward:
+        rem, add = _Nodes(nodes, 2, split), _Nodes(nodes, split, swaps)
+    else:
+        add, rem = _Nodes(nodes, 2, split), _Nodes(nodes, split, swaps)
+    rem.next()
+    add.next()
+    isrc, dst = 0, []
+    for _ in range(100000):
+        if forward:
+            removes = isrc < len(src) and rem.len > 0 and rem.idx - 1 - isrc == 0
+            adds = add.len > 0 and add.idx + rem.count - isrc == 0
+        else:
+            removes = isrc < len(src) and rem.len > 0 and rem.idx + rem.count - isrc == 0
+            adds = add.len > 0 and add.idx + rem.count - (add.count + 1) - isrc == 0
+        if removes:
+            isrc += 1
+            rem.len -= 1
+            rem.count += 1
+            rem.next()
+        elif adds:
+            dst.append(add.poly & 0x7FFF)
+            add.len -= 1
+            add.count += 1
+            add.next()
+        elif isrc < len(src):
+            if forward:
+                n = min(add.idx + rem.count - isrc, rem.idx - (isrc + 1), len(src) - (isrc + 1))
+                n = 1 if n == 0 else n
+            else:
+                n = min(add.idx + (rem.count - add.count) - (isrc + 1), rem.idx + rem.count - isrc,
+                        len(src) - (isrc + 1))
+                n = 1 if n <= 0 else n
+            assert n > 0, "the game would loop forever"
+            dst += src[isrc:isrc + n]
+            isrc += n
+        if not (isrc < len(src) or add.len > 0 or rem.len > 0):
+            return dst
+    raise AssertionError("the game would loop forever")
+
+
+def slst_walk(items, forward=True):
+    """each point's list, the way LevelUpdate gets it walking the whole path
+    from its first point (forward) or its last (backward)"""
+    n = len(items) - 1
+    if forward:
+        lists = [slst_decode(items[0], [], True)]
+        for k in range(1, n):
+            lists.append(slst_decode(items[k], lists[-1], True))
+        return lists
+    lists = [slst_decode(items[n], [], False)]
+    for k in range(n - 1, 0, -1):
+        lists.insert(0, slst_decode(items[k], lists[0], False))
+    return lists
+
+
 class SortList(unittest.TestCase):
     # three polygons whose far edges (towards +z) are at z 100, 500 and 900;
     # the camera moves along -z from 1000 to 600 in steps of 200
     POLY_ZMAX = [100, 500, 900]
     CAM_ZS = [1000, 800, 600]
 
-    def test_one_full_list_per_point_and_one_more_for_the_last(self):
+    def test_full_lists_at_the_ends_and_changes_between(self):
+        # LevelUpdate copies item 0 at the first point and item N at the
+        # last (N points), and steps between with items 1..N-1
         items = nslevel.slst_items([self.POLY_ZMAX], self.CAM_ZS, step=200, near=50)
         self.assertEqual(len(self.CAM_ZS) + 1, len(items))
-        self.assertEqual({0}, {slst_list(item)[0] for item in items})  # copied as is, either way
+        self.assertEqual([0, 1, 1, 0], [slst_words(item)[1] & 1 for item in items])
 
     def test_each_point_lists_only_polygons_in_front_of_the_camera(self):
         # in front for the whole step to the next point: zmax < cam z - step - near
         items = nslevel.slst_items([self.POLY_ZMAX], self.CAM_ZS, step=200, near=50)
         ids = [nslevel.poly_id(0, i) for i in range(3)]
-        self.assertEqual(ids[:2], slst_list(items[0])[1])  # under 1000-250: 100 and 500
-        self.assertEqual(ids[:2], slst_list(items[1])[1])  # under 800-250: 100 and 500
-        self.assertEqual(ids[:1], slst_list(items[2])[1])  # under 600-250: 100
-        self.assertEqual(slst_list(items[2]), slst_list(items[3]))  # last point again
+        expected = [ids[:2], ids[:2], ids[:1]]  # under 1000-250 and 800-250: 100 and 500; then 100
+        self.assertEqual(expected, slst_walk(items))
+        self.assertEqual(expected, slst_walk(items, forward=False))
+
+    def test_walking_the_path_either_way_gives_each_points_list(self):
+        # polygons coming into view and leaving it, in runs longer than a
+        # node holds (16), at the start, middle and end of the lists
+        zmax = [z * 10 for z in range(300)]
+        zmid = [(z * 37) % 300 for z in range(300)]
+        cams = list(range(3500, 600, -170))
+        items = nslevel.slst_items([zmax, zmax[:40]], cams, step=170, near=50,
+                                   world_zmid=[zmid, zmid[:40]])
+        expected = [slst_words(nslevel.slst_items([zmax, zmax[:40]], [c], step=170, near=50,
+                                                  world_zmid=[zmid, zmid[:40]])[0])[2] for c in cams]
+        self.assertEqual(expected, slst_walk(items))
+        self.assertEqual(expected, slst_walk(items, forward=False))
+
+    def test_changes_go_both_ways(self):
+        ids = list(range(1, 200))
+        cases = [([], ids[:30]), (ids[:30], []), (ids[:50], ids[10:60]), (ids[::2], ids[::3]),
+                 (ids[5:40] + ids[90:120], ids[:20] + ids[30:100] + ids[150:]), (ids, ids)]
+        for a, b in cases:
+            item = nslevel.slst_delta(a, b)
+            self.assertEqual(b, slst_decode(item, a, True))
+            self.assertEqual(a, slst_decode(item, b, False))
+
+    def test_a_long_path_fits_in_a_page(self):
+        zmax = [z * 8 for z in range(4000)]
+        items = nslevel.slst_items([zmax], list(range(32000, 0, -128)), step=128, near=50)
+        self.assertLess(sum(len(i) for i in items), nslevel.PAGE_SIZE // 2)
 
     def test_lists_polygons_of_every_world_mesh(self):
         items = nslevel.slst_items([[100, 900], [200]], [1000], step=200, near=50)
@@ -505,6 +647,14 @@ class SortList(unittest.TestCase):
         ids = slst_list(items[0])[1]
         self.assertEqual(1460, len(ids))
         self.assertEqual(1000, sum(1 for i in ids if i >> 12 == 1))  # all of the nearer world
+
+    def test_a_zones_list_takes_in_the_next_zones_meshes(self):
+        # the next zone is further along -z, so its meshes are offset by -16384
+        # in this zone's frame, and come first, being farther
+        verts = [(0, 0, 1000, None), (8, 0, 1000, None), (0, 0, 1008, None)]
+        listed = [(verts, [(0, 1, 2)], 0), (verts, [(0, 1, 2)], -16384)]
+        items = nslevel.zone_slst_items(listed, [3000], step=200)
+        self.assertEqual([nslevel.poly_id(1, 0), nslevel.poly_id(0, 0)], slst_words(items[0])[2])
 
     def test_poly_id_layout(self):
         self.assertEqual((2 << 12) | 7, nslevel.poly_id(2, 7))
@@ -595,6 +745,21 @@ class Map(unittest.TestCase):
             self.assertIn(stone, struct.unpack_from("<16H", page.data, clut_y * 512))
         self.assertGreater(on_page, 0)
 
+    def test_each_mesh_holds_only_the_texture_regions_it_uses(self):
+        # a mesh header's texinfos are indexed by 12 bits of words, so a map
+        # whose meshes together use more regions than that still fits if each
+        # mesh lists its own
+        template = struct.pack(nslevel.WGEO_HEADER, 0, 0, 0, 0, 0, 2, 1, 0) + bytes(32) + b"TEX!TEX?"
+        TileRegion = nslevel.blendmap.TileRegion
+        a, b = TileRegion("stone", 0, 0, 32, 32, 0), TileRegion("stone", 32, 0, 32, 32, 0)
+        verts = [(0, 0, 0, (128, 128, 128))] * 3
+        worlds = [(verts, [(0, 1, 2, a, None), (0, 1, 2, a, None)]), (verts, [(0, 1, 2, b, None)])]
+        worlds, (tpags, texinfos, pages) = nslevel.map_textures(worlds, {"stone": self.stone()}, template)
+        self.assertEqual([8, 8], [len(t) for t in texinfos])  # one region (2 words) each
+        self.assertEqual([2, 2], [p[3] for p in worlds[0][1]])  # after the template's 2 words
+        self.assertEqual([2], [p[3] for p in worlds[1][1]])
+        self.assertNotEqual(texinfos[0], texinfos[1])
+
     def test_materials_without_an_image_keep_n_sanity_beachs_textures(self):
         level, entries, zone = self.make(self.TEXTURED_OBJ, images={"stone": self.stone()})
         tpags = struct.unpack_from("<8I", self.world(entries, zone).items[0], 32)
@@ -683,6 +848,76 @@ class Map(unittest.TestCase):
         level, entries, zone = self.make(scale=256, turn=90)
         w, h, d = struct.unpack_from("<III", zone.items[1], 12)
         self.assertGreater(w, d)
+
+    # a floor 100 m long: 40000 units at the default scale, so 3 zones of 16384
+    LONG_OBJ = "o Floor\nv -4 0 -50\nv -4 0 50\nv 4 0 50\nv 4 0 -50\nf 1 2 3 4\n"
+
+    _long = None
+
+    def long_zones(self):
+        if Map._long is None:  # built once, as it takes a while
+            level, entries, _ = self.make(self.LONG_OBJ)
+            zones = sorted((e for e in entries.values() if e.type == 7),
+                           key=lambda z: -struct.unpack_from("<i", z.items[1], 8)[0])  # from the start (+z)
+            Map._long = level, entries, zones
+        return Map._long
+
+    def neighbors(self, zone):
+        count = struct.unpack_from("<I", zone.items[0], nslevel.ZONE_PATHS_IDX + 12)[0]
+        return list(struct.unpack_from("<%dI" % count, zone.items[0], nslevel.ZONE_NEIGHBORS))
+
+    def test_a_long_map_is_a_chain_of_zones_along_the_route(self):
+        level, entries, zones = self.long_zones()
+        self.assertEqual(3, len(zones))
+        rects = [struct.unpack_from("<iiiIII", z.items[1], 0) for z in zones]
+        for (x, y, z, w, h, d), nxt in zip(rects, rects[1:]):
+            self.assertEqual(16384, d)
+            self.assertEqual(z - 16384, nxt[2])  # the next one along -z, touching
+            self.assertEqual((x, y, w, h), nxt[:2] + nxt[3:5])
+
+    def test_each_zone_lists_itself_then_the_zones_either_side(self):
+        level, entries, zones = self.long_zones()
+        a, b, c = (z.eid for z in zones)
+        self.assertEqual([[a, b], [b, a, c], [c, b]], [self.neighbors(z) for z in zones])
+
+    def test_paths_lead_on_to_the_next_zones_and_back(self):
+        level, entries, zones = self.long_zones()
+        links = []
+        for z in zones:
+            paths_idx, path_count = struct.unpack_from("<2I", z.items[0], nslevel.ZONE_PATHS_IDX)
+            for p in z.items[paths_idx:paths_idx + path_count]:
+                n = struct.unpack_from("<I", p, 8)[0]
+                links.append(sorted(struct.unpack_from("<4B", p, 12 + 4 * i) for i in range(n)))
+        # crash starts in the first zone, so all three have a path
+        self.assertEqual([[(2, 1, 0, 1)], [(1, 1, 0, 2), (2, 2, 0, 1)], [(1, 1, 0, 2)]], links)
+
+    def test_crash_is_in_the_zone_the_level_spawns_in(self):
+        level, entries, zones = self.long_zones()
+        spawn = entries[level.nsd.ldat.zone_spawn]
+        counts = [struct.unpack_from("<I", z.items[0], nslevel.ZONE_PATHS_IDX + 8)[0] for z in zones]
+        self.assertEqual(1, sum(counts))
+        self.assertEqual(1, struct.unpack_from("<I", spawn.items[0], nslevel.ZONE_PATHS_IDX + 8)[0])
+        paths_idx, path_count = struct.unpack_from("<2I", spawn.items[0], nslevel.ZONE_PATHS_IDX)
+        crash = spawn.items[paths_idx + path_count]
+        z = struct.unpack_from("<h", crash, nslevel.ENTITY_POINTS + 4)[0] * 4
+        self.assertTrue(0 <= z < 16384, z)  # relative to its zone
+
+    def test_every_zone_loads_the_texture_pages(self):
+        level, entries, zones = self.long_zones()
+        pages = sum(1 for p in level.pages if p.type == nslevel.PAGE_TEXTURE)
+        for z in zones:
+            self.assertEqual(pages, struct.unpack_from("<i", z.items[0], nslevel.ZONE_LOADLIST + 4)[0])
+
+    def test_a_zone_draws_its_own_and_the_next_zones_meshes(self):
+        level, entries, zones = self.long_zones()
+        worlds = []
+        for z in zones:
+            count = struct.unpack_from("<I", z.items[0], 0)[0]
+            worlds.append([struct.unpack_from("<I", z.items[0], 4 + i * nslevel.ZONE_WORLD_SIZE)[0]
+                           for i in range(count)])
+        for i in range(2):
+            self.assertTrue(set(worlds[i + 1]) & set(worlds[i]), "zone %d lists the next zone's meshes" % i)
+        self.assertLessEqual(max(len(w) for w in worlds), 8)
 
 
 @unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
