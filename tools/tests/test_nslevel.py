@@ -8,6 +8,8 @@ import struct
 import sys
 import unittest
 
+from PIL import Image
+
 TOOLS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, TOOLS)
 import nslevel  # noqa: E402
@@ -181,6 +183,37 @@ class WriteLevel(unittest.TestCase):
             nslevel.entry_page_bytes([big], 0)
 
 
+class SharedItems(unittest.TestCase):
+    A, B = b"AAAA" * 3, b"BBBB"
+
+    def test_identical_items_are_stored_once(self):
+        entry = nslevel.Entry(nslevel.str_to_eid("TestS"), 4, [self.A, self.B, self.A, self.A])
+        data = nslevel.entry_bytes(entry)
+        self.assertEqual(16 + 4 * 5 + len(self.A) + len(self.B), len(data))
+
+    def test_each_items_offset_points_at_its_data(self):
+        # the loader makes each item offset a pointer on its own (NSPageStruct in src/ns.c)
+        items = [self.A, self.B, self.A, self.B]
+        data = nslevel.entry_bytes(nslevel.Entry(nslevel.str_to_eid("TestS"), 4, items))
+        offsets = struct.unpack_from("<5I", data, 16)
+        for item, offset in zip(items, offsets):
+            self.assertEqual(item, data[offset:offset + len(item)])
+        self.assertEqual(len(data), offsets[-1])
+
+    def test_other_entries_keep_every_item_including_empty_ones(self):
+        # sort lists never have empty items, but other entries might, and an empty
+        # item's offset is the next item's, so only sort lists share
+        items = [self.A, b"", self.A]
+        data = nslevel.entry_bytes(nslevel.Entry(nslevel.str_to_eid("TestZ"), 7, items))
+        self.assertEqual(16 + 4 * 4 + 2 * len(self.A), len(data))
+        self.assertEqual(items, nslevel.read_entry(data, 0).items)
+
+    def test_shared_items_read_back(self):
+        items = [self.A, self.B, self.A, self.A, self.B]
+        data = nslevel.entry_bytes(nslevel.Entry(nslevel.str_to_eid("TestS"), 4, items))
+        self.assertEqual(items, nslevel.read_entry(data, 0).items)
+
+
 def entry_page(entries):
     return nslevel.Page(nslevel.PAGE_ENTRIES, entries=entries)
 
@@ -250,53 +283,7 @@ class CutLevel(unittest.TestCase):
         self.assertEqual(big, [e for p in pages for e in p.entries])
 
 
-def octree_leaves(rect):
-    """(level, y offset as a fraction of the zone height, leaf value) for
-    each solid leaf of a zone's octree, walked the way ZoneQueryOctreeR does"""
-    root, mdx, mdy, mdz = struct.unpack_from("<4H", rect, 28)
-    leaves = []
-
-    def walk(node, level, y, height):
-        if node == 0:
-            return
-        if node & 1:
-            leaves.append((level, y, node >> 1))
-            return
-        fx, fy, fz = level < mdx, level < mdy, level < mdz
-        children = struct.unpack_from("<%dH" % ((1 + fx) * (1 + fy) * (1 + fz)), rect, node)
-        idx = 0
-        for i in range(1 + fx):
-            for j in range(1 + fy):
-                for k in range(1 + fz):
-                    sub = height / 2 if fy else height
-                    walk(children[idx], level + 1, y + (sub if j else 0), sub)
-                    idx += 1
-    walk(root, 0, 0.0, 1.0)
-    return leaves
-
-
 class Zone(unittest.TestCase):
-    def test_floor_octree_is_solid_ground_along_the_bottom(self):
-        rect = nslevel.floor_rect_bytes(100, 200, 300, 4096, 2048, 4096, depth=3)
-        self.assertEqual((100, 200, 300, 4096, 2048, 4096),
-                         struct.unpack_from("<iiiIII", rect, 0))
-        leaves = octree_leaves(rect)
-        self.assertTrue(leaves)
-        self.assertEqual({(0.0, 0)}, {(y, value) for _, y, value in leaves})  # bottom, plain ground
-
-    def test_floor_cells_are_small_enough_to_query(self):
-        # ZoneQueryOctree stores a cell's position relative to the query as
-        # int16 (>> 4), so cells have to be within about 2047 zone units
-        rect = nslevel.floor_rect_bytes(0, 0, 0, 4801, 3200, 6563, depth=3)
-        _, mdx, mdy, mdz = struct.unpack_from("<4H", rect, 28)
-        self.assertLessEqual(4801 >> mdx, nslevel.FLOOR_CELL_MAX)
-        self.assertLessEqual(6563 >> mdz, nslevel.FLOOR_CELL_MAX)
-        self.assertEqual(3, mdy)
-        self.assertEqual(2 ** (mdx + mdz), len(octree_leaves(rect)))
-
-    def test_floor_top_is_a_fraction_of_the_height(self):
-        self.assertEqual(256, nslevel.floor_top(2048, depth=3))
-
     def test_zone_header_fields(self):
         template = bytearray(nslevel.ZONE_HEADER_SIZE)
         world = nslevel.str_to_eid("Flr0W")
@@ -422,36 +409,6 @@ class BlockOctree(unittest.TestCase):
             nslevel.blocks_rect_bytes((0, 0, 0), self.SIZE, [(0, 0, 0, 100, 128, 128)], cell=128)
 
 
-class BlockMesh(unittest.TestCase):
-    TOP, SIDE = (593, 0), (110, 2)
-    BLOCK = (0, 0, 0, 512, 256, 768)
-
-    def mesh(self):
-        return nslevel.blocks_mesh([self.BLOCK], self.TOP, self.SIDE, piece=256)
-
-    def test_top_is_split_into_pieces(self):
-        verts, polys = self.mesh()
-        tops = [p for p in polys if p[3:] == self.TOP]
-        self.assertEqual(2 * 3 * 2, len(tops))  # 2x3 squares, 2 triangles each
-        self.assertEqual({256}, {verts[i][1] for p in tops for i in p[:3]})
-
-    def test_sides_use_the_side_texture_and_span_the_height(self):
-        verts, polys = self.mesh()
-        sides = [p for p in polys if p[3:] == self.SIDE]
-        # x sides are 3 pieces long, z sides 2; one piece high; 2 triangles each
-        self.assertEqual(2 * (3 + 3 + 2 + 2), len(sides))
-        self.assertEqual({0, 256}, {verts[i][1] for p in sides for i in p[:3]})
-
-    def test_every_vertex_is_on_the_block(self):
-        verts, _ = self.mesh()
-        for x, y, z in verts:
-            self.assertTrue(0 <= x <= 512 and 0 <= y <= 256 and 0 <= z <= 768)
-
-    def test_too_many_vertices_is_an_error(self):
-        with self.assertRaises(ValueError):
-            nslevel.blocks_mesh([(0, 0, 0, 8192, 128, 8192)], self.TOP, self.SIDE, piece=64)
-
-
 def entity(type, subtype, id, points):
     """an entity as stored in a zone: parent zone, spawn flags, group, id,
     point count, 3 init flags, type, subtype, then the points (units of 4)"""
@@ -462,33 +419,6 @@ def entity(type, subtype, id, points):
 
 
 class Entities(unittest.TestCase):
-    def test_placed_entity_has_the_new_id_and_first_point(self):
-        crab = entity(31, 0, 14, [(100, 50, 200), (110, 50, 200), (120, 50, 210)])
-        placed = nslevel.place_entity(crab, 42, (400, 128, 800))
-        self.assertEqual(42, struct.unpack_from("<H", placed, 8)[0])
-        points = [struct.unpack_from("<3h", placed, 20 + 6 * i) for i in range(3)]
-        self.assertEqual([(100, 32, 200), (110, 32, 210), (120, 32, 220)][0], points[0])
-
-    def test_placed_entity_keeps_its_path_shape(self):
-        crab = entity(31, 0, 14, [(100, 50, 200), (110, 50, 200), (120, 50, 210)])
-        placed = nslevel.place_entity(crab, 42, (400, 128, 800))
-        points = [struct.unpack_from("<3h", placed, 20 + 6 * i) for i in range(3)]
-        self.assertEqual([(100, 32, 200), (110, 32, 200), (120, 32, 210)], points)
-
-    def test_placed_entity_keeps_everything_else(self):
-        box = entity(34, 6, 6, [(1, 2, 3)])
-        placed = nslevel.place_entity(box, 7, (0, 0, 0))
-        self.assertEqual(box[:4] + box[6:8] + box[10:20], placed[:4] + placed[6:8] + placed[10:20])
-
-    def test_placed_entity_uses_plain_lighting(self):
-        # spawn_flags >> 3 picks a lighting region in the zone's octree
-        # (ZoneColorsScaleSeekByEntityNode); a copy points at the plain one
-        # crash uses (0x18), keeping the low 3 bits
-        box = bytearray(entity(34, 6, 6, [(1, 2, 3)]))
-        struct.pack_into("<H", box, 4, 0x1a19)
-        placed = nslevel.place_entity(bytes(box), 7, (0, 0, 0))
-        self.assertEqual(0x19, struct.unpack_from("<H", placed, 4)[0])
-
     def test_entity_type_and_subtype(self):
         self.assertEqual((34, 6), nslevel.entity_type(entity(34, 6, 1, [(0, 0, 0)])))
 
@@ -521,14 +451,6 @@ class World(unittest.TestCase):
         data = nslevel.world_polygon_bytes(1, 2, 4095, tinf=593, tpag=3)
         self.assertEqual((1, 2, 4095, 593, 3), decode_polygon(data))
 
-    def test_floor_grid_covers_the_area_in_two_triangles_per_cell(self):
-        verts, polys = nslevel.floor_grid(1024, 2048, cell=512)
-        self.assertEqual(3 * 5, len(verts))
-        self.assertEqual(2 * 2 * 4, len(polys))
-        self.assertEqual({0}, {v[1] for v in verts})
-        self.assertEqual((0, 1024), (min(v[0] for v in verts), max(v[0] for v in verts)))
-        self.assertEqual((0, 2048), (min(v[2] for v in verts), max(v[2] for v in verts)))
-
     def test_world_header_keeps_the_templates_textures(self):
         template = struct.pack("<iiiIIIII", 1, 2, 3, 99, 99, 2, 1, 0)
         template += struct.pack("<8I", nslevel.str_to_eid("Ju89T"), *([0] * 7)) + b"TEX!TEX?"
@@ -549,55 +471,223 @@ class SortList(unittest.TestCase):
     CAM_ZS = [1000, 800, 600]
 
     def test_one_full_list_per_point_and_one_more_for_the_last(self):
-        items = nslevel.slst_items(self.POLY_ZMAX, self.CAM_ZS, step=200, near=50)
+        items = nslevel.slst_items([self.POLY_ZMAX], self.CAM_ZS, step=200, near=50)
         self.assertEqual(len(self.CAM_ZS) + 1, len(items))
         self.assertEqual({0}, {slst_list(item)[0] for item in items})  # copied as is, either way
 
     def test_each_point_lists_only_polygons_in_front_of_the_camera(self):
         # in front for the whole step to the next point: zmax < cam z - step - near
-        items = nslevel.slst_items(self.POLY_ZMAX, self.CAM_ZS, step=200, near=50)
+        items = nslevel.slst_items([self.POLY_ZMAX], self.CAM_ZS, step=200, near=50)
         ids = [nslevel.poly_id(0, i) for i in range(3)]
         self.assertEqual(ids[:2], slst_list(items[0])[1])  # under 1000-250: 100 and 500
         self.assertEqual(ids[:2], slst_list(items[1])[1])  # under 800-250: 100 and 500
         self.assertEqual(ids[:1], slst_list(items[2])[1])  # under 600-250: 100
         self.assertEqual(slst_list(items[2]), slst_list(items[3]))  # last point again
 
+    def test_lists_polygons_of_every_world_mesh(self):
+        items = nslevel.slst_items([[100, 900], [200]], [1000], step=200, near=50)
+        self.assertEqual([nslevel.poly_id(0, 0), nslevel.poly_id(1, 0)], slst_list(items[0])[1])
+
+    def test_lists_polygons_farthest_first(self):
+        # the game draws a list in order, later polygons over earlier ones,
+        # with no depth test, so a near wall has to come after what's behind
+        # it. by their middles: a floor piece just behind a wall shares the
+        # wall's largest z
+        items = nslevel.slst_items([[500, 100], [500]], [1000], step=200, near=50,
+                                   world_zmid=[[250, 50], [500]])
+        self.assertEqual([nslevel.poly_id(0, 1), nslevel.poly_id(0, 0), nslevel.poly_id(1, 0)],
+                         slst_list(items[0])[1])
+
+    def test_keeps_the_nearest_polygons_the_game_can_list(self):
+        # the game's lists hold at most 1460 polygons (SlstInit in src/slst.c);
+        # the farthest (smallest z, as the camera looks along -z) are left out
+        items = nslevel.slst_items([[0] * 1000, [500] * 1000], [1000], step=200, near=50)
+        ids = slst_list(items[0])[1]
+        self.assertEqual(1460, len(ids))
+        self.assertEqual(1000, sum(1 for i in ids if i >> 12 == 1))  # all of the nearer world
+
     def test_poly_id_layout(self):
         self.assertEqual((2 << 12) | 7, nslevel.poly_id(2, 7))
+
+
+class MapCells(unittest.TestCase):
+    def test_cells_become_blocks_with_their_leaf(self):
+        blocks = nslevel.cell_blocks({(1, 2, 3): "floor", (0, 0, 0): "pit", (2, 0, 0): "wall"}, 128)
+        self.assertEqual(sorted([(128, 256, 384, 256, 384, 512, nslevel.LEAF_FLOOR),
+                                 (0, 0, 0, 128, 128, 128, nslevel.LEAF_PIT),
+                                 (256, 0, 0, 384, 128, 128, nslevel.LEAF_GROUND)]), sorted(blocks))
+
+    def test_floor_leaf_is_a_floor_crash_can_step_up_onto(self):
+        # FindFloorY in src/solid.c: type (bits 1-3) 0 is wall or scenery, which crash
+        # can't step up onto; 1 is floor, as most of n. sanity beach is
+        self.assertEqual(1, (nslevel.LEAF_FLOOR & 0xE) >> 1)
+        self.assertEqual(1, nslevel.LEAF_FLOOR & 1)  # a leaf
+
+
+# a map as blender exports it: a floor 8 m by 16 m, a wall, and a spawn marker
+MAP_OBJ = """o Floor
+v -4 0 -8
+v -4 0 8
+v 4 0 8
+v 4 0 -8
+f 1 2 3 4
+o Wall
+v 4 0 -8
+v 4 2 -8
+v 4 2 8
+v 4 0 8
+f 5 6 7 8
+o Spawn
+v 0 1 5
+v 0.1 1 5
+v 0 1.1 5
+f 9 10 11
+"""
+
+
+@unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
+                     "needs N. Sanity Beach in streams/")
+class Map(unittest.TestCase):
+    def make(self, text=MAP_OBJ, **kw):
+        level = nslevel.make_map(nslevel.read_level(STREAMS, 9), text, **kw)
+        entries = {e.eid: e for p in level.pages for e in p.entries}
+        return level, entries, entries[level.nsd.ldat.zone_spawn]
+
+    TEXTURED_OBJ = MAP_OBJ.replace("o Floor\n", "o Floor\nusemtl stone\n").replace("o Wall\n", "o Wall\nusemtl plain\n")
+
+    def stone(self):
+        return Image.new("RGB", (32, 32), (90, 90, 100))
+
+    def textures(self, level):
+        return [p for p in level.pages if p.type == nslevel.PAGE_TEXTURE]
+
+    def world(self, entries, zone):
+        return entries[struct.unpack_from("<I", zone.items[0], 4)[0]]
+
+    def test_material_images_become_a_texture_page_the_zone_loads(self):
+        plain, _, _ = self.make(self.TEXTURED_OBJ)
+        level, entries, zone = self.make(self.TEXTURED_OBJ, images={"stone": self.stone()})
+        self.assertEqual(len(self.textures(plain)) + 1, len(self.textures(level)))
+        tpags = struct.unpack_from("<8I", self.world(entries, zone).items[0], 32)
+        new = [p.eid for p in self.textures(level) if p.eid not in {q.eid for q in self.textures(plain)}]
+        self.assertIn(new[0], tpags)
+        header = zone.items[0]
+        self.assertEqual(len(self.textures(level)), struct.unpack_from("<i", header, nslevel.ZONE_LOADLIST + 4)[0])
+
+    def test_textured_polygons_use_their_materials_tile(self):
+        level, entries, zone = self.make(self.TEXTURED_OBJ, images={"stone": self.stone()})
+        world = self.world(entries, zone)
+        header = world.items[0]
+        fields = struct.unpack_from(nslevel.WGEO_HEADER, header, 0)
+        tpags = struct.unpack_from("<8I", header, 32)
+        page = next(p for p in self.textures(level) if p.eid == tpags[fields[6] - 1])
+        stone = nslevel.blendmap.tpage.colour_5551((90, 90, 100))
+        on_page = 0
+        for i in range(fields[3]):
+            w0 = struct.unpack_from("<I", world.items[1], 8 * i)[0]
+            tinf, tpag = (w0 >> 8) & 0xFFF, (w0 >> 5) & 7
+            if tpags[tpag] != page.eid:
+                continue
+            on_page += 1
+            self.assertLess(tinf + 1, fields[5])  # within the mesh's texture infos
+            rgn = struct.unpack_from("<I", header, 64 + 4 * tinf + 4)[0]
+            clut_y = (rgn >> 6) & 127
+            self.assertIn(stone, struct.unpack_from("<16H", page.data, clut_y * 512))
+        self.assertGreater(on_page, 0)
+
+    def test_materials_without_an_image_keep_n_sanity_beachs_textures(self):
+        level, entries, zone = self.make(self.TEXTURED_OBJ, images={"stone": self.stone()})
+        tpags = struct.unpack_from("<8I", self.world(entries, zone).items[0], 32)
+        used = {tpags[(struct.unpack_from("<I", self.world(entries, zone).items[1], 8 * i)[0] >> 5) & 7]
+                for i in range(len(self.world(entries, zone).items[1]) // 8)}
+        self.assertEqual(2, len(used))  # the stone page, and the beach's page for the wall
+
+    def test_map_images_are_read_from_the_mtl_next_to_the_obj(self):
+        out = os.path.join(TOOLS, "..", "build", "test_map_images")
+        os.makedirs(os.path.join(out, "textures"), exist_ok=True)
+        self.stone().save(os.path.join(out, "textures", "stone.png"))
+        with open(os.path.join(out, "level.mtl"), "w") as f:
+            f.write("newmtl stone\nmap_Kd textures/stone.png\nnewmtl plain\nKd 1 1 1\n")
+        images = nslevel.map_images(os.path.join(out, "level.obj"), "mtllib level.mtl\n" + self.TEXTURED_OBJ)
+        self.assertEqual(["stone"], list(images))
+        self.assertEqual((90, 90, 100), images["stone"].convert("RGB").getpixel((0, 0)))
+
+    def test_a_maps_folder_gives_its_obj_and_the_folders_name(self):
+        out = os.path.normpath(os.path.join(TOOLS, "..", "build", "test_map_source", "my_map"))
+        os.makedirs(out, exist_ok=True)
+        for name in os.listdir(out):
+            os.remove(os.path.join(out, name))
+        open(os.path.join(out, "level.obj"), "w").close()
+        open(os.path.join(out, "level.mtl"), "w").close()
+        self.assertEqual((os.path.join(out, "level.obj"), "my_map"), nslevel.map_source(out))
+        self.assertEqual((os.path.join(out, "level.obj"), "my_map"), nslevel.map_source(out + os.sep))
+
+    def test_a_maps_obj_gives_itself_and_its_name(self):
+        path = os.path.join("maps", "x", "level.obj")
+        self.assertEqual((path, "level"), nslevel.map_source(path))
+
+    def test_a_maps_folder_needs_one_obj(self):
+        out = os.path.join(TOOLS, "..", "build", "test_map_source", "two")
+        os.makedirs(out, exist_ok=True)
+        for name in ("a.obj", "b.obj"):
+            open(os.path.join(out, name), "w").close()
+        with self.assertRaises(ValueError):
+            nslevel.map_source(out)
+        with self.assertRaises(ValueError):
+            nslevel.map_source(os.path.join(TOOLS, "..", "build", "test_map_source"))  # none
+
+    def test_map_is_one_zone_with_its_geometry_and_crash_only(self):
+        level, entries, zone = self.make()
+        self.assertEqual(nslevel.LID_TEST, level.nsd.ldat.lid)
+        header = zone.items[0]
+        paths_idx, path_count, entity_count, _ = struct.unpack_from("<4I", header, nslevel.ZONE_PATHS_IDX)
+        self.assertEqual((1, 1), (path_count, entity_count))
+        self.assertEqual((0, 0), nslevel.entity_type(zone.items[paths_idx + 1]))  # crash
+        execs = [e for e in level.nsd.ldat.exec_map if e != nslevel.EID_NONE]
+        self.assertEqual(len(nslevel.CORE_EXEC_SLOTS), len(execs))
+        counts = nslevel.count_by_type(level.pages)
+        self.assertEqual(1, counts["ZDAT"])
+        self.assertEqual(1, counts["SLST"])
+        self.assertEqual(struct.unpack_from("<I", header, 0)[0], counts["WGEO"])
+
+    def test_crash_starts_on_the_ground_at_the_spawn_marker(self):
+        level, entries, zone = self.make(scale=256)
+        paths_idx = struct.unpack_from("<I", zone.items[0], nslevel.ZONE_PATHS_IDX)[0]
+        crash = zone.items[paths_idx + 1]
+        x, y, z = (c * 4 for c in struct.unpack_from("<3h", crash, nslevel.ENTITY_POINTS))
+        # the floor's corner is at the zone's corner plus a cell of margin
+        self.assertAlmostEqual(128 + 4 * 256, x, delta=16)  # the marker's middle, on multiples of 8
+        self.assertEqual(128 + 5 * 256 + 8 * 256, z)
+        self.assertGreater(y, 128)
+        self.assertLessEqual(y, 128 + 128)
+
+    def test_world_meshes_are_its_faces(self):
+        level, entries, zone = self.make()
+        header = zone.items[0]
+        world = entries[struct.unpack_from("<I", header, 4)[0]]
+        _, _, _, polys, verts = struct.unpack_from("<iiiII", world.items[0], 0)
+        self.assertGreater(polys, 4)  # floor and wall, sliced
+        self.assertEqual(polys * 8, len(world.items[1]))
+
+    def test_a_bigger_map_gets_several_world_meshes(self):
+        rows = []
+        for k in range(60):
+            for i in range(60):
+                rows.append("v %d 0 %d\nv %d 0 %d\nv %d 0 %d\nf -3 -2 -1" % (
+                    i, k, i, k + 1, i + 1, k + 1))
+        level, entries, zone = self.make("o Floor\n" + "\n".join(rows), scale=96)
+        self.assertGreater(struct.unpack_from("<I", zone.items[0], 0)[0], 1)
+
+    def test_turn_runs_the_map_along_z(self):
+        # turned a quarter, the 16 m long floor runs along x
+        level, entries, zone = self.make(scale=256, turn=90)
+        w, h, d = struct.unpack_from("<III", zone.items[1], 12)
+        self.assertGreater(w, d)
 
 
 @unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
                      "needs N. Sanity Beach in streams/")
 class RealLevel(unittest.TestCase):
-    def test_course_has_its_objects_and_their_code(self):
-        course = nslevel.make_course(nslevel.read_level(STREAMS, 9))
-        entries = {e.eid: e for p in course.pages for e in p.entries}
-        zone = entries[course.nsd.ldat.zone_spawn]
-        header = zone.items[0]
-        paths_idx, path_count, entity_count, _ = struct.unpack_from("<4I", header, nslevel.ZONE_PATHS_IDX)
-        kinds = [nslevel.entity_type(e) for e in zone.items[paths_idx + path_count:]]
-        self.assertEqual(entity_count, len(kinds))
-        self.assertEqual((0, 0), kinds[0])  # crash first
-        self.assertEqual(len(nslevel.COURSE_BOXES) + 1, sum(1 for k in kinds if k[0] == 34))
-        self.assertEqual(len(nslevel.COURSE_CRABS), kinds.count((31, 0)))
-        self.assertEqual(1, kinds.count((32, 1)))
-        execs = {nslevel.eid_to_str(e) for e in course.nsd.ldat.exec_map if e != nslevel.EID_NONE}
-        self.assertTrue({"WillC", "CrabC", "WarpC", "BoxsC"} <= execs, execs)
-        textures = [p for p in course.pages if p.type == nslevel.PAGE_TEXTURE]
-        self.assertEqual(len(textures), struct.unpack_from("<i", header, nslevel.ZONE_LOADLIST + 4)[0])
-
-    def test_mock_level_is_one_zone_with_a_floor_and_crash(self):
-        mock = nslevel.make_mock(nslevel.read_level(STREAMS, 9))
-        self.assertEqual(nslevel.LID_TEST, mock.nsd.ldat.lid)
-        entries = {e.eid: e for p in mock.pages for e in p.entries}
-        zone = entries[mock.nsd.ldat.zone_spawn]
-        self.assertEqual(4, len(zone.items))  # header, bounds, path, crash
-        counts = nslevel.count_by_type(mock.pages)
-        self.assertEqual(1, counts["ZDAT"])
-        self.assertEqual(1, counts["WGEO"])
-        self.assertEqual(1, counts["SLST"])
-        self.assertNotIn("MIDI", counts)
-
     def test_cut_n_sanity_beach_keeps_crash_and_the_hud_only(self):
         level = nslevel.read_level(STREAMS, 9)
         cut = nslevel.cut_level(level, [level.nsd.ldat.exec_map[i] for i in nslevel.CORE_EXEC_SLOTS])
@@ -608,7 +698,7 @@ class RealLevel(unittest.TestCase):
         self.assertTrue({"WillC", "DispC", "FruiC", "ShadC", "BoxsC", "DoctC"} <= gools, gools)
         self.assertNotIn("BeaOC", gools)
         self.assertLess(len(cut.pages), len(level.pages))
-    def test_copy_of_n_sanity_beach_has_the_same_entries(self):
+    def test_written_n_sanity_beach_reads_back_the_same(self):
         level = nslevel.read_level(STREAMS, 9)
         out = os.path.join(TOOLS, "..", "build", "test_custom_levels")
         os.makedirs(out, exist_ok=True)

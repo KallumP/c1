@@ -20,7 +20,7 @@ At the moment the game is only partially playable with a number of currently ide
 - [Running](doc/running.md): getting the game files from your disc or a disc image, and starting the game
 - [Controls](doc/controls.md): the default keys and changing them with `controls.cfg`
 - [Settings](doc/settings.md): game settings in `settings.cfg`, such as the loading screen, speed display and skipping the splash screens
-- [Custom levels](doc/custom_levels.md): booting into a level from `custom_levels/`, and making levels with `tools/nslevel.py`
+- [Custom levels](doc/custom_levels.md): turning a map modelled in Blender into a level and booting into it
 - [Structure](doc/structure.md): what each file and directory in the project is for
 - [Contributing](doc/contributing.md): commit messages, pull requests and coding standards
 
