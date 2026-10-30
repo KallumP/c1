@@ -10,6 +10,7 @@
 #include "ext/disgool.h"
 #endif
 #include "pc/gfx/soft.h"
+#include "pc/gfx/gte.h"
 int CardControl(int op, int part_idx) { return 1; }
 
 /* forward declarations for unexported funcs */
@@ -3499,19 +3500,19 @@ int GoolTransform2(vec *in, vec *out, int flag) {
 //----- (800249E0) --------------------------------------------------------
 int GoolProject(vec *in, vec *out) {
   vec v_in;
-  int32_t p,flag;
-  int32_t sz0,sz1,sz2;
+  vec r_vert;
+  int32_t sx,sy,sz2;
 
   v_in.x = (in->x - cam_trans.x) >> 8;
   v_in.y = (in->y - cam_trans.y) >> 8;
   v_in.z = (in->z - cam_trans.z) >> 8;
-  vec r_out;
-  vec2 offs;
-  offs.x=0;offs.y=0;
-  SwRotTransPers(&v_in, &r_out, &mn_trans.t, &ms_cam_rot, &offs, screen_proj);
-  sz2 = r_out.z;
-  out->x = (r_out.x) << 8;
-  out->y = -(r_out.y) << 8;
+  /* orig uses the gte (RotTransPers), which clamps depth to 0 for a point
+     behind the camera and saturates the divide, so it can't be mirrored on
+     screen (e.g. the gem flying in on the level end screen) */
+  SwRotTrans(&v_in, &r_vert, &mn_trans.t, &ms_cam_rot);
+  GtePerspective(r_vert.x, r_vert.y, r_vert.z, screen_proj, &sx, &sy, &sz2);
+  out->x = sx << 8;
+  out->y = -sy << 8;
   out->z = sz2 << 8;
   return SUCCESS;
 }
