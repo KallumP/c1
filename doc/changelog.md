@@ -5,7 +5,7 @@
 ### Added
 
 - `fix_model_draw_order` setting (default off): 3D models are depth tested against each other, so a model behind another (e.g. a crate behind Crash) can't be drawn over it, which the original game's draw order sometimes allows
-- `record_inputs` and `replay_inputs` settings (default off) to record the buttons held each frame to `inputs.rec` and play them back, for reproducing bugs
+- `record_inputs` and `replay_inputs` settings (default off) to record the buttons held each frame to `inputs.rec` and play them back, for reproducing bugs, with `replay_speed` to play them back faster
 
 ### Fixed
 
