@@ -468,10 +468,10 @@ def blocks_rect_bytes(origin, size, blocks, cell):
     return pad4(data + struct.pack("<4H", root, mx, my, mz) + bytes(nodes))
 
 
-def zone_header_bytes(template, self_eid, worlds, path_count, entity_count):
+def zone_header_bytes(template, self_eid, worlds, path_count, entity_count, neighbors=()):
     """a zone header from a real one, with the given worlds ((wgeo eid,
-    (x, y, z)) pairs), its own paths and entities, itself as its only
-    neighbor, an empty load list and no music"""
+    (x, y, z)) pairs), its own paths and entities, itself and then the
+    neighbors (zone eids) as its neighbors, an empty load list and no music"""
     h = bytearray(template)
     struct.pack_into("<I", h, 0, len(worlds))
     for i in range(8):
@@ -480,8 +480,9 @@ def zone_header_bytes(template, self_eid, worlds, path_count, entity_count):
             eid, trans = worlds[i]
             world = struct.pack("<I3i", eid, *trans).ljust(ZONE_WORLD_SIZE, b"\0")
         h[4 + i * ZONE_WORLD_SIZE:4 + (i + 1) * ZONE_WORLD_SIZE] = world
-    struct.pack_into("<4I", h, ZONE_PATHS_IDX, 2, path_count, entity_count, 1)
-    struct.pack_into("<8I", h, ZONE_NEIGHBORS, self_eid, *([0] * 7))
+    listed = [self_eid] + list(neighbors)
+    struct.pack_into("<4I", h, ZONE_PATHS_IDX, 2, path_count, entity_count, len(listed))
+    struct.pack_into("<8I", h, ZONE_NEIGHBORS, *(listed + [0] * (8 - len(listed))))
     h[ZONE_LOADLIST:ZONE_DISPLAY_FLAGS] = b"\0" * (ZONE_DISPLAY_FLAGS - ZONE_LOADLIST)
     struct.pack_into("<I", h, ZONE_DISPLAY_FLAGS, 0)
     struct.pack_into("<I", h, ZONE_MIDI, EID_NONE)
