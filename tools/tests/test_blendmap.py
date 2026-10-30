@@ -301,6 +301,12 @@ class Spawn(unittest.TestCase):
         cells = blendmap.solid_cells(mesh, self.SIZE, 128)
         self.assertEqual((1536 + 64, 512, 2560 - 64), blendmap.spawn(mesh, cells, self.SIZE, 128))
 
+    def test_middle_across_is_the_middle_of_the_floors_not_of_the_zone(self):
+        mesh = floor(0, 0, 768, 2048, y=256)  # the zone is 2048 wide
+        cells = blendmap.solid_cells(mesh, self.SIZE, 128)
+        x, y, z = blendmap.spawn(mesh, cells, self.SIZE, 128)
+        self.assertIn(x, (320, 448))  # either column next to 384
+
     def test_crash_starts_on_a_floor_not_on_top_of_a_wall(self):
         # a wall across the +z end, nearest the start, whose top is solid with room above
         wall = quad_mesh([(0, 0, 2048), (0, 1024, 2048), (2048, 1024, 2048), (2048, 0, 2048)])
