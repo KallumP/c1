@@ -785,11 +785,7 @@ uint16_t ZoneReboundVector(vec *va, vec *vb) {
 static inline void sub_80027A08(gool_object *obj, int idx, uint32_t val) {
   uint32_t inc, res;
 
-#ifdef PSX
-  inc = obj->state_flags & 0x18 ? 0: 0x18;
-#else
   inc = obj->state_flags & 0x10 ? 0: 0x18; /* orig masks with 0x10 */
-#endif
   if (idx < 0)
     res = inc + val;
   else
@@ -1128,9 +1124,7 @@ gool_objnode ZoneFindNearestObjectNode2(gool_object *obj, vec *v) {
     return res;
   y_max = -999999999;
   header = (zone_header *)cur_zone->items[0];
-#ifndef PSX
   va = *v; /* orig copies the input vec before the node search moves v->y */
-#endif
   /* first find the nearest octree node to input vec
      amongst cur zone and neighbors, if any such node */
   while (1) {
@@ -1155,32 +1149,6 @@ gool_objnode ZoneFindNearestObjectNode2(gool_object *obj, vec *v) {
   /* find an object (other than obj) which collides with the input vec
      and which is stopped by some node */
   found = 0; found_max = 0;
-#ifdef PSX
-  for (i=0;i<object_bound_count;i++) {
-    bound = &object_bounds[i];
-    if (!((bound->obj->status_b & 0x40020000) == 0x20000)) { continue; }
-    if (va.x >= bound->p1.x - 35000 && va.x <= bound->p2.x + 35000
-      && va.z >= bound->p1.z - 35000 && va.z <= bound->p2.z + 35000) {
-      if (va.y >= bound->p1.y && va.y <= bound->p2.y) {
-        res.obj = bound->obj;
-        va.y = bound->p1.y;
-        found = 1;
-        break;
-      }
-      else if (bound->p2.y > y_max && vb.y >= bound->p2.y) {
-        /* keep track of highest object below va */
-        found_max = bound->obj;
-        y_max = bound->p2.y;
-      }
-    }
-  }
-  if (found_max && (!res.obj || y_max >= va.y)) {
-    /* found a highest below obj */
-    /* and no node or max object y is nearer to va? */
-    v->y = y_max; /* replace with max object y */
-    res.obj = found_max; /* put max object in the result */
-  }
-#else
   /* matches orig: the y test uses v->y as moved by the node search, a hit
      sets v->y to the object top, and an object found below counts as found */
   for (i=0;i<object_bound_count;i++) {
@@ -1208,7 +1176,6 @@ gool_objnode ZoneFindNearestObjectNode2(gool_object *obj, vec *v) {
     res.obj = found_max; /* put max object in the result */
     found = 1;
   }
-#endif
   if (!res.value) /* has nothing been found? */
     sub_80027A08(obj->parent, -1, 0);
   else if (found) { /* has an object been found? */
