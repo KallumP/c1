@@ -344,17 +344,43 @@ def pad4(data):
     return data + b"\0" * (-len(data) % 4)
 
 
+def split_depth(size):
+    """how many times to halve size to get cells of at most FLOOR_CELL_MAX"""
+    depth = 0
+    while size >> depth > FLOOR_CELL_MAX:
+        depth += 1
+    return depth
+
+
 def floor_rect_bytes(x, y, z, w, h, d, depth):
-    """zone bounds (zone units) and an octree that only splits along y, depth
-    times, with the bottom cell solid ground and everything above it empty;
-    so the floor's top is floor_top(h, depth) above the zone's bottom"""
+    """zone bounds (zone units) and an octree whose bottom layer of cells is
+    solid ground and everything above it empty, splitting along y depth
+    times, so the floor's top is floor_top(h, depth) above the zone's bottom.
+
+    it also splits along x and z until cells are at most FLOOR_CELL_MAX
+    across: ZoneQueryOctree stores a cell's position relative to the query
+    point as int16 (>> 4), so a cell much bigger than that is misplaced.
+    every column is the same, so each level is one child array that all the
+    lower children share."""
+    mx, mz = split_depth(w), split_depth(d)
+    levels = max(mx, depth, mz)
     nodes = b""
-    for level in range(depth):
-        lower = OCTREE_NODES + 4 * (level + 1) if level < depth - 1 else LEAF_GROUND
-        nodes += struct.pack("<HH", lower, 0)  # children: lower half, upper half
-    root = OCTREE_NODES if depth else LEAF_GROUND
+    for level in range(levels):
+        fx, fy, fz = level < mx, level < depth, level < mz
+        child = OCTREE_NODES + len(nodes) + 2 * (1 + fx) * (1 + fy) * (1 + fz)
+        child += child % 4  # keep the next array aligned
+        if level == levels - 1:
+            child = LEAF_GROUND
+        children = []
+        for i in range(1 + fx):
+            for j in range(1 + fy):
+                for k in range(1 + fz):
+                    children.append(0 if fy and j else child)  # upper y half empty
+        nodes += struct.pack("<%dH" % len(children), *children)
+        nodes = pad4(nodes)
+    root = OCTREE_NODES if levels else LEAF_GROUND
     data = struct.pack("<iiiIIII", x, y, z, w, h, d, 0)
-    data += struct.pack("<4H", root, 0, depth, 0) + nodes
+    data += struct.pack("<4H", root, mx, depth, mz) + nodes
     return pad4(data)
 
 
