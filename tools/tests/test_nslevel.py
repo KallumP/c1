@@ -461,7 +461,16 @@ class Entities(unittest.TestCase):
     def test_placed_entity_keeps_everything_else(self):
         box = entity(34, 6, 6, [(1, 2, 3)])
         placed = nslevel.place_entity(box, 7, (0, 0, 0))
-        self.assertEqual(box[:8] + box[10:20], placed[:8] + placed[10:20])
+        self.assertEqual(box[:4] + box[6:8] + box[10:20], placed[:4] + placed[6:8] + placed[10:20])
+
+    def test_placed_entity_uses_plain_lighting(self):
+        # spawn_flags >> 3 picks a lighting region in the zone's octree
+        # (ZoneColorsScaleSeekByEntityNode); a copy points at the plain one
+        # crash uses (0x18), keeping the low 3 bits
+        box = bytearray(entity(34, 6, 6, [(1, 2, 3)]))
+        struct.pack_into("<H", box, 4, 0x1a19)
+        placed = nslevel.place_entity(bytes(box), 7, (0, 0, 0))
+        self.assertEqual(0x19, struct.unpack_from("<H", placed, 4)[0])
 
     def test_entity_type_and_subtype(self):
         self.assertEqual((34, 6), nslevel.entity_type(entity(34, 6, 1, [(0, 0, 0)])))
