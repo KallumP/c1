@@ -523,8 +523,45 @@ def floor_grid(w, d, cell):
     return verts, polys
 
 
+WGEO_MAX = 4096  # polygon and vertex indices are 12 bits
+
+
+def pieces(start, end, piece):
+    """split start..end into pieces at most piece long"""
+    edges = list(range(start, end, piece)) + [end]
+    return list(zip(edges, edges[1:]))
+
+
 def blocks_mesh(blocks, top_texture, side_texture, piece):
-    return [], []
+    """a world mesh for blocks ((x0, y0, z0, x1, y1, z1), zone units): each
+    block's top and four sides, split into squares at most piece across so
+    the sort list can drop the ones behind the camera a little at a time.
+    returns vertices (x, y, z) and triangles (a, b, c, tinf, tpag), with
+    top_texture and side_texture as (tinf, tpag)"""
+    verts, polys = [], []
+
+    def quad(corners, texture):
+        # corners in order a, b, c, d around the square: triangles abd, bcd
+        base = len(verts)
+        verts.extend(corners)
+        polys.append((base, base + 1, base + 3) + texture)
+        polys.append((base + 1, base + 2, base + 3) + texture)
+
+    for x0, y0, z0, x1, y1, z1 in blocks:
+        for xa, xb in pieces(x0, x1, piece):
+            for za, zb in pieces(z0, z1, piece):
+                quad([(xa, y1, za), (xb, y1, za), (xb, y1, zb), (xa, y1, zb)], top_texture)
+        for ya, yb in pieces(y0, y1, piece):
+            for za, zb in pieces(z0, z1, piece):  # the two sides along z
+                for x in (x0, x1):
+                    quad([(x, ya, za), (x, ya, zb), (x, yb, zb), (x, yb, za)], side_texture)
+            for xa, xb in pieces(x0, x1, piece):  # the two ends
+                for z in (z0, z1):
+                    quad([(xa, ya, z), (xb, ya, z), (xb, yb, z), (xa, yb, z)], side_texture)
+    if len(verts) > WGEO_MAX or len(polys) > WGEO_MAX:
+        raise ValueError("mesh has %d vertices and %d polygons, more than %d"
+                         % (len(verts), len(polys), WGEO_MAX))
+    return verts, polys
 
 
 WGEO_HEADER = "<iiiIIIII"  # trans x y z, poly, vert, texinfo and tpag counts, is_backdrop
