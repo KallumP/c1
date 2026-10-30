@@ -9,6 +9,7 @@ import os
 import struct
 
 import blendmap
+import tpage
 
 MAGIC_PAGE = 0x1234
 MAGIC_ENTRY = 0x100FFFF
@@ -618,12 +619,21 @@ def blocks_mesh(blocks, top_texture, side_texture, piece):
 WGEO_HEADER = "<iiiIIIII"  # trans x y z, poly, vert, texinfo and tpag counts, is_backdrop
 
 
-def world_header_bytes(template, trans, poly_count, vert_count):
+WGEO_TPAGS = 8  # texture page slots in a mesh header
+
+
+def world_header_bytes(template, trans, poly_count, vert_count, tpags=(), texinfos=b""):
     """a mesh header from a real one (keeping its texture pages and
-    texinfos), placed at trans (zone units) with new counts"""
+    texinfos), placed at trans (zone units) with new counts, and more
+    texture pages (in its free slots) and texinfos added after its own"""
     fields = list(struct.unpack_from(WGEO_HEADER, template, 0))
+    slots = list(struct.unpack_from("<%dI" % WGEO_TPAGS, template, 32))
+    slots[fields[6]:fields[6] + len(tpags)] = tpags
     fields[0:5] = [trans[0], trans[1], trans[2], poly_count, vert_count]
-    return struct.pack(WGEO_HEADER, *fields) + template[struct.calcsize(WGEO_HEADER):]
+    fields[5] += len(texinfos) // 4
+    fields[6] += len(tpags)
+    return (struct.pack(WGEO_HEADER, *fields) + struct.pack("<%dI" % WGEO_TPAGS, *slots[:WGEO_TPAGS])
+            + template[32 + 4 * WGEO_TPAGS:] + texinfos)
 
 
 # sort lists (slst, see src/formats/slst.h and src/slst.c)
@@ -808,19 +818,23 @@ class Templates:
 GREY = (128, 128, 128)  # unshaded vertex colour
 
 
-def assemble_level(level, templates, prefix, size, blocks, worlds, points, step, entities):
+def assemble_level(level, templates, prefix, size, blocks, worlds, points, step, entities,
+                   textures=None):
     """a custom level from a real level: one zone of size (w, h, d) at the
     template zone's origin, with collision from blocks, world meshes (each
     vertices (x, y, z, colour) and polygons (a, b, c, tinf, tpag) relative
     to the zone), one follow camera path through points (x, y, z) step
     apart going along -z, and entities (crash first). keeps crash, the hud
-    and core objects, and the code for the entities' types, from level"""
+    and core objects, and the code for the entities' types, from level.
+    textures, from map_textures, adds texture pages and the meshes'
+    texinfos for them"""
+    tpag_eids, texinfos, texture_pages = textures or ((), b"", [])
     t = templates
     zone_eid, slst_eid = str_to_eid(prefix + "Z"), str_to_eid(prefix + "S")
     world_eids = [str_to_eid(prefix + ("W" if i == 0 else str(i))) for i in range(len(worlds))]
     x0, y0, z0 = t.origin
     world_entries = [Entry(eid, 3, [
-        world_header_bytes(t.world.items[0], (x0, y0, z0), len(polys), len(verts)),
+        world_header_bytes(t.world.items[0], (x0, y0, z0), len(polys), len(verts), tpag_eids, texinfos),
         b"".join(world_polygon_bytes(a, b, c, tinf, tpag) for a, b, c, tinf, tpag in polys),
         b"".join(world_vertex_bytes(x, y, z, colour) for x, y, z, colour in verts)])
         for eid, (verts, polys) in zip(world_eids, worlds)]
@@ -840,7 +854,7 @@ def assemble_level(level, templates, prefix, size, blocks, worlds, points, step,
     slots = set(CORE_EXEC_SLOTS) | {entity_type(e)[0] for e in entities}
     keep = [exec_map[i] for i in slots] + [tp for tp in tpags if tp]
     out = cut_level(level, keep)
-    out.pages = pack_entries([zone, slst] + world_entries) + out.pages
+    out.pages = pack_entries([zone, slst] + world_entries) + out.pages + list(texture_pages)
     out.nsd.ldat.lid = LID_TEST
     out.nsd.ldat.zone_spawn = zone_eid
     out.nsd.ldat.path_idx_spawn = 0
@@ -951,16 +965,86 @@ def cell_blocks(cells, cell):
             for (i, j, k), kind in cells.items()]
 
 
-def make_map(level, text, scale=MAP_SCALE, turn=0):
+TEXINFO_WORDS_MAX = 4096  # polygons' texinfo indices (in words) are 12 bits
+
+
+def map_textures(worlds, images, template):
+    """texture pages for the materials' images that the world meshes' tile
+    regions (blendmap.TileRegion) use, and the meshes with each region
+    turned into a texinfo index and texture page slot, for a mesh header
+    from template: (worlds, (tpag eids, texinfos, texture pages))"""
+    fields = struct.unpack_from(WGEO_HEADER, template, 0)
+    used = sorted({p[3].material for _, polys in worlds for p in polys if p[4] is None})
+    chunks = [used[i:i + tpage.TILES_PER_PAGE] for i in range(0, len(used), tpage.TILES_PER_PAGE)]
+    if len(chunks) > WGEO_TPAGS - fields[6]:
+        raise ValueError("%d textured materials, more than %d" % (
+            len(used), (WGEO_TPAGS - fields[6]) * tpage.TILES_PER_PAGE))
+    pages, place_of = [], {}
+    for k, chunk in enumerate(chunks):
+        eid = str_to_eid("BMp%dT" % k)
+        data, places = tpage.texture_page(eid, [tpage.tile(images[m]) for m in chunk])
+        pages.append(Page(PAGE_TEXTURE, eid=eid, data=data))
+        for m, place in zip(chunk, places):
+            place_of[m] = (fields[6] + k, place)
+    index, texinfos = {}, b""
+    out = []
+    for verts, polys in worlds:
+        new = []
+        for p in polys:
+            if p[4] is None:
+                r = p[3]
+                slot, place = place_of[r.material]
+                if r not in index:
+                    index[r] = fields[5] + len(texinfos) // 4
+                    texinfos += tpage.texinfo_bytes(place, r.layout, (r.x, r.y, r.w, r.h))
+                p = p[:3] + (index[r], slot)
+            new.append(p)
+        out.append((verts, new))
+    if fields[5] + len(texinfos) // 4 > TEXINFO_WORDS_MAX:
+        raise ValueError("too many texture regions for a mesh's texinfos")
+    return out, ([p.eid for p in pages], texinfos, pages)
+
+
+def map_images(obj_path, text):
+    """{material: PIL image} for a .obj (its path and text): each material's
+    image from the .mtl files it names, next to it. missing files are
+    skipped with a warning"""
+    from PIL import Image
+    base = os.path.dirname(obj_path)
+    images = {}
+    for line in text.splitlines():
+        fields = line.split()
+        if not fields or fields[0] != "mtllib":
+            continue
+        mtl = os.path.join(base, " ".join(fields[1:]))
+        if not os.path.exists(mtl):
+            print("warning: %s not found, so its materials are untextured" % mtl)
+            continue
+        with open(mtl) as f:
+            for mat, path in blendmap.read_mtl(f.read(), os.path.dirname(mtl)).items():
+                if os.path.exists(path):
+                    images[mat] = Image.open(path)
+                    images[mat].load()
+                else:
+                    print("warning: %s (material %s) not found, so it is untextured" % (path, mat))
+    return images
+
+
+def make_map(level, text, scale=MAP_SCALE, turn=0, images=None):
     """a level from a map exported from blender as .obj (its text): its
     faces as the world meshes and collision, and crash, with nothing else;
     built like make_course from level (a real level such as N. Sanity
-    Beach) for crash and the textures"""
+    Beach) for crash and the textures. faces of materials with an image in
+    images ({material: PIL image}) get it, the rest the beach's textures"""
     t = Templates(level)
     fit = blendmap.fit(blendmap.read_obj(text, scale, turn), COURSE_CELL, MAP_HEADROOM, margin=COURSE_CELL)
     mesh = fit.mesh
     cells = blendmap.solid_cells(mesh, fit.size, COURSE_CELL)
-    worlds = blendmap.world_meshes(mesh, MAP_PIECE, t.textures[0], t.textures[1], MAP_TILE)
+    worlds = blendmap.world_meshes(mesh, MAP_PIECE, t.textures[0], t.textures[1], MAP_TILE,
+                                   textured=set(images or ()))
+    textures = None
+    if images:
+        worlds, textures = map_textures(worlds, images, t.world.items[0])
     start = blendmap.spawn(mesh, cells, fit.size, COURSE_CELL)
     crash = bytearray(t.crash)
     struct.pack_into("<3h", crash, ENTITY_POINTS, start[0] // 4, (start[1] + 100) // 4, start[2] // 4)
@@ -969,7 +1053,7 @@ def make_map(level, text, scale=MAP_SCALE, turn=0):
         points = blendmap.camera_path(cells, fit.size, COURSE_CELL, start, step)
         try:
             return assemble_level(level, t, "BMap", fit.size, cell_blocks(cells, COURSE_CELL), worlds,
-                                  points, step, [bytes(crash)])
+                                  points, step, [bytes(crash)], textures)
         except EntryTooBig as e:
             if e.entry.type != 4 or step >= MAP_PIECE:  # only the sort list shrinks
                 raise
@@ -1033,7 +1117,8 @@ def main(argv):
         name = args[1] if len(args) >= 2 else os.path.splitext(os.path.basename(path))[0]
         with open(path) as f:
             text = f.read()
-        level = make_map(read_level(STREAMS_DIR, 9), text, options["--scale"], options["--turn"])
+        images = map_images(path, text)
+        level = make_map(read_level(STREAMS_DIR, 9), text, options["--scale"], options["--turn"], images)
         write_level(level, CUSTOM_LEVELS_DIR, name)
         print("wrote %s" % os.path.join(CUSTOM_LEVELS_DIR, name))
         return 0
