@@ -236,6 +236,29 @@ UTEST(settings, record_inputs_on_and_off) {
   ASSERT_EQ(0, s.record_inputs);
 }
 
+UTEST(settings, replay_speed_is_normal_by_default) {
+  pc_settings s;
+
+  s.replay_speed = 7;
+  SettingsReset(&s);
+  ASSERT_EQ(1u, s.replay_speed);
+}
+
+UTEST(settings, replay_speed_takes_0_to_16) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, SettingsParseLine("replay_speed = 4", &s));
+  ASSERT_EQ(4u, s.replay_speed);
+  ASSERT_EQ(1, SettingsParseLine("replay_speed = 0", &s));
+  ASSERT_EQ(0u, s.replay_speed);
+  ASSERT_EQ(1, SettingsParseLine("replay_speed = 16", &s));
+  ASSERT_EQ(16u, s.replay_speed);
+  ASSERT_EQ(-1, SettingsParseLine("replay_speed = 17", &s));
+  ASSERT_EQ(-1, SettingsParseLine("replay_speed = fast", &s));
+  ASSERT_EQ(16u, s.replay_speed);
+}
+
 UTEST(settings, replay_inputs_is_off_by_default) {
   pc_settings s;
 

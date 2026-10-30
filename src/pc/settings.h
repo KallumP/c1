@@ -14,6 +14,7 @@ typedef struct {
   int fix_model_draw_order;       /* depth test 3d models against each other */
   int record_inputs;              /* record inputs to inputs.rec */
   int replay_inputs;              /* replay inputs from inputs.rec */
+  uint32_t replay_speed;          /* times normal speed, 0 = as fast as possible */
 } pc_settings;
 
 extern pc_settings game_settings;
