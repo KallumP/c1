@@ -124,13 +124,17 @@ UTEST(settings, example_settings_file_matches_defaults) {
   game_settings.speed_display = !defaults.speed_display;
   game_settings.skip_splash_screens = !defaults.skip_splash_screens;
   game_settings.fix_model_draw_order = !defaults.fix_model_draw_order;
+  game_settings.record_inputs = !defaults.record_inputs;
+  game_settings.replay_inputs = !defaults.replay_inputs;
   /* run from the project root */
-  ASSERT_EQ(5, SettingsLoad("settings.example.cfg"));
+  ASSERT_EQ(7, SettingsLoad("settings.example.cfg"));
   ASSERT_EQ(defaults.loading_screen, game_settings.loading_screen);
   ASSERT_EQ(defaults.loading_screen_min_ms, game_settings.loading_screen_min_ms);
   ASSERT_EQ(defaults.speed_display, game_settings.speed_display);
   ASSERT_EQ(defaults.skip_splash_screens, game_settings.skip_splash_screens);
   ASSERT_EQ(defaults.fix_model_draw_order, game_settings.fix_model_draw_order);
+  ASSERT_EQ(defaults.record_inputs, game_settings.record_inputs);
+  ASSERT_EQ(defaults.replay_inputs, game_settings.replay_inputs);
   SettingsReset(&game_settings);
 }
 
