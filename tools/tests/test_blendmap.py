@@ -244,6 +244,17 @@ class WorldMeshes(unittest.TestCase):
             self.assertEqual(min(zs) // 256, (max(zs) - 1) // 256, zs)  # within one piece
         self.assertAlmostEqual(512 * 1024, sum(area(verts, p) for p in polys))
 
+    def test_polygons_are_sliced_into_pieces_along_x_and_y_too(self):
+        # a texture covers a whole polygon, so a big one would stretch it; a wall
+        # facing z isn't cut by the slices along z at all
+        wall = quad_mesh([(0, 0, 512), (1024, 0, 512), (1024, 768, 512), (0, 768, 512)])
+        [(verts, polys)] = worlds(wall)
+        for p in polys:
+            for axis in (0, 1):
+                cs = [verts[i][axis] for i in p[:3]]
+                self.assertEqual(min(cs) // 256, (max(cs) - 1) // 256, cs)
+        self.assertAlmostEqual(1024 * 768, sum(area(verts, p) for p in polys))
+
     def test_slicing_leaves_no_cracks_along_shared_edges(self):
         # two triangles sharing a slanted edge: wherever a slice cuts it, both sides get the same vertex
         mesh = blendmap.Mesh([(0, 0, 0), (512, 0, 1000), (0, 0, 1000), (512, 0, 0)],
