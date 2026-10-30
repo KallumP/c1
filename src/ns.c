@@ -2,9 +2,7 @@
 #include "geom.h"
 #include "title.h"
 #include "formats/zdat.h"
-#ifndef PSX
 #include "pc/loading.h"
-#endif
 
 /* .rdata */
 #ifdef CFLAGS_ORIG_IMPL
@@ -200,29 +198,6 @@ int NSEntryItemSize(entry *entry, int idx) {
   return entry->items[idx+1] - entry->items[idx];
 }
 
-#ifdef PSX
-// unreferenced; exists as inline code elsewhere
-static uint8_t *NSTransferFile(ns_filedesc *fd, uint8_t *buf, int flag) {
-  CdlLOC p;
-  uint8_t res[8];
-  int sector_len, size;
-
-  if (!use_cd) { return 0;}
-  if (!flag) { return buf; }
-  sector_len = shr_ceil(fd->size, 11);
-  if (!buf) {
-    size = sector_len << 11; /* round up to nearest sector size multiple */
-    buf = (uint8_t*)malloc(size);
-    if (!buf)
-      return (uint8_t*)ERROR_MALLOC_FAILED;
-  }
-  CdIntToPos(fd->sector_num, &p);
-  CdControl(2, &p, res); /* CdlSetLoc */
-  if (!CdRead(sector_len, buf, 128) || CdReadSync(0, 0))
-    return (uint8_t*)ERROR_READ_FAILED;
-  return realloc(buf, fd->size); /* realloc to non sector size multiple */
-}
-#else
 #include <SDL2/SDL_messagebox.h>
 
 uint8_t *NSFileReadRange(char *filename, int start, int end, size_t *size) {
@@ -262,7 +237,6 @@ static uint8_t *NSFileReadFrom(char *filename, int offset, size_t *size) {
 static uint8_t *NSFileRead(char *filename, size_t *size) {
   return NSFileReadRange(filename, 0, -1, size);
 }
-#endif
 
 int NSCountEntries(ns_struct *nss, int type) {
   nsd *nsd;
@@ -296,9 +270,7 @@ static inline int NSPageTranslateOffsets(page* page) {
   return SUCCESS;
 }
 
-#ifndef PSX
 page tpagemem[16];
-#endif
 //----- (80012F10) --------------------------------------------------------
 static void NSPageUpdateEntries(int idx) {
   page_struct *ps, *tps;
@@ -339,14 +311,8 @@ static void NSPageUpdateEntries(int idx) {
     idx = NSTexturePageAllocate();
     if (idx != -12 || (idx = 15, ps->ref_count)) {
       tps = &texture_pages[idx];
-#ifdef PSX
-      tpage_rect.x = (idx % 4) * 256;
-      tpage_rect.y = (idx / 4) * 128;
-      LoadImage(tpage_rect, page);
-#else
       tpagemem[idx] = *page;
       page = &tpagemem[idx];
-#endif
       tpg = (tpage*)page;
       pte = NSProbe(tpg->eid);
       tps->state = 20;
@@ -354,11 +320,7 @@ static void NSPageUpdateEntries(int idx) {
       tps->eid = tpg->eid;
       tps->pte = pte;
       tps->page = page;
-#ifdef PSX
-      pte->value = tps->info;
-#else
       pte->entry = (struct _entry*)page;
-#endif
     }
     ps->state = 1; /* free the original page */
     tps = &texture_pages[idx];
@@ -376,11 +338,7 @@ static void NSPageUpdateEntries(int idx) {
         eid = page->type == 4 ? pte->eid : EID_NONE;
         insts[ps->tail->idx%8] = eid;
       }
-#ifdef PSX
-      pte->value = (((entry->items[0] - (uint8_t*)page) + ps->tail->addr) << 2) | 0x80000002;
-#else
       pte->entry = entry;
-#endif
       type = entry->type;
       if (subsys[type].on_load)
         (*subsys[type].on_load)(entry);
@@ -394,370 +352,6 @@ static void NSPageUpdateEntries(int idx) {
   return/* ps->page*/;
 }
 
-#ifdef PSX
-
-//----- (8001331C) --------------------------------------------------------
-int NSPageFree(page_struct* ps) {
-  page_struct* ps;
-  page* page;
-  entry* entry;
-  ns_pte* pte, *bucket;
-  int pgid, type, hash;
-
-  if (ps == cur_ps)
-    cur_ps = 0;
-  if (ps->state == 20 || ps->state == 21) {
-    page = ps->page;
-    if (ps->type == 0) {
-      entry = page->entries[0];
-      pgid = ps->pgid;
-      hash = (entry->eid >> 15) & 0xFF;
-      bucket = ns.pte_buckets[hash];
-      for (i=0;i<page->entry_count;i++) {
-        entry = page->entries[i];
-        eid = entry->eid;
-        type = entry->type;
-        pte = bucket;
-        while ((pte++)->eid != eid);
-        (*subsys[type].kill)(entry)
-        pte->pgid = pgid;
-      }
-    }
-    ns.page_map[ps->pgid>>1] = NULL_PAGE;
-  }
-  ps->state = 1;
-  return SUCCESS;
-}
-
-//----- (800134C8) --------------------------------------------------------
-void NSUpdate(pgid_t pgid) {
-  page_struct* ps, *cur_ps;
-  int i, idx, count, state;
-  int pgid_min, start, end;
-
-  /* TODO: check control flow at bottom of this func */
-  if (ns.page_count == 0) return;
-  cur_ps = ns.cur_ps;
-  if (cur_ps && pgid != -1) { /* update any pages in 'currently paging' group */
-    page_count = cur_ps->page_count;
-    ps = cur_ps - (page_count + 1);
-    for (i=0;i<page_count;i++,ps++) {
-      state = ps->state;
-      if (state == 3 || state == 13)
-        NS_PageUpdate(ps, pgid);
-    }
-  }
-  if (!cur_ps && pgid == -1) { /* clone next sequence of contiguous virtual pages */
-    for (i=0;i<ns.virtual_page_count;i++) { /* find first virtual page waiting to be processed */
-      ps = &ns.virtual_pages[i];
-      if (ps->state == 2 && (idx == -1 || ps->pgid < pgid_min)) {
-        pgid_min = ps->pgid;
-        idx = i;
-      }
-    }
-    if (idx != -1) { /* count number of following virtual pages */
-      count = 1;
-      if (use_cd) {
-        start = (pgid_min >> 1) + 1;
-        end = ns.page_count - 1;
-        for (i=start;i<end;i++) {
-          ps = ns.page_map[i];
-          if (ISERRORCODE(ps) && ps->type == 0)
-            count++;
-          else
-            break;
-        }
-      }
-      ps = &virtual_pages[idx];
-      NSPageCreate(ps, ps->pgid, EID_NONE, count, 0); /* copy virtual pages to physical pages */
-    }
-  }
-  for (i=0;i<ns.physical_page_count;i++) { /* update all [other] physical pages */
-    NSPageUpdate(ns.physical_pages[i], pgid);
-  }
-}
-
-//----- (80013748) --------------------------------------------------------
-void NSUpdate2() {
-  dword_8005CFC0 = 1;
-  while (ns.page_count)
-    NSUpdate(-1);
-}
-
-//----- (80013798) --------------------------------------------------------
-int NSCdSeek(int idx) {
-  ns_filedesc *fd;
-  uint8_t res[8];
-
-  if (!use_cd || cur_ps) { return 0; }
-  if (!PadChkVsync(1, 0)) { return 0; }
-  fd = &filedescs[idx];
-  CdIntToPos(fd->sector_num, res);
-  return CdControlF(0x15, res); /* CdlSeekL: logical seek */
-}
-
-// unreferenced; exists as inline code elsewhere
-static int NSCdRead(page_struct *ps, int sector_count) {
-  int size, sector_offset;
-  uint8_t *dst;
-  char res[16]; // [sp+10h] [-10h] BYREF
-
-  if (ps->compressed) {
-    size = 32*sector_count - ps->savings;
-    dst = (uint8_t*)ps->page + (ps->savings << 11);
-    sector_offset = ns.nsf_loc + ns.nsd->compressed_page_offsets[ps->pgid >> 1] >> 6;
-  }
-  else {
-    size = 32*sector_count;
-    dst = (uint8_t*)ps->page;
-    sector_offset = ns.nsf_loc + ns.nsd->pages_offset + 32*(ps->pgid>>1);
-  }
-  CdIntToPos(sector_offset, res);
-  CdControlF(2, res);
-  if (CdRead(size, dst, 128) != 0)
-    return ERROR_READ_FAILED;
-  return SUCCESS;
-}
-
-//----- (80013970) --------------------------------------------------------
-void NSPageDecompress(page_compressed *page_src, page *page_dst) {
-  int i, size;
-  uint16_t seek, length, skip, remainder, data;
-  uint8_t span, prefix;
-  uint8_t *src, *dst;
-
-  src = page_src->data;
-  dst = (uint8_t*)page_dst;
-  if (page_src->magic == MAGIC_PAGE) {
-    if ((uint8_t*)page_dst == ((uint8_t*)page_src)+0xC) { return; }
-    for (i=0;i<0x10000;i++)
-      *(dst++) = *(src++);
-    return;
-  }
-  while (dst - (uint8_t*)page_dst < page_src->length) {
-    prefix = *(src++);
-    if (prefix & 0x80) {
-      data = (prefix << 8) | *(src++);
-      span = data & 7;
-      seek = (data >> 3) & 0xFFF;
-      if (span == 7)
-        span = 0x40;
-      else
-        span += 3;
-      for (i=0;i<span;i++,dst++)
-        *(dst) = *(dst-seek);
-    }
-    else {
-      for (i=0;i<prefix;i++)
-        *(dst++) = *(src++);
-    }
-  }
-  src += page_src->skip;
-  remainder = 0x10000 - page_src->length;
-  for (i=0;i<remainder;i++)
-    *(dst++) = *(src++);
-}
-
-//----- (80013B30) --------------------------------------------------------
-page_struct *NSPageTranslate(page_struct *ps) {
-  int i, idx, count, state;
-  int compressed, savings, pagesize;
-  int clen, dlen;
-  uint8_t *src, *dst;
-
-  state = ps->state;
-  if (state == 3 || state == 13) {
-    if (ps->compressed) {
-      dst = ps->page;
-      src = dst + (ps->savings << 11);
-      NSPageDecompress(src, dst);
-    }
-    ps->state = 4;
-    NSPageTranslateOffsets(ps->page);
-    return 0;
-  }
-  count = ns.nsd->count_compressed;
-  idx = ps->page_idx;
-  compressed = (idx < count) && use_compressed;
-  count = ps->page_count;
-  for (i=0;i<count;i++,ps--) {
-    if (state != 2)
-      continue;
-    idx = ps->page_idx >> 1;
-    clen = ns.nsd->compressed_lengths[idx] & 0x3F;
-    ps->compressed = compressed;
-    if (compressed) {
-      savings += (32 - clen);
-      ps->savings = savings;
-    }
-    if (ps->state == 2) {
-      ps->state = 3;
-      continue;
-    }
-    ps->state = 13;
-    if (compressed) {
-      dlen = clen + ps->savings;
-      pagesize = dlen * 2048;
-      ps->next = ps->page + pagesize;
-    }
-    else
-      ps->next = ps[1].page;
-    ps->next->magic = MAGIC_DECOMPRESSED;
-  }
-  return ps+(count>0);
-}
-// 8005C540: using guessed type int dword_8005C540;
-// 8005CFC0: using guessed type int dword_8005CFC0;
-
-//----- (80013D48) --------------------------------------------------------
-int NSPageUpdate(page_struct *ps, pgid_t pgid) {
-
-  while (1) {
-    switch (ps->state) {
-    case 2:
-      if (ns.cur_ps) { return; }
-      tail = ps->tail;
-      idx = ps->pgid >> 1;
-      tail_idx = tail->pgid >> 1;
-      head_idx = ps->page_count;
-      if (pgid == -1 || (idx >= head_idx && idx <= tail_idx)) {
-        ns.cur_pgid = ns.cur_ps->pgid;
-        if (use_cd) {
-          if (CDSync(1, 0) != 2 && pgid == -1)
-            return;
-          head = NSPageTranslate(ps);
-          ns.cur_ps = ps;
-          NSCdRead(head, ps->page_count);
-        }
-        else {
-#if defined(NS_TRANSFER_PC)
-          head = NSPageTranslate(ps);
-          NSTransferPage(pagesys, head, ps->page_count);
-          head->state = 4;
-          goto case_4;
-#endif
-        }
-      }
-    case 3:
-      if (use_cd && ps == ns.cur_ps) {
-        status = CdReadSync((pgid == -1), &buf);
-        if (status <= 0)
-          return;
-        NSPageTranslate(ps);
-        cur_ps = 0;
-      }
-      else {
-        NSPageDelete(ps);
-        page_count--;
-        ns.cur_ps = 0;
-        return;
-      }
-    }
-    case 13:
-      if (pgid != -1) {
-        res = sub_80043984(0, 0);
-        if (res != 0) { return; }
-      }
-      else if (ps->page->magic != MAGIC_DECOMPRESSED)
-        return;
-      NSPageTranslate(ps);
-      if (pgid != -1 && ps != ps->tail)
-        NSPageUpdate(ps+1, pgid); /* update next ps in the list */
-    case 4:
-      page = ps->page;
-      type = page->type;
-      if (type != 3 && type != 4) {
-        NSPageUpdateEntries(ps->idx);
-        page_count--;
-        return;
-      }
-      else
-        ps->state = 10;
-    case 10:
-      if (!ns.cur_audio_ps) { return; }
-      if (pgid != -1 && pgid != ps->pgid) { return; }
-      arg = -1;
-      page = ps->page;
-      type = page->type;
-      if (type == 4)
-        arg = ((uint32_t*)page->entries[0]->items[0])[0] + dword_8005CFB0;
-      idx = NSAudioPageAllocate(type, arg);
-      if (idx == -12) {
-        NSPageDelete(ps);
-        ns.page_count--;
-        return;
-      }
-      aps = &dword_800574F0[idx];
-      ps->state = 11;
-      ps->tail = aps;
-      ns.cur_audio_ps = ps;
-      aps->state = 11;
-      aps->pgid = ps->pgid;
-      SpuSetTransferStartAddr(aps->addr);
-      if (type == 3)
-        SpuWrite(&page, 0x10000);
-      else if (type == 4) {
-        entry = &page->entries[0];
-        item1 = entry->items[0];
-        item2 = entry->items[1];
-        size = ((uint32_t*)item1)[1];
-        SpuWrite(item2, size);
-      }
-    case 11:
-      if (ps == ns.cur_audio_ps) {
-        res = SpuIsTransferCompleted(pgid == ps->pgid);
-        if (res) {
-          NSPageUpdateEntries(ps->idx);
-          ns.cur_audio_ps = 0;
-          ns.page_count--;
-        }
-      }
-      break; /* !!! */
-    case 31:
-      ps->state = 1;
-    }
-  }
-}
-
-//----- (800141F4) --------------------------------------------------------
-int NSPageAllocate(int* count, int flag) {
-  int i, cur, rem, replace;
-  int idx, len, age;
-  int idx_max, len_max, age_max;
-  page_struct *ps;
-
-  for (i=0;i<ns.physical_page_count;i++) {
-    rem = ns.physical_page_count - i;
-    if (cur < min(rem, *count)) {
-      ps = &ns.physical_pages[i + len];
-      replace = ((ps->state == 20 || ps->state == 21) && ps->ref_count <= 0);
-      if (ps->state == 1 || replace) {
-        if (replace)
-          age += 1 + ps->timestamp;
-        len++;
-        if (idx_max == -1 || len > len_max || (len == len_max && age >= age_max)) {
-          idx_max = i;
-          len_max = len;
-          age_max = age;
-        }
-        continue;
-      }
-    }
-    len = 0;
-    age = 0;
-  }
-  if (idx_max != -1) {
-    for (i=idx_max;i<idx_max+len_max;i++) {
-      NSPageFree(ns.physical_pages[i]);
-    }
-    *count = len_max;
-    return idx_max;
-  }
-  *count = 0;
-  return -1;
-}
-
-#endif
 
 //----- (8001439C) --------------------------------------------------------
 int NSTexturePageAllocate() {
@@ -808,12 +402,8 @@ int NSTexturePageFree(int idx) {
   ps = &texture_pages[idx];
   if (ps->state == 20) {
     ps->pte->pgid = ps->pgid;
-#ifdef PSX
-    ns.page_map[ps->pgid >> 1] = (page_struct*)NULL_PAGE;
-#else
     /* page contents are kept in memory on pc,
        so keep the ps for the tpage data */
-#endif
     ps->state = 1;
   }
   else if (ps->state == 21)
@@ -821,156 +411,6 @@ int NSTexturePageFree(int idx) {
   return ERROR;
 }
 
-#ifdef PSX
-//----- (800145C8) --------------------------------------------------------
-int NSAudioPageAllocate(int type, int idx) {
-  int i;
-  page_struct *ps;
-
-  for (i=7;i>=0;i--) {
-    ps = &audio_pages[i];
-    if (ps->state == 1 && ps->type == type) {
-      if (idx == -1 || ps->idx == idx)
-        break;
-    }
-  }
-  if (i < 0) { return ERROR_NO_FREE_PAGES; }
-  return i;
-}
-
-//----- (80014644) --------------------------------------------------------
-// unreferenced; exists as inline code elsewhere
-page_struct* NSPageCreateVirtual(int pgid, eid_t eid) {
-  int i, count; // $v1
-  page_struct* ps; // $a2
-
-  count = ns.virtual_page_count;
-  for (i=0,ps=&ns.virtual_pages;i<count;i++,ps++) {
-    if (ps->state == 1) {
-      ps->state = 2;
-      ps->pgid = pgid;
-      ps->entries_to_process = 0;
-      ps->eid = eid;
-      ps->timestamp = 0; /* ??????? */
-      ns.page_map[pgid>>1] = ps;
-      ns.page_count++;
-      return ps;
-    }
-  }
-  return 0;
-}
-
-//----- (800146F0) --------------------------------------------------------
-page_struct *NSPageCreatePhysical(page_struct* ps, int pgid, eid_t eid, int *count, int flag) {
-  int idx_head, idx_tail;
-  page_struct *head, *tail, *src, *dst;
-
-  idx_head = NSPageAllocate(count, flag);
-  if (idx_head == -1)
-    return (page_struct*)ERROR_NO_FREE_PAGES;
-  idx_tail = idx_head + *count;
-  tail = &physical_pages_pre[idx_tail];
-  if (ps) { /* if there is a source group to copy */
-    pgid = ps->pgid;
-    dst = tail;
-    for (i=*count-1;i>=0;i--,dst--) {
-      src = ns.page_map[(pgid>>1)+i];
-      dst->pgid = src->pgid;
-      dst->eid = (eid == EID_NONE) ? src->eid : eid;
-      dst->timestamp = src->timestamp;
-      dst->page_count = src->page_count;
-      dst->tail = tail;
-      if (i == (*count - 1))
-        dst->state = 2; /* tail page, ready for transfer */
-      else
-        dst->state = 12; /* other pages, ready for transfer */
-      ns.page_map[dst->pgid>>1] = dst;
-      src->state = 1;
-    }
-    return tail;
-  }
-  else { /* single new page */
-    *count = 1;
-    dst = tail;
-    dst->pgid = pgid;
-    dst->ref_count = 0;
-    dst->timestamp = ticks_elapsed;
-    dst->page_count = 1;
-    dst->tail = tail;
-    dst->state = 2;
-    ns.page_map[dst->pgid >> 1] = dst;
-    return dst
-  }
-}
-
-//----- (800148C4) --------------------------------------------------------
-void NSPageDecRef(page_struct *ps) {
-  if (ps->ref_count <= 0) { return; }
-  ps->ref_count--;
-  if (ps->ref_count <= 0 && ps->type == 0) {
-    NSPageDelete(ps);
-    ns->page_count--;
-  }
-}
-
-//----- (80014930) --------------------------------------------------------
-page_struct *NSPageDelete(page_struct *ps) {
-  ps->state = 1;
-  ns.page_map[ps->pgid>>1] = NULL_PAGE;
-  return ps;
-}
-
-//----- (8001495C) --------------------------------------------------------
-void NSZoneUnload(ns_loadlist* loadlist) {
-  int i;
-  page_struct* ps;
-  if (!loadlist)
-    return;
-  for (i=0;i<loadlist->entry_count;i++) {
-    ps = NSPageStruct(&loadlist->eids[i]);
-    if (ISERRORCODE(ps))
-      NSPageDecRef(ps);
-  }
-  for (i=0;i<loadlist->page_count;i++)
-    NSPageClose(loadlist->pgids[i], 1);
-}
-
-//----- (80014B20) --------------------------------------------------------
-// unreferenced; exists as inline code elsewhere
-static inline page_struct* NSPageVirtual(int pgid, int eid) {
-  page_struct* ps; // $v0
-  ps = ns->virtual_pages[pgid >> 1];
-  if (ps == ERROR_INVALID_MAGIC)
-    ps = NSPageCreateVirtual(pgid, eid); /* inlined */
-  else if (ISERRORCODE(ps))
-    ps->eid = eid;
-  return ps;
-}
-
-//----- (80014C08) --------------------------------------------------------
-static page_struct* NSPagePhysical(int pgid, eid_t eid) {
-  page_struct* ps; // $a0
-  ps = ns->page_map[pgid >> 1];
-  if (ISERRORCODE(ps)) { /* page does not exist as physical or virtual */
-    ps = NSPageCreate(0, pgid, eid, 1, 1);
-    if (ISERRORCODE(ps))
-      return ps;
-  }
-  else if (ps == SUCCESS) /* previously succeeded */
-    return ps;
-  else if (ps->type == 0) /* virtual */
-    ps = NSPageCreate(ps, pgid, eid, 1, 1);
-  else if (ps->type == 1) { /* physical */
-    ps->eid = eid;
-    if (ps->state == 20)
-      return ps;
-  }
-  else if (ps->type == 2 || ps->type == 3) /* texture/audio */
-    return ps;
-  NSUpdate(pgid);
-  return ns->page_map[pgid>>1];
-}
-#else
 
 static page_struct* NSPageTranslate(page_struct *ps) {
   int state, type;
@@ -1022,7 +462,6 @@ static page_struct *NSPageVirtual(int pgid, eid_t eid) {
   return NSPagePhysical(pgid, eid);
 }
 
-#endif
 
 //----- (80014D00) --------------------------------------------------------
 int NSPageOpen(pgid_t pgid, int flag, int count, eid_t eid) {
@@ -1372,15 +811,9 @@ static inline void NSInitAudioPages(ns_struct *nss, uint32_t lid) {
       pte = NSProbeSafe(eid);
       if (!ISERRORCODE(pte)) {
 
-#ifdef PSX
-        nss->page_map[pte->pgid >> 1] = aps;
-#endif
         aps->state = 20;
         aps->pgid = pte->pgid;
         aps->eid = eid;
-#ifdef PSX
-        pte->value = 0x80000002;
-#endif
 
 /*#else
         page *page;
@@ -1426,15 +859,7 @@ void NSInit(ns_struct *nss, uint32_t lid) {
   nss->level_update_pending = 1;
   nsd_filename = NSGetFilename(0, lid);
   strcpy(filename, nsd_filename);
-#ifdef PSX
-#ifdef NS_FILEMAP
-  nsd = NSTransferFile(filemap[lid], nsd, 1, 0);
-#else
-  nsd = NSTransferFile(filename, nsd, 1, 0);
-#endif
-#else
   nsd = (struct _nsd*)NSFileRead(filename, 0);
-#endif
   nss->nsd = nsd;
   /* record pointers to nsd data */
   nss->ldat_eid = &nsd->ldat_eid;
@@ -1444,10 +869,6 @@ void NSInit(ns_struct *nss, uint32_t lid) {
   /* display loading screen */
   TitleLoading(lid, nss->ldat->image_data, nsd);
   nsd_size = sizeof(nsd) + sizeof(nsd_pte)*nsd->page_table_size + sizeof(nsd_ldat);
-#ifdef PSX
-  /* note: psy-q realloc always shrinks in-place */
-  nss->nsd = realloc(nss->nsd, nsd_size); /* trim splash screen image */
-#endif
   /* convert pte bucket relative offsets to absolute pointers */
   buckets = nss->pte_buckets;
   offsets = nss->nsd->ptb_offsets;
@@ -1455,29 +876,6 @@ void NSInit(ns_struct *nss, uint32_t lid) {
     buckets[i] = &nss->page_table[offsets[i]];
   nsf_filename = NSGetFilename(1, lid);
   strcpy(filename, nsf_filename);
-#ifdef PSX
-  /* record position of nsf file */
-  if (use_cd) { /* cd-rom read? */
-#ifdef NS_FILEMAP
-    ns->nsf_loc = mapping->nsf_loc; /* TODO: mapping? */
-#else
-    CdlFile fp;
-    if (CDSearchFile(&fp, filename) == 0)
-      return ERROR_READ_FAILED;
-    nss->nsf_loc = fp.loc;
-#endif
-  }
-  else {
-#ifdef NS_TRANSFER_PC
-    uint32_t handle = PCopen(filename);
-    ns->nsf_loc = handle;
-    if (handle == -1) {
-      PCclose(-1);
-      return -16;
-    }
-#endif
-  }
-#endif
   /* allocate and init the page map */
   page_count = nss->nsd->page_count;
   nss->page_map = (page_struct**)malloc(page_count*sizeof(page_struct*));
@@ -1489,38 +887,6 @@ void NSInit(ns_struct *nss, uint32_t lid) {
     if (subsys[i].init)
       (*subsys[i].init)();
   }
-#ifdef PSX
-  /* allocate and init 22 64 kb physical pages (max) */
-  physical_page_count = 22;
-  do {
-    pagemem = malloc(physical_page_count*PAGE_SIZE);
-    if (pagemem) {
-      nss->pagemem = pagemem;
-      break;
-    }
-  } while (physical_page_count > 0);
-  nss->physical_page_count = physical_page_count;
-  ps = &nss->physical_pages[0];
-  for (i=0;i<physical_page_count;i++,ps++) {
-    ps->state = 1;
-    ps->type = 1;
-    ps->idx = i;
-    ps->ref_count = 0;
-    ps->page = &pagemem[i];
-  }
-
-  /* init 38 virtual pages */
-  virtual_page_count = 38;
-  nss->virtual_page_count = virtual_page_count;
-  ps = &nss->virtual_pages[0];
-  for (i=0;i<virtual_page_count;i++,ps++) {
-    ps->state = 1;
-    ps->type = 0;
-    /* no idx recorded for virtual pages */
-    ps->ref_count = 0;
-    ps->page = 0;
-  }
-#else
   /* load all uncompressed pages in nsf into pagemem */
   physical_page_count = page_count;
   pagemem = (page*)NSFileReadFrom(filename, nsd->pages_offset*SECTOR_SIZE, &pagemem_size);
@@ -1543,7 +909,6 @@ void NSInit(ns_struct *nss, uint32_t lid) {
   /* set page map */
   for (i=0;i<page_count;i++)
     nss->page_map[i] = &nss->physical_pages[i];
-#endif
   printf("Inited and Allocated %d pages\n", physical_page_count);
   NSInitTexturePages(nss, lid);
   NSInitAudioPages(nss, lid);
@@ -1553,10 +918,8 @@ void NSInit(ns_struct *nss, uint32_t lid) {
     if (subsys[i].init2)
       (*subsys[i].init2)();
   }
-#ifndef PSX
   /* keep the loading screen up as long as the cd load would have */
   LoadingWait();
-#endif
 }
 
 //----- (80016420) --------------------------------------------------------

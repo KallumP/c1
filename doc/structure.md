@@ -54,14 +54,6 @@ Project structure is listed below, including descriptions for each file.
 │   │   │── loading.c,h      # level loading screen image conversion and minimum display time
 │   │   │── speed.c,h        # crash's speed measurement for the speed display
 │   │   └── time.c,h         # tick counter
-│   ├── psx                  # psx-specific code (non-inline)
-│   │   ├── card.c,h         # memory card
-│   │   ├── cdr.c,h          # cd-rom
-│   │   ├── gpu.c,h          # gpu interface (2D primitive rasterization)
-│   │   ├── init.c,h         # psx-specific initialization
-│   │   ├── r3000a.s         # r3000a assembly code; includes all functions from the game that were originally written in assembly
-│   │   ├── r3000a.c         # c equivalents of the code in r3000a.s; here for sake of readability
-│   │   └── r3000a.h         # header for r3000a.s and r3000a.c
 │   ├── common.h             # common includes, macros, and codes
 │   ├── geom.h               # geometric primitives (point, vector, angle, rect, matrix etc.)
 │   ├── globals.h            # GOOL globals

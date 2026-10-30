@@ -470,18 +470,9 @@ static void CamFollow(gool_object *obj, uint32_t flag) {
     cam_speed = cam_nearest->delta_progress;
   }
   else {
-#ifdef PSX
-    if (cam_nearest->delta_progress <= 0x200) /* change <= 2? */
-      cam_speed = cam_nearest->delta_progress/2; /* halve progress */
-    else if (cam_nearest->delta_progress < 0x500) /* from 2 to 5 non-inclusive? */
-      cam_speed = 0x200; /* limit to 2 */
-    else /* > 5 */ 
-      cam_speed = min((cam_nearest->delta_progress/2), cam_speed)+0x100;
-#else
     /* TODO: what makes the camera too slow to keep up with the player
              when the above limiting code is used? */
     cam_speed = cam_nearest->delta_progress/2;
-#endif
     CamAdjustProgress(cam_speed, cam_nearest);
   }
 }
