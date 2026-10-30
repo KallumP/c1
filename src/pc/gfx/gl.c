@@ -17,6 +17,8 @@ static PFNGLBLENDEQUATIONPROC pglBlendEquation;
 #include "pbak.h"
 #include "audio.h"
 #include "pc/gfx/tex.h"
+#include "pc/gfx/gldepth.h"
+#include "pc/settings.h"
 #include "pc/time.h"
 
 #ifdef CFLAGS_GUI
@@ -237,25 +239,52 @@ void GLShowImage(dim2 *dim, uint8_t *buf) {
     (*callbacks.post_update)();
 }
 
+/* draw a tri; model tris (depth != 0) are placed at the gl depth of their vertex depths plus z_offs */
+static void GLDrawTri(poly3i *poly, int depth, int z_offs) {
+  int ii;
+
+  glBegin(GL_TRIANGLES);
+  for (ii=0;ii<3;ii++) {
+    glColor3ui(poly->colors[ii].r, poly->colors[ii].g, poly->colors[ii].b);
+    glTexCoord2f(poly->uvs[ii].x, poly->uvs[ii].y);
+    if (depth)
+      glVertex3f(poly->verts[ii].x, poly->verts[ii].y,
+        -GLDepthFromZ(poly->verts[ii].z + z_offs));
+    else
+      glVertex3i(poly->verts[ii].x, poly->verts[ii].y, -1);
+  }
+  glEnd();
+}
+
 void GLDrawPrims(void *data, int count) {
   poly3i *poly;
-  int i, ii, texid, flags;
+  int i, texid, flags, mode, depth, depth_on;
 
   texid = -1;
   flags = 3;
+  depth_on = 0;
   poly = (poly3i*)data;
   glActiveTexture(GL_TEXTURE0);
   glDisable(GL_TEXTURE_2D);
   glEnable(GL_BLEND);
+  /*
+   * model tris are depth tested against each other (fix_model_draw_order);
+   * they don't write depth while drawing, see below
+   */
+  glDisable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LEQUAL);
+  glDepthMask(GL_FALSE);
+  glAlphaFunc(GL_GEQUAL, 1.0f);
   for (i=0;i<count;i++,poly++) {
     if (poly->type == 3)
       glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     else
       glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    if (poly->flags != flags) {
-      if (poly->flags == 2) { glBlendEquation(GL_FUNC_REVERSE_SUBTRACT); }
+    mode = GLPrimBlendMode(poly->flags);
+    if (mode != flags) {
+      if (mode == 2) { glBlendEquation(GL_FUNC_REVERSE_SUBTRACT); }
       else if (flags == 2)  { glBlendEquation(GL_FUNC_ADD); }
-      switch (poly->flags) {
+      switch (mode) {
       case 0:
       case 3:
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -267,7 +296,7 @@ void GLDrawPrims(void *data, int count) {
         glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
         break;
       }
-      flags = poly->flags;
+      flags = mode;
     }
     if (poly->texid != texid) {
       if (poly->texid == -1) { glDisable(GL_TEXTURE_2D); }
@@ -281,14 +310,31 @@ void GLDrawPrims(void *data, int count) {
       }
       texid = poly->texid;
     }
-    glBegin(GL_TRIANGLES);
-    for (ii=0;ii<3;ii++) {
-      glColor3ui(poly->colors[ii].r, poly->colors[ii].g, poly->colors[ii].b);
-      glTexCoord2f(poly->uvs[ii].x, poly->uvs[ii].y);
-      glVertex3i(poly->verts[ii].x, poly->verts[ii].y, -1);
+    depth = game_settings.fix_model_draw_order && poly->type == 1
+      && GLPrimDepthTested(poly->flags);
+    if (depth != depth_on) {
+      if (depth) { glEnable(GL_DEPTH_TEST); }
+      else { glDisable(GL_DEPTH_TEST); }
+      depth_on = depth;
     }
-    glEnd();
+    GLDrawTri(poly, depth, 0);
+    if (depth && GLPrimWritesDepth(poly->flags)) {
+      /*
+       * then write its depth, for fully opaque texels only, pushed back by
+       * the tolerance so that a model only just behind it (e.g. a shadow on
+       * a crate top) can still draw over it
+       */
+      glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+      glDepthMask(GL_TRUE);
+      glEnable(GL_ALPHA_TEST);
+      GLDrawTri(poly, depth, GL_DEPTH_TOLERANCE);
+      glDisable(GL_ALPHA_TEST);
+      glDepthMask(GL_FALSE);
+      glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    }
   }
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_TRUE); /* so glClear clears depth */
   glDisable(GL_BLEND);
   glDisable(GL_TEXTURE_2D);
   glBindTexture(GL_TEXTURE_2D, 0);
@@ -363,8 +409,9 @@ static void GLConvertToTris(void *ot, poly3i **tris, int *count) {
     if (prim->type == 1) {
       *(poly3i*)dst = *(poly3i*)src;
 #ifdef CFLAGS_GFX_SW_PERSP
-      for (i=0;i<3;i++)
-        ((poly3i*)dst)->verts[i].z = -1;
+      if (!GLPrimDepthTested(((poly3i*)src)->flags)) /* model tris keep their depth */
+        for (i=0;i<3;i++)
+          ((poly3i*)dst)->verts[i].z = -1;
 #endif
       dst += sizeof(poly3i);
       ++(*count);
@@ -437,8 +484,12 @@ void GLClear() {
   // glViewport(0, 0, screen.w, screen.h);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  glFrustum(screen.x, screen.x+screen.w, screen.y, screen.y+screen.h,
-            1.0, 100000.0);
+  /*
+   * same x/y mapping as a frustum at z=-1 (where everything else is drawn),
+   * but model tris drawn at z=-(gl depth) keep their depth (0 to 0.5)
+   */
+  glOrtho(screen.x, screen.x+screen.w, screen.y, screen.y+screen.h,
+          0.0, 2.0);
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
   if (!(cur_display_flags & 0x80000)) {

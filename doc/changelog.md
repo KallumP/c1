@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-30
+
+### Added
+
+- `fix_model_draw_order` setting (default off): 3D models are depth tested against each other, so a model behind another (e.g. a crate behind Crash) can't be drawn over it, which the original game's draw order sometimes allows
+
 ## 2026-10-28
 
 ### Added

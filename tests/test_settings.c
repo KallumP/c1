@@ -123,12 +123,14 @@ UTEST(settings, example_settings_file_matches_defaults) {
   game_settings.loading_screen_min_ms = defaults.loading_screen_min_ms + 1;
   game_settings.speed_display = !defaults.speed_display;
   game_settings.skip_splash_screens = !defaults.skip_splash_screens;
+  game_settings.fix_model_draw_order = !defaults.fix_model_draw_order;
   /* run from the project root */
-  ASSERT_EQ(4, SettingsLoad("settings.example.cfg"));
+  ASSERT_EQ(5, SettingsLoad("settings.example.cfg"));
   ASSERT_EQ(defaults.loading_screen, game_settings.loading_screen);
   ASSERT_EQ(defaults.loading_screen_min_ms, game_settings.loading_screen_min_ms);
   ASSERT_EQ(defaults.speed_display, game_settings.speed_display);
   ASSERT_EQ(defaults.skip_splash_screens, game_settings.skip_splash_screens);
+  ASSERT_EQ(defaults.fix_model_draw_order, game_settings.fix_model_draw_order);
   SettingsReset(&game_settings);
 }
 
@@ -189,4 +191,23 @@ UTEST(settings, skip_splash_screens_on_and_off) {
   ASSERT_EQ(0, s.skip_splash_screens);
   ASSERT_EQ(-1, SettingsParseLine("skip_splash_screens = yes", &s));
   ASSERT_EQ(0, s.skip_splash_screens);
+}
+
+UTEST(settings, fix_model_draw_order_is_off_by_default) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(0, s.fix_model_draw_order);
+}
+
+UTEST(settings, fix_model_draw_order_on_and_off) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, SettingsParseLine("fix_model_draw_order = off", &s));
+  ASSERT_EQ(0, s.fix_model_draw_order);
+  ASSERT_EQ(1, SettingsParseLine("fix_model_draw_order = on", &s));
+  ASSERT_EQ(1, s.fix_model_draw_order);
+  ASSERT_EQ(-1, SettingsParseLine("fix_model_draw_order = 1", &s));
+  ASSERT_EQ(1, s.fix_model_draw_order);
 }
