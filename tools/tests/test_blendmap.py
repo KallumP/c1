@@ -1,4 +1,4 @@
-"""
+﻿"""
 tests for tools/blendmap.py
 
 run from the project root: python -m unittest discover -s tools/tests
@@ -257,7 +257,7 @@ class WorldMeshes(unittest.TestCase):
         self.assertGreater(min(top)[0], max(side)[0])
 
     def test_split_into_several_meshes_when_over_4096(self):
-        floors = [floor(0, k * 256, 256, k * 256 + 256, y=(k % 7) * 8) for k in range(120)]
+        floors = [floor(0, k * 256, 256, k * 256 + 256, y=(k % 7) * 8) for k in range(250)]
         mesh = merged(*[merged(*[blendmap.Mesh([(x + i * 256, y, z) for x, y, z in f.verts], f.tris)
                                  for i in range(10)]) for f in floors])
         out = worlds(mesh)
@@ -267,7 +267,7 @@ class WorldMeshes(unittest.TestCase):
             self.assertLessEqual(len(polys), 4096)
             for p in polys:
                 self.assertTrue(all(0 <= i < len(verts) for i in p[:3]))
-        self.assertEqual(2 * 120 * 10, sum(len(polys) for _, polys in out))
+        self.assertEqual(2 * 250 * 10, sum(len(polys) for _, polys in out))
 
 
 if __name__ == "__main__":
