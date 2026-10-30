@@ -231,3 +231,23 @@ UTEST(settings, record_inputs_on_and_off) {
   ASSERT_EQ(-1, SettingsParseLine("record_inputs = yes", &s));
   ASSERT_EQ(0, s.record_inputs);
 }
+
+UTEST(settings, replay_inputs_is_off_by_default) {
+  pc_settings s;
+
+  s.replay_inputs = 1;
+  SettingsReset(&s);
+  ASSERT_EQ(0, s.replay_inputs);
+}
+
+UTEST(settings, replay_inputs_on_and_off) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, SettingsParseLine("replay_inputs = on", &s));
+  ASSERT_EQ(1, s.replay_inputs);
+  ASSERT_EQ(1, SettingsParseLine("replay_inputs = off", &s));
+  ASSERT_EQ(0, s.replay_inputs);
+  ASSERT_EQ(-1, SettingsParseLine("replay_inputs = 1", &s));
+  ASSERT_EQ(0, s.replay_inputs);
+}

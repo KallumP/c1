@@ -33,6 +33,7 @@ extern void ReplayRecordStop(replay_recorder *r);
 
 /* game side */
 #define REPLAY_RECORD 1
+#define REPLAY_PLAY   2
 
 extern int ReplayStart(const char *path, int mode, uint32_t lid,
   uint32_t seed);

@@ -13,6 +13,7 @@ typedef struct {
   int skip_splash_screens;        /* boot straight to the main menu */
   int fix_model_draw_order;       /* depth test 3d models against each other */
   int record_inputs;              /* record inputs to inputs.rec */
+  int replay_inputs;              /* replay inputs from inputs.rec */
 } pc_settings;
 
 extern pc_settings game_settings;

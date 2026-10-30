@@ -63,6 +63,65 @@ UTEST(replay, stopping_goes_back_to_the_real_clock) {
   ASSERT_FALSE(TimeIsFixed());
 }
 
+/* record frames holding each of held[] in turn */
+static void Record(uint32_t lid, SDL_Scancode *held, int count) {
+  int i;
+
+  memset(keys, 0, sizeof(keys));
+  PadResetBindings();
+  ReplayStart(TEST_REPLAY, REPLAY_RECORD, lid, 12345);
+  for (i=0;i<count;i++) {
+    memset(keys, 0, sizeof(keys));
+    if (held[i]) { keys[held[i]] = 1; }
+    ReplayUpdate();
+    TimeWaitFrame(34);
+  }
+  ReplayStop();
+  memset(keys, 0, sizeof(keys));
+}
+
+UTEST(replay, replay_feeds_the_recorded_buttons_instead_of_the_keyboard) {
+  SDL_Scancode held[2] = { SDL_SCANCODE_Z, 0 };
+
+  Record(0x19, held, 2);
+  ASSERT_EQ(1, ReplayStart(TEST_REPLAY, REPLAY_PLAY, 0x19, 12345));
+  keys[SDL_SCANCODE_LEFT] = 1; /* ignored while replaying */
+  ReplayUpdate();
+  ASSERT_EQ((uint32_t)PAD_CROSS << 16, SwPadRead(0));
+  TimeWaitFrame(34);
+  ReplayUpdate();
+  ASSERT_EQ(0u, SwPadRead(0));
+  ReplayStop();
+  keys[SDL_SCANCODE_LEFT] = 0;
+}
+
+UTEST(replay, replay_starts_on_the_fixed_clock_at_the_recorded_time) {
+  SDL_Scancode held[1] = { 0 };
+  replay_header header;
+  replay_frame frames[1];
+
+  Record(0x19, held, 1);
+  ASSERT_EQ(1, ReadRecording(&header, frames, 1));
+  SetTicksElapsed(header.start_ticks + 1000);
+  ASSERT_EQ(1, ReplayStart(TEST_REPLAY, REPLAY_PLAY, 0x19, 12345));
+  ASSERT_TRUE(TimeIsFixed());
+  ASSERT_EQ(header.start_ticks, GetTicksElapsed());
+  ReplayStop();
+}
+
+UTEST(replay, replay_refuses_a_recording_from_another_boot_level) {
+  SDL_Scancode held[1] = { 0 };
+
+  Record(0x19, held, 1);
+  ASSERT_EQ(0, ReplayStart(TEST_REPLAY, REPLAY_PLAY, 0x09, 12345));
+  ASSERT_FALSE(TimeIsFixed());
+}
+
+UTEST(replay, replay_of_a_missing_file_fails_cleanly) {
+  ASSERT_EQ(0, ReplayStart("build/no_such_file.rec", REPLAY_PLAY, 0x19, 12345));
+  ASSERT_FALSE(TimeIsFixed());
+}
+
 UTEST(replay, start_fails_cleanly_for_a_bad_path) {
   ASSERT_EQ(0, ReplayStart("build/no/such/dir/test.rec", REPLAY_RECORD, 0x19, 12345));
   ASSERT_FALSE(TimeIsFixed());
