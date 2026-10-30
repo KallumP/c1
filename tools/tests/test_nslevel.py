@@ -599,6 +599,16 @@ class SortList(unittest.TestCase):
         items = nslevel.slst_items([[100, 900], [200]], [1000], step=200, near=50)
         self.assertEqual([nslevel.poly_id(0, 0), nslevel.poly_id(1, 0)], slst_list(items[0])[1])
 
+    def test_lists_polygons_farthest_first(self):
+        # the game draws a list in order, later polygons over earlier ones,
+        # with no depth test, so a near wall has to come after what's behind
+        # it. by their middles: a floor piece just behind a wall shares the
+        # wall's largest z
+        items = nslevel.slst_items([[500, 100], [500]], [1000], step=200, near=50,
+                                   world_zmid=[[250, 50], [500]])
+        self.assertEqual([nslevel.poly_id(0, 1), nslevel.poly_id(0, 0), nslevel.poly_id(1, 0)],
+                         slst_list(items[0])[1])
+
     def test_keeps_the_nearest_polygons_the_game_can_list(self):
         # the game's lists hold at most 1460 polygons (SlstInit in src/slst.c);
         # the farthest (smallest z, as the camera looks along -z) are left out

@@ -645,23 +645,29 @@ def poly_id(world_idx, poly_idx):
 POLY_IDS_MAX = 1460  # polygons the game can list (SlstInit in src/slst.c)
 
 
-def slst_items(world_zmax, cam_zs, step, near):
+def slst_items(world_zmax, cam_zs, step, near, world_zmid=None):
     """a sort list for a camera path along -z (cameras at z cam_zs): for each
     point, the polygons (of each world, by their largest z, one list per
     world) that stay in front of the camera all the way to the next point,
     so none is ever drawn from behind the camera, which the renderer would
     project mirrored. a list holds at most the POLY_IDS_MAX nearest.
 
+    the game draws a list in order with no depth test (SwTransformAndShadeWorlds
+    in src/pc/gfx/soft.c), so each is farthest first by the polygons' middle
+    z (world_zmid, laid out like world_zmax; their largest z if not given).
+
     every item is a full list rather than a delta (the game copies an even
     type item as is, whichever way the camera moves). LevelUpdate reads
     item k on reaching point k, and item N (one past the last point) when
     starting in the second half of the path, so that repeats the last."""
+    world_zmid = world_zmid or world_zmax
+
     def full_list(cam_z):
-        front = [(zmax, poly_id(w, i)) for w, poly_zmax in enumerate(world_zmax)
+        front = [(zmax, world_zmid[w][i], poly_id(w, i)) for w, poly_zmax in enumerate(world_zmax)
                  for i, zmax in enumerate(poly_zmax) if zmax < cam_z - step - near]
         if len(front) > POLY_IDS_MAX:  # too many to list: leave out the farthest
             front = sorted(front, key=lambda f: -f[0])[:POLY_IDS_MAX]
-        ids = sorted(f[1] for f in front)
+        ids = [f[2] for f in sorted(front, key=lambda f: (f[1], f[2]))]
         return pad4(struct.pack("<HH%dH" % len(ids), len(ids), 0, *ids))
     items = [full_list(z) for z in cam_zs]
     return items + [items[-1]]
@@ -843,7 +849,9 @@ def assemble_level(level, templates, prefix, size, blocks, worlds, points, step,
                       avg_node_dist=step, direction=(0, 0, -4096))
     world_zmax = [[max(verts[a][2], verts[b][2], verts[c][2]) for a, b, c, _, _ in polys]
                   for verts, polys in worlds]
-    slst = Entry(slst_eid, 4, slst_items(world_zmax, [p[2] for p in points], step, MOCK_NEAR))
+    world_zmid = [[(verts[a][2] + verts[b][2] + verts[c][2]) / 3 for a, b, c, _, _ in polys]
+                  for verts, polys in worlds]
+    slst = Entry(slst_eid, 4, slst_items(world_zmax, [p[2] for p in points], step, MOCK_NEAR, world_zmid))
     zone = Entry(zone_eid, 7, [
         zone_header_bytes(t.header, zone_eid, [(eid, (x0, y0, z0)) for eid in world_eids],
                           1, len(entities)),
