@@ -183,7 +183,9 @@ def solid_cells(mesh, size, cell):
 
 # world meshes (wgeo): the faces, sliced along z so the sort list can drop
 # the pieces behind the camera a little at a time (see slst_items in
-# nslevel.py), split into meshes of at most WGEO_MAX vertices and polygons
+# nslevel.py), and along x and y so textures, which cover a whole polygon,
+# are about the same size everywhere; split into meshes of at most WGEO_MAX
+# vertices and polygons
 
 WGEO_MAX = 4096   # polygon and vertex indices are 12 bits
 WGEO_ITEMS_MAX = 7500  # vertices and polygons (8 bytes each) a mesh fits in a page beside its header
@@ -221,13 +223,17 @@ def clip(points, axis, value, keep_above):
     return out
 
 
-def slices(points, piece):
-    """a convex polygon cut by the planes z = multiples of piece"""
-    zs = [p[2] for p in points]
-    for k in range(int(min(zs) // piece), int(max(zs) // piece) + 1):
-        part = clip(clip(points, 2, k * piece, True), 2, (k + 1) * piece, False)
+def slices(points, piece, axes=(2, 0, 1)):
+    """a convex polygon cut by the planes z, x and y = multiples of piece"""
+    if not axes:
+        yield points
+        return
+    axis = axes[0]
+    cs = [p[axis] for p in points]
+    for k in range(int(min(cs) // piece), int(max(cs) // piece) + 1):
+        part = clip(clip(points, axis, k * piece, True), axis, (k + 1) * piece, False)
         if len(part) >= 3:
-            yield part
+            yield from slices(part, piece, axes[1:])
 
 
 def snap(p):
