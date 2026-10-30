@@ -321,9 +321,86 @@ class Zone(unittest.TestCase):
         self.assertEqual(0, len(p) % 4)
 
 
+def decode_vertex(data):
+    """(x, y, z, r, g, b) the way SwTransformWorlds reads a wgeo vertex"""
+    def sx(v, bits):
+        return v - (1 << bits) if v & (1 << (bits - 1)) else v
+    r, g, b, z8, h0, h1 = struct.unpack("<BBBBHH", data)
+    x = sx(h0 >> 3, 13)
+    z2 = (h0 >> 1) & 3
+    y = sx(h1 >> 3, 13)
+    z3 = sx(h1 & 7, 3)
+    return (x * 8, y * 8, (z8 + (z2 << 8) + (z3 << 10)) * 8, r, g, b)
+
+
+def decode_polygon(data):
+    """(a, b, c, tinf, tpag) of a wgeo polygon"""
+    w0, w1 = struct.unpack("<II", data)
+    return (w1 >> 20, (w1 >> 8) & 0xFFF, w0 >> 20, (w0 >> 8) & 0xFFF, (w0 >> 5) & 7)
+
+
+class World(unittest.TestCase):
+    def test_vertex_round_trips(self):
+        for v in [(0, 0, 0), (4088, -800, 8184), (-32768, 32760, -8192)]:
+            data = nslevel.world_vertex_bytes(*v, color=(1, 2, 3))
+            self.assertEqual(v + (1, 2, 3), decode_vertex(data))
+
+    def test_polygon_round_trips(self):
+        data = nslevel.world_polygon_bytes(1, 2, 4095, tinf=593, tpag=3)
+        self.assertEqual((1, 2, 4095, 593, 3), decode_polygon(data))
+
+    def test_floor_grid_covers_the_area_in_two_triangles_per_cell(self):
+        verts, polys = nslevel.floor_grid(1024, 2048, cell=512)
+        self.assertEqual(3 * 5, len(verts))
+        self.assertEqual(2 * 2 * 4, len(polys))
+        self.assertEqual({0}, {v[1] for v in verts})
+        self.assertEqual((0, 1024), (min(v[0] for v in verts), max(v[0] for v in verts)))
+        self.assertEqual((0, 2048), (min(v[2] for v in verts), max(v[2] for v in verts)))
+
+    def test_world_header_keeps_the_templates_textures(self):
+        template = struct.pack("<iiiIIIII", 1, 2, 3, 99, 99, 2, 1, 0)
+        template += struct.pack("<8I", nslevel.str_to_eid("Ju89T"), *([0] * 7)) + b"TEX!TEX?"
+        header = nslevel.world_header_bytes(template, (10, 20, 30), poly_count=4, vert_count=5)
+        self.assertEqual((10, 20, 30, 4, 5, 2, 1, 0), struct.unpack_from("<iiiIIIII", header, 0))
+        self.assertEqual(template[32:], header[32:])
+
+
+class SortList(unittest.TestCase):
+    def test_full_lists_at_both_ends_and_empty_deltas_between(self):
+        ids = [nslevel.poly_id(0, i) for i in range(3)]
+        items = nslevel.slst_items(ids, path_length=4)
+        self.assertEqual(5, len(items))
+        for item in (items[0], items[4]):
+            length, type = struct.unpack_from("<HH", item, 0)
+            self.assertEqual((3, 0), (length, type))
+            self.assertEqual(ids, list(struct.unpack_from("<3H", item, 4)))
+        for item in items[1:4]:
+            length, type, split, swaps = struct.unpack_from("<HHHH", item, 0)
+            self.assertEqual(1, type & 1)
+            # nodes from the delta: split, swaps, then the removals (from 2),
+            # additions (from split) and swaps (from swaps), each ended by 0xFFFF
+            nodes = struct.unpack_from("<%dH" % length, item, 4)
+            self.assertEqual((0xFFFF, 0xFFFF, 0xFFFF), (nodes[2], nodes[split], nodes[swaps]))
+
+    def test_poly_id_layout(self):
+        self.assertEqual((2 << 12) | 7, nslevel.poly_id(2, 7))
+
+
 @unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
                      "needs N. Sanity Beach in streams/")
 class RealLevel(unittest.TestCase):
+    def test_mock_level_is_one_zone_with_a_floor_and_crash(self):
+        mock = nslevel.make_mock(nslevel.read_level(STREAMS, 9))
+        self.assertEqual(nslevel.LID_TEST, mock.nsd.ldat.lid)
+        entries = {e.eid: e for p in mock.pages for e in p.entries}
+        zone = entries[mock.nsd.ldat.zone_spawn]
+        self.assertEqual(4, len(zone.items))  # header, bounds, path, crash
+        counts = nslevel.count_by_type(mock.pages)
+        self.assertEqual(1, counts["ZDAT"])
+        self.assertEqual(1, counts["WGEO"])
+        self.assertEqual(1, counts["SLST"])
+        self.assertNotIn("MIDI", counts)
+
     def test_cut_n_sanity_beach_keeps_crash_and_the_hud_only(self):
         level = nslevel.read_level(STREAMS, 9)
         cut = nslevel.cut_level(level, [level.nsd.ldat.exec_map[i] for i in nslevel.CORE_EXEC_SLOTS])

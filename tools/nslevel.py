@@ -419,6 +419,34 @@ def path_bytes(slst, points, cam_mode, zoom, avg_node_dist, direction=(0, 0, 0))
     return pad4(data)
 
 
+def world_vertex_bytes(x, y, z, color):
+    return b""
+
+
+def world_polygon_bytes(a, b, c, tinf, tpag):
+    return b""
+
+
+def floor_grid(w, d, cell):
+    return [], []
+
+
+def world_header_bytes(template, trans, poly_count, vert_count):
+    return b""
+
+
+def poly_id(world_idx, poly_idx):
+    return 0
+
+
+def slst_items(ids, path_length):
+    return []
+
+
+def make_mock(level):
+    return level
+
+
 def type_name(etype):
     return TYPE_NAMES.get(etype, str(etype))
 
