@@ -1,5 +1,6 @@
 # Blender v2.80 (sub 75) OBJ File: 'level.blend'
 # www.blender.org
+mtllib simple_afps_level.mtl
 o Level
 v -3.721678 -0.049381 -0.189361
 v -3.721678 2.350619 1.010639
