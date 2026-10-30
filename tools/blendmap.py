@@ -155,6 +155,13 @@ def zone_spans(depth, cell):
     return [(z, z + zone) for z in range(depth - zone, -1, -zone)]
 
 
+def zone_cells(cells, span, cell):
+    """the collision cells ({(i, j, k): kind}) in a zone span (z0, z1),
+    relative to the zone"""
+    k0, k1 = span[0] // cell, span[1] // cell
+    return {(i, j, k - k0): kind for (i, j, k), kind in cells.items() if k0 <= k < k1}
+
+
 # collision: the game's collision is an octree of solid cells (see
 # blocks_rect_bytes in nslevel.py), so the faces are turned into cells
 
