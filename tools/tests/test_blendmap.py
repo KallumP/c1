@@ -255,6 +255,13 @@ class WorldMeshes(unittest.TestCase):
                 self.assertEqual(min(cs) // 256, (max(cs) - 1) // 256, cs)
         self.assertAlmostEqual(1024 * 768, sum(area(verts, p) for p in polys))
 
+    def test_x_and_y_can_be_sliced_less_often_than_z(self):
+        # fewer polygons, as the sort list only needs the slices along z
+        wall = quad_mesh([(0, 0, 512), (1024, 0, 512), (1024, 768, 512), (0, 768, 512)])
+        [(verts, polys)] = blendmap.world_meshes(wall, 256, GROUND, SIDE, tile=512)
+        xs = {verts[i][0] for p in polys for i in p[:3]}
+        self.assertEqual({0, 512, 1024}, xs)
+
     def test_slicing_leaves_no_cracks_along_shared_edges(self):
         # two triangles sharing a slanted edge (x = z / 2, so every cut along it is on
         # a multiple of 8): wherever a slice cuts it, both sides get the same vertex
