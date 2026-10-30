@@ -937,6 +937,7 @@ def make_course(level):
 
 MAP_SCALE = 400        # zone units per blender metre: crash is a little over 2 m tall
 MAP_PIECE = 512        # the world meshes are sliced along z this often
+MAP_TILE = 1024        # and along x and y this often, so textures don't stretch over whole faces
 MAP_PATH_STEP = 128    # camera path points; doubled while the sort list doesn't fit in a page
 MAP_HEADROOM = 1024    # room above the map
 
@@ -958,7 +959,7 @@ def make_map(level, text, scale=MAP_SCALE, turn=0):
     fit = blendmap.fit(blendmap.read_obj(text, scale, turn), COURSE_CELL, MAP_HEADROOM, margin=COURSE_CELL)
     mesh = fit.mesh
     cells = blendmap.solid_cells(mesh, fit.size, COURSE_CELL)
-    worlds = blendmap.world_meshes(mesh, MAP_PIECE, t.textures[0], t.textures[1])
+    worlds = blendmap.world_meshes(mesh, MAP_PIECE, t.textures[0], t.textures[1], MAP_TILE)
     start = blendmap.spawn(mesh, cells, fit.size, COURSE_CELL)
     crash = bytearray(t.crash)
     struct.pack_into("<3h", crash, ENTITY_POINTS, start[0] // 4, (start[1] + 100) // 4, start[2] // 4)

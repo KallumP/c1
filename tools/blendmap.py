@@ -223,28 +223,31 @@ def clip(points, axis, value, keep_above):
     return out
 
 
-def slices(points, piece, axes=(2, 0, 1)):
-    """a convex polygon cut by the planes z, x and y = multiples of piece"""
-    if not axes:
+def slices(points, sizes):
+    """a convex polygon cut by the planes z, x and y = multiples of sizes
+    ((axis, size) pairs)"""
+    if not sizes:
         yield points
         return
-    axis = axes[0]
+    axis, size = sizes[0]
     cs = [p[axis] for p in points]
-    for k in range(int(min(cs) // piece), int(max(cs) // piece) + 1):
-        part = clip(clip(points, axis, k * piece, True), axis, (k + 1) * piece, False)
+    for k in range(int(min(cs) // size), int(max(cs) // size) + 1):
+        part = clip(clip(points, axis, k * size, True), axis, (k + 1) * size, False)
         if len(part) >= 3:
-            yield from slices(part, piece, axes[1:])
+            yield from slices(part, sizes[1:])
 
 
 def snap(p):
     return tuple(int(round(c / 8)) * 8 for c in p)
 
 
-def world_meshes(mesh, piece, ground, side):
-    """world meshes for a mesh's faces: a list of (vertices (x, y, z,
+def world_meshes(mesh, piece, ground, side, tile=None):
+    """world meshes for a mesh's faces, sliced every piece along z and every
+    tile (piece by default) along x and y: a list of (vertices (x, y, z,
     colour), polygons (a, b, c, tinf, tpag)), with ground (tinf, tpag) on
     faces facing up and side on the rest. faces facing down aren't drawn,
     since the camera looks down on the level and they would hide it"""
+    sizes = ((2, piece), (0, tile or piece), (1, tile or piece))
     meshes = []
     verts, polys, index = [], [], {}
 
@@ -269,7 +272,7 @@ def world_meshes(mesh, piece, ground, side):
             continue
         texture = ground if n[1] > FACING else side
         colour = shade(n)
-        for part in slices([mesh.verts[i] for i in tri.verts], piece):
+        for part in slices([mesh.verts[i] for i in tri.verts], sizes):
             part = [snap(p) for p in part]
             for k in range(1, len(part) - 1):
                 a, b, c = part[0], part[k], part[k + 1]
