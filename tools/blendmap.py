@@ -119,27 +119,40 @@ class Fit:
         self.mesh, self.size, self.offset = mesh, size, offset
 
 
-def fit(mesh, cell, headroom, margin=0):
+def fit(mesh, cell, headroom, margin=0, long_z=False):
     """mesh moved so its lowest corner is margin (zone units) in from the
     zone's, with each side of the zone a power of two cells, margin to
     spare along x and z, and headroom above it. a side is at most
-    SIDE_CELLS_MAX cells (TooBig)"""
+    SIDE_CELLS_MAX cells (TooBig); with long_z, z (the route) can run on
+    for whole zones of that (zone_spans)"""
     lo = [min(v[i] for v in mesh.verts) - margin for i in range(3)]
     verts = [tuple(int(round((v[i] - lo[i]) / 8)) * 8 for i in range(3)) for v in mesh.verts]
     size = []
+    zone_max = cell * SIDE_CELLS_MAX
     for i in range(3):
         extent = max(v[i] for v in verts)
-        if extent > VERTEX_MAX:
+        long = long_z and i == 2 and extent + margin > zone_max
+        if extent > VERTEX_MAX and not long:  # a long route's meshes are each relative to their zone
             raise ValueError("the map is %d zone units along %s, more than %d; scale it down"
                              % (extent, "xyz"[i], VERTEX_MAX))
+        if long:
+            size.append(-(-(extent + margin) // zone_max) * zone_max)
+            continue
         side = cell
         while side < extent + (headroom if i == 1 else margin):
             side *= 2
-        if side > cell * SIDE_CELLS_MAX:
+        if side > zone_max:
             fixed = (headroom + margin) if i == 1 else 2 * margin  # margin below too, and on both ends
             raise TooBig(i, extent + (headroom if i == 1 else margin), cell * SIDE_CELLS_MAX, fixed)
         size.append(side)
     return Fit(Mesh(verts, mesh.tris), tuple(size), tuple(lo))
+
+
+def zone_spans(depth, cell):
+    """the zones (z0, z1) a fitted map depth long along z is split into,
+    SIDE_CELLS_MAX cells each, from the route's start (the +z end)"""
+    zone = min(depth, cell * SIDE_CELLS_MAX)
+    return [(z, z + zone) for z in range(depth - zone, -1, -zone)]
 
 
 # collision: the game's collision is an octree of solid cells (see
