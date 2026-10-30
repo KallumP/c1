@@ -2,9 +2,11 @@
 #define _PC_REPLAY_H_
 
 #include <stdio.h>
+#include <time.h>
 #include "common.h"
 
 #define REPLAY_FILE  "inputs.rec"
+#define REPLAY_DIR   "recorded_inputs"
 #define REPLAY_MAGIC 0x31434552 /* "REC1" */
 
 /* state needed to start a level the same way again */
@@ -30,6 +32,12 @@ extern int ReplayRecordStart(replay_recorder *r, const char *path,
 extern void ReplayRecordFrame(replay_recorder *r, int32_t ticks,
   uint32_t held);
 extern void ReplayRecordStop(replay_recorder *r);
+
+/* recording files */
+extern void ReplayFileName(char *name, size_t size, const char *dir,
+  struct tm *start);
+extern int ReplayNewestFile(const char *dir, char *path, size_t size);
+extern int ReplayMakeDir(const char *dir);
 
 /* game side */
 #define REPLAY_RECORD 1

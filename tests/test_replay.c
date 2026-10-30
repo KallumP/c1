@@ -149,6 +149,63 @@ UTEST(replay, replay_of_a_missing_file_fails_cleanly) {
   ASSERT_FALSE(TimeIsFixed());
 }
 
+#define TEST_REC_DIR "build/test_recorded_inputs"
+
+static void TouchFile(const char *name) {
+  char path[256];
+  FILE *file;
+
+  snprintf(path, sizeof(path), "%s/%s", TEST_REC_DIR, name);
+  file = fopen(path, "wb");
+  if (file) { fclose(file); }
+}
+
+static void RemoveFile(const char *name) {
+  char path[256];
+
+  snprintf(path, sizeof(path), "%s/%s", TEST_REC_DIR, name);
+  remove(path);
+}
+
+UTEST(replay, file_name_starts_with_the_start_time) {
+  struct tm t = { 0 };
+  char name[64];
+
+  t.tm_year = 2026 - 1900; t.tm_mon = 9; t.tm_mday = 30;
+  t.tm_hour = 14; t.tm_min = 5; t.tm_sec = 9;
+  ReplayFileName(name, sizeof(name), "recorded_inputs", &t);
+  ASSERT_STREQ("recorded_inputs/2026-10-30_14-05-09.rec", name);
+}
+
+UTEST(replay, newest_file_is_the_latest_start_time) {
+  char path[256];
+
+  ASSERT_EQ(1, ReplayMakeDir(TEST_REC_DIR));
+  TouchFile("2026-10-30_14-05-09.rec");
+  TouchFile("2026-11-02_08-00-00.rec");
+  TouchFile("2026-10-31_23-59-59.rec");
+  TouchFile("zzz.txt"); /* not a recording */
+  ASSERT_EQ(1, ReplayNewestFile(TEST_REC_DIR, path, sizeof(path)));
+  ASSERT_STREQ(TEST_REC_DIR "/2026-11-02_08-00-00.rec", path);
+  RemoveFile("2026-10-30_14-05-09.rec");
+  RemoveFile("2026-11-02_08-00-00.rec");
+  RemoveFile("2026-10-31_23-59-59.rec");
+  RemoveFile("zzz.txt");
+}
+
+UTEST(replay, no_newest_file_in_an_empty_or_missing_folder) {
+  char path[256];
+
+  ASSERT_EQ(1, ReplayMakeDir(TEST_REC_DIR));
+  ASSERT_EQ(0, ReplayNewestFile(TEST_REC_DIR, path, sizeof(path)));
+  ASSERT_EQ(0, ReplayNewestFile("build/no_such_folder", path, sizeof(path)));
+}
+
+UTEST(replay, making_a_folder_that_exists_is_fine) {
+  ASSERT_EQ(1, ReplayMakeDir(TEST_REC_DIR));
+  ASSERT_EQ(1, ReplayMakeDir(TEST_REC_DIR));
+}
+
 UTEST(replay, start_fails_cleanly_for_a_bad_path) {
   ASSERT_EQ(0, ReplayStart("build/no/such/dir/test.rec", REPLAY_RECORD, 0x19, 12345));
   ASSERT_FALSE(TimeIsFixed());

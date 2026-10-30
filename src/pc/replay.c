@@ -32,6 +32,19 @@ void ReplayRecordStop(replay_recorder *r) {
   r->file = 0;
 }
 
+void ReplayFileName(char *name, size_t size, const char *dir,
+  struct tm *start) {
+  name[0] = 0;
+}
+
+int ReplayNewestFile(const char *dir, char *path, size_t size) {
+  return 0;
+}
+
+int ReplayMakeDir(const char *dir) {
+  return 0;
+}
+
 static replay_recorder recorder = { 0 };
 
 static FILE *replay_file = 0;   /* recording being replayed, or 0 */
