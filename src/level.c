@@ -48,14 +48,10 @@ extern vec cam_trans;
 extern ang cam_rot;
 extern uint32_t screen_proj;
 
-#ifdef PSX
-extern int ticks_elapsed;
-#else
 #include "solid.h"
 #include "pc/time.h"
 #include "pc/gfx/soft.h"
 extern sw_transform_struct params;
-#endif
 
 //----- (800253A0) --------------------------------------------------------
 int LdatInit() {
@@ -297,10 +293,6 @@ void LevelUpdate(entry *zone, zone_path *path, int32_t progress, uint32_t flags)
         NSOpen(&loadlist->eids[i], 0, 1);
       for (i=0;i<loadlist->page_count;i++) /* TODO: rename */
         NSPageOpen(loadlist->pgids[i], 0, 1, EID_NONE);
-#ifdef PSX
-      if (flag)
-        NSUpdate2();
-#endif
       for (i=0;i<header->neighbor_count;i++) {
         neighbor = NSLookup(&header->neighbors[i]);
         n_header = (zone_header*)neighbor->items[0];
@@ -338,11 +330,9 @@ void LevelUpdate(entry *zone, zone_path *path, int32_t progress, uint32_t flags)
 
 //----- (800260AC) --------------------------------------------------------
 void LevelUpdateMisc(zone_gfx *gfx, uint32_t flags) {
-#ifndef PSX
   int ticks_elapsed;
 
   ticks_elapsed = GetTicksElapsed();
-#endif
   respawn_stamp = ticks_elapsed;
   prev_vram_fill_color = vram_fill_color;
   next_vram_fill_color = gfx->unknown_h;
@@ -395,9 +385,6 @@ void LevelResetGlobals(int flag) {
   saved_level_count = 1;
   life_count = init_life_count;
   memset(level_spawns, 0, sizeof(level_spawns));
-#ifdef PSX
-  sub_8003D1B4();
-#endif
 }
 
 //----- (800262DC) --------------------------------------------------------
@@ -510,11 +497,7 @@ void LevelRestart(level_state *state) {
     NSZoneUnload(&header->loadlist);
   }
   cur_zone = 0;
-#ifdef PSX
-  SetGeomScreen(screen_proj);
-#else
   params.screen_proj = screen_proj;
-#endif
   if (first_spawn) {
     for (i=0;i<sizeof(spawns)/sizeof(uint32_t);i++)
       spawns[i] = state->spawns[i];
@@ -1378,11 +1361,7 @@ int ZoneQueryOctrees(vec *v, gool_object *obj, zone_query *query) {
     if (TestRectIntersectsBound(&query->nodes_bound, (rect*)z_rect)) {
       count = query->result_count;
       results_tail = (zone_query_results*)&query->results[count];
-#ifdef PSX
-      query->result_count = RZoneQueryOctree(z_rect, &query->nodes_bound, results_tail);
-#else
       query->result_count += ZoneQueryOctree(z_rect, &query->nodes_bound, results_tail);
-#endif
     }
   }
   count = query->result_count;
