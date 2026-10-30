@@ -566,11 +566,13 @@ class SortList(unittest.TestCase):
         items = nslevel.slst_items([[100, 900], [200]], [1000], step=200, near=50)
         self.assertEqual([nslevel.poly_id(0, 0), nslevel.poly_id(1, 0)], slst_list(items[0])[1])
 
-    def test_more_polygons_than_the_game_can_list_is_an_error(self):
-        # the game's lists hold at most 1460 polygons (SlstInit in src/slst.c)
-        with self.assertRaises(ValueError):
-            nslevel.slst_items([[0] * 1461], [1000], step=200, near=50)
-        nslevel.slst_items([[0] * 1460], [1000], step=200, near=50)
+    def test_keeps_the_nearest_polygons_the_game_can_list(self):
+        # the game's lists hold at most 1460 polygons (SlstInit in src/slst.c);
+        # the farthest (smallest z, as the camera looks along -z) are left out
+        items = nslevel.slst_items([[0] * 1000, [500] * 1000], [1000], step=200, near=50)
+        ids = slst_list(items[0])[1]
+        self.assertEqual(1460, len(ids))
+        self.assertEqual(1000, sum(1 for i in ids if i >> 12 == 1))  # all of the nearer world
 
     def test_poly_id_layout(self):
         self.assertEqual((2 << 12) | 7, nslevel.poly_id(2, 7))
