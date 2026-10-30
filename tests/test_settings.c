@@ -211,3 +211,23 @@ UTEST(settings, fix_model_draw_order_on_and_off) {
   ASSERT_EQ(-1, SettingsParseLine("fix_model_draw_order = 1", &s));
   ASSERT_EQ(1, s.fix_model_draw_order);
 }
+
+UTEST(settings, record_inputs_is_off_by_default) {
+  pc_settings s;
+
+  s.record_inputs = 1;
+  SettingsReset(&s);
+  ASSERT_EQ(0, s.record_inputs);
+}
+
+UTEST(settings, record_inputs_on_and_off) {
+  pc_settings s;
+
+  SettingsReset(&s);
+  ASSERT_EQ(1, SettingsParseLine("record_inputs = on", &s));
+  ASSERT_EQ(1, s.record_inputs);
+  ASSERT_EQ(1, SettingsParseLine("record_inputs = off", &s));
+  ASSERT_EQ(0, s.record_inputs);
+  ASSERT_EQ(-1, SettingsParseLine("record_inputs = yes", &s));
+  ASSERT_EQ(0, s.record_inputs);
+}
