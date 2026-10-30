@@ -67,3 +67,6 @@ int TimeIsFixed() {
 void TimeAdvance(int32_t ticks) {
   fixed_ticks += ticks;
 }
+
+void TimeWaitFrame(int32_t ticks) {
+}
