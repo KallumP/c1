@@ -394,11 +394,13 @@ def log2_exact(n, what):
 
 def blocks_rect_bytes(origin, size, blocks, cell):
     """zone bounds and a collision octree where the given blocks are solid
-    ground and the rest is empty. size (w, h, d) and the blocks ((x0, y0, z0,
-    x1, y1, z1), zone units relative to origin) have to be on a grid of cell
-    sized cells, and each side of size a power of two times cell.
+    and the rest is empty. size (w, h, d) and the blocks ((x0, y0, z0, x1,
+    y1, z1), zone units relative to origin, optionally followed by the leaf
+    to use, LEAF_GROUND by default; later blocks win where they overlap)
+    have to be on a grid of cell sized cells, and each side of size a power
+    of two times cell.
 
-    a region is split where it's partly solid, and a solid region is also
+    a region is split where its cells differ, and a solid region is also
     split while it's wider than FLOOR_CELL_MAX (see floor_rect_bytes); the
     same subtree is only stored once, so large regions cost nothing"""
     w, h, d = size
@@ -406,28 +408,32 @@ def blocks_rect_bytes(origin, size, blocks, cell):
     mx, my, mz = log2_exact(nx, "w"), log2_exact(ny, "h"), log2_exact(nz, "d")
     if (nx * cell, ny * cell, nz * cell) != (w, h, d):
         raise ValueError("size has to be a multiple of the cell size")
+    grid = [[[0] * nz for _ in range(ny)] for _ in range(nx)]
     for block in blocks:
-        if any(v % cell for v in block) or not (0 <= block[0] < block[3] <= w and
-                                                0 <= block[1] < block[4] <= h and
-                                                0 <= block[2] < block[5] <= d):
+        box, leaf = block[:6], (block[6] if len(block) > 6 else LEAF_GROUND)
+        if any(v % cell for v in box) or not (0 <= box[0] < box[3] <= w and
+                                              0 <= box[1] < box[4] <= h and
+                                              0 <= box[2] < box[5] <= d):
             raise ValueError("block %r isn't on the %d grid inside the zone" % (block, cell))
+        for i in range(box[0] // cell, box[3] // cell):
+            for j in range(box[1] // cell, box[4] // cell):
+                for k in range(box[2] // cell, box[5] // cell):
+                    grid[i][j][k] = leaf
 
-    # prefix sums of solid cells, so any region's solid count is a lookup
-    solid = [[[0] * nz for _ in range(ny)] for _ in range(nx)]
-    for x0, y0, z0, x1, y1, z1 in blocks:
-        for i in range(x0 // cell, x1 // cell):
-            for j in range(y0 // cell, y1 // cell):
-                for k in range(z0 // cell, z1 // cell):
-                    solid[i][j][k] = 1
-    sums = [[[0] * (nz + 1) for _ in range(ny + 1)] for _ in range(nx + 1)]
-    for i in range(nx):
-        for j in range(ny):
-            for k in range(nz):
-                sums[i + 1][j + 1][k + 1] = (solid[i][j][k] + sums[i][j + 1][k + 1] + sums[i + 1][j][k + 1]
-                                             + sums[i + 1][j + 1][k] - sums[i][j][k + 1] - sums[i][j + 1][k]
-                                             - sums[i + 1][j][k] + sums[i][j][k])
+    # prefix sums of each leaf's cells, so a region's makeup is a lookup
+    def prefix_sums(leaf):
+        sums = [[[0] * (nz + 1) for _ in range(ny + 1)] for _ in range(nx + 1)]
+        for i in range(nx):
+            for j in range(ny):
+                for k in range(nz):
+                    sums[i + 1][j + 1][k + 1] = ((grid[i][j][k] == leaf) + sums[i][j + 1][k + 1]
+                                                 + sums[i + 1][j][k + 1] + sums[i + 1][j + 1][k]
+                                                 - sums[i][j][k + 1] - sums[i][j + 1][k]
+                                                 - sums[i + 1][j][k] + sums[i][j][k])
+        return sums
+    leaves = {leaf: prefix_sums(leaf) for leaf in {b[6] if len(b) > 6 else LEAF_GROUND for b in blocks}}
 
-    def count(i0, j0, k0, i1, j1, k1):
+    def count(sums, i0, j0, k0, i1, j1, k1):
         return (sums[i1][j1][k1] - sums[i0][j1][k1] - sums[i1][j0][k1] - sums[i1][j1][k0]
                 + sums[i0][j0][k1] + sums[i0][j1][k0] + sums[i1][j0][k0] - sums[i0][j0][k0])
 
@@ -435,11 +441,14 @@ def blocks_rect_bytes(origin, size, blocks, cell):
     shared = {}
 
     def build(level, i0, j0, k0, ni, nj, nk):
-        n = count(i0, j0, k0, i0 + ni, j0 + nj, k0 + nk)
-        if n == 0:
+        total = ni * nj * nk
+        counts = {leaf: count(sums, i0, j0, k0, i0 + ni, j0 + nj, k0 + nk)
+                  for leaf, sums in leaves.items()}
+        if not any(counts.values()):
             return 0
-        if n == ni * nj * nk and ni * cell <= FLOOR_CELL_MAX and nk * cell <= FLOOR_CELL_MAX:
-            return LEAF_GROUND
+        uniform = [leaf for leaf, n in counts.items() if n == total]
+        if uniform and ni * cell <= FLOOR_CELL_MAX and nk * cell <= FLOOR_CELL_MAX:
+            return uniform[0]
         fx, fy, fz = level < mx, level < my, level < mz
         si, sj, sk = (ni // 2 if fx else ni), (nj // 2 if fy else nj), (nk // 2 if fz else nk)
         children = tuple(build(level + 1, i0 + i * si, j0 + j * sj, k0 + k * sk, si, sj, sk)
