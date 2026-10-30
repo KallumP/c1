@@ -689,49 +689,77 @@ class Templates:
         self.crash = self.entities[(0, 0)]
 
 
-def assemble_level(level, templates, prefix, size, blocks, worlds, points, step, entities,
-                   textures=None):
-    """a custom level from a real level: one zone of size (w, h, d) at the
-    template zone's origin, with collision from blocks, world meshes (each
-    vertices (x, y, z, colour) and polygons (a, b, c, tinf, tpag) relative
-    to the zone), one follow camera path through points (x, y, z) step
-    apart going along -z, and entities (crash first). keeps crash, the hud
-    and core objects, and the code for the entities' types, from level.
-    textures, from map_textures, adds texture pages and each mesh's
-    texinfos for them"""
-    tpag_eids, texinfos, texture_pages = textures or ((), [b""] * len(worlds), [])
+class ZonePlan:
+    """what goes in one zone of a custom level: its z offset from the first
+    zone's corner, collision blocks, world meshes (vertices (x, y, z, colour)
+    and polygons (a, b, c, tinf, tpag) relative to the zone), its mesh
+    headers' extra texinfos, camera path points (x, y, z) relative to the
+    zone (none for zones the camera never reaches) and entities"""
+    def __init__(self, dz, blocks, worlds, texinfos, points, entities=()):
+        self.dz, self.blocks, self.worlds, self.texinfos = dz, blocks, worlds, texinfos
+        self.points, self.entities = points, list(entities)
+
+
+def zone_prefix(i):
+    return "Bm%02d" % i  # a zone's entries are this and Z, S, W, 1, 2, 3
+
+
+def assemble_level(level, templates, size, zones, step, spawn_zone, tpag_eids=(), texture_pages=()):
+    """a custom level from a real level: a chain of zones (ZonePlan) of size
+    (w, h, d), the first at the template zone's origin and the rest each
+    along -z from the one before, each with a follow camera path step apart
+    going along -z that leads on to the next zone's. each zone lists its own
+    meshes and the next zone's, as the camera looks on into it. crash, the
+    first entity of spawn_zone, starts there. keeps crash, the hud and core
+    objects, and the code for the entities' types, from level. tpag_eids and
+    texture_pages add texture pages for the meshes' texinfos"""
     t = templates
-    zone_eid, slst_eid = str_to_eid(prefix + "Z"), str_to_eid(prefix + "S")
-    world_eids = [str_to_eid(prefix + ("W" if i == 0 else str(i))) for i in range(len(worlds))]
     x0, y0, z0 = t.origin
-    world_entries = [Entry(eid, 3, [
-        world_header_bytes(t.world.items[0], (x0, y0, z0), len(polys), len(verts), tpag_eids, infos),
-        b"".join(world_polygon_bytes(a, b, c, tinf, tpag) for a, b, c, tinf, tpag in polys),
-        b"".join(world_vertex_bytes(x, y, z, colour) for x, y, z, colour in verts)])
-        for eid, (verts, polys), infos in zip(world_eids, worlds, texinfos)]
-    cam_points = [(x, y, z, -181, 1, 0) for x, y, z in points]
-    path = path_bytes(slst_eid, cam_points, cam_mode=5, zoom=1700,
-                      avg_node_dist=step, direction=(0, 0, -4096))
-    world_zmax = [[max(verts[a][2], verts[b][2], verts[c][2]) for a, b, c, _, _ in polys]
-                  for verts, polys in worlds]
-    world_zmid = [[(verts[a][2] + verts[b][2] + verts[c][2]) / 3 for a, b, c, _, _ in polys]
-                  for verts, polys in worlds]
-    slst = Entry(slst_eid, 4, slst_items(world_zmax, [p[2] for p in points], step, SLST_NEAR, world_zmid))
-    zone = Entry(zone_eid, 7, [
-        zone_header_bytes(t.header, zone_eid, [(eid, (x0, y0, z0)) for eid in world_eids],
-                          1, len(entities)),
-        blocks_rect_bytes(t.origin, size, blocks, MAP_CELL),
-        path] + list(entities))
+    zone_eids = [str_to_eid(zone_prefix(i) + "Z") for i in range(len(zones))]
+    world_eids = [[str_to_eid(zone_prefix(i) + ("W" if w == 0 else str(w))) for w in range(len(z.worlds))]
+                  for i, z in enumerate(zones)]
+    origins = [(x0, y0, z0 + z.dz) for z in zones]
+    entries = []
+    for i, z in enumerate(zones):
+        entries += [Entry(eid, 3, [
+            world_header_bytes(t.world.items[0], origins[i], len(polys), len(verts), tpag_eids, infos),
+            b"".join(world_polygon_bytes(a, b, c, tinf, tpag) for a, b, c, tinf, tpag in polys),
+            b"".join(world_vertex_bytes(x, y, zz, colour) for x, y, zz, colour in verts)])
+            for eid, (verts, polys), infos in zip(world_eids[i], z.worlds, z.texinfos)]
+    for i, z in enumerate(zones):
+        nxt = i + 1 if i + 1 < len(zones) else None
+        listed = [(eid, origins[i]) for eid in world_eids[i]]
+        meshes = [(verts, polys, 0) for verts, polys in z.worlds]
+        if nxt is not None:
+            listed += [(eid, origins[nxt]) for eid in world_eids[nxt]]
+            meshes += [(verts, polys, zones[nxt].dz - z.dz) for verts, polys in zones[nxt].worlds]
+        neighbors = ([zone_eids[i - 1]] if i > 0 else []) + ([zone_eids[nxt]] if nxt is not None else [])
+        paths = []
+        if z.points:
+            slst_eid = str_to_eid(zone_prefix(i) + "S")
+            links = []
+            if i > 0 and zones[i - 1].points:
+                links.append((1, 1, 0, 2))  # back to the end of the path before
+            if nxt is not None and zones[nxt].points:
+                links.append((2, neighbors.index(zone_eids[nxt]) + 1, 0, 1))  # on to the start of the next
+            cam_points = [(x, y, zz, -181, 1, 0) for x, y, zz in z.points]
+            paths = [path_bytes(slst_eid, cam_points, cam_mode=5, zoom=1700, avg_node_dist=step,
+                                direction=(0, 0, -4096), links=links)]
+            entries.append(Entry(slst_eid, 4, zone_slst_items(meshes, [p[2] for p in z.points], step)))
+        entries.append(Entry(zone_eids[i], 7, [
+            zone_header_bytes(t.header, zone_eids[i], listed, len(paths), len(z.entities), neighbors),
+            blocks_rect_bytes(origins[i], size, z.blocks, MAP_CELL)] + paths + z.entities))
     tpags = struct.unpack_from("<8I", t.world.items[0], 32)
     exec_map = level.nsd.ldat.exec_map
-    slots = set(CORE_EXEC_SLOTS) | {entity_type(e)[0] for e in entities}
+    slots = set(CORE_EXEC_SLOTS) | {entity_type(e)[0] for z in zones for e in z.entities}
     keep = [exec_map[i] for i in slots] + [tp for tp in tpags if tp]
     out = cut_level(level, keep)
-    out.pages = pack_entries([zone, slst] + world_entries) + out.pages + list(texture_pages)
+    out.pages = pack_entries(entries) + out.pages + list(texture_pages)
     out.nsd.ldat.lid = LID_TEST
-    out.nsd.ldat.zone_spawn = zone_eid
+    out.nsd.ldat.zone_spawn = zone_eids[spawn_zone]
     out.nsd.ldat.path_idx_spawn = 0
-    load_texture_pages(out, zone_eid)
+    for eid in zone_eids:
+        load_texture_pages(out, eid)
     return out
 
 
@@ -842,29 +870,44 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None):
     the textures. faces of materials with an image in
     images ({material: PIL image}) get it, the rest the beach's textures"""
     t = Templates(level)
-    fit = blendmap.fit(blendmap.read_obj(text, scale, turn), MAP_CELL, MAP_HEADROOM, margin=MAP_CELL)
+    fit = blendmap.fit(blendmap.read_obj(text, scale, turn), MAP_CELL, MAP_HEADROOM, margin=MAP_CELL,
+                       long_z=True)
     mesh = fit.mesh
     cells = blendmap.solid_cells(mesh, fit.size, MAP_CELL)
+    spans = blendmap.zone_spans(fit.size[2], MAP_CELL)
+    size = (fit.size[0], fit.size[1], spans[0][1] - spans[0][0])
     texinfo_words = struct.unpack_from(WGEO_HEADER, t.world.items[0], 0)[5]  # the template's own
-    worlds = blendmap.world_meshes(mesh, MAP_PIECE, t.textures[0], t.textures[1], MAP_TILE,
-                                   textured=set(images or ()),
-                                   regions_max=(TEXINFO_WORDS_MAX - texinfo_words) // 2)
-    textures = None
+    worlds_max = blendmap.WORLDS_MAX if len(spans) == 1 else blendmap.WORLDS_MAX // 2  # and the next's
+    zone_worlds = [blendmap.world_meshes(mesh, MAP_PIECE, t.textures[0], t.textures[1], MAP_TILE,
+                                         textured=set(images or ()),
+                                         regions_max=(TEXINFO_WORDS_MAX - texinfo_words) // 2,
+                                         span=span, worlds_max=worlds_max) for span in spans]
+    flat = [w for worlds in zone_worlds for w in worlds]
+    tpag_eids, texinfos, pages = (), [b""] * len(flat), []
     if images:
-        worlds, textures = map_textures(worlds, images, t.world.items[0])
+        flat, (tpag_eids, texinfos, pages) = map_textures(flat, images, t.world.items[0])
     start = blendmap.spawn(mesh, cells, fit.size, MAP_CELL)
+    spawn_zone = blendmap.zone_index(spans, start[2])
     crash = bytearray(t.crash)
-    struct.pack_into("<3h", crash, ENTITY_POINTS, start[0] // 4, (start[1] + 100) // 4, start[2] // 4)
+    struct.pack_into("<3h", crash, ENTITY_POINTS, start[0] // 4, (start[1] + 100) // 4,
+                     (start[2] - spans[spawn_zone][0]) // 4)
     step = MAP_PATH_STEP
     while True:
-        points = blendmap.camera_path(cells, fit.size, MAP_CELL, start, step)
+        paths = blendmap.zone_paths(blendmap.camera_path(cells, fit.size, MAP_CELL, start, step), spans)
+        zones, n = [], 0
+        for i, span in enumerate(spans):
+            count = len(zone_worlds[i])
+            zones.append(ZonePlan(span[0] - spans[0][0], cell_blocks(blendmap.zone_cells(cells, span, MAP_CELL),
+                                                                     MAP_CELL),
+                                  flat[n:n + count], texinfos[n:n + count], paths[i],
+                                  [bytes(crash)] if i == spawn_zone else []))
+            n += count
         try:
-            return assemble_level(level, t, "BMap", fit.size, cell_blocks(cells, MAP_CELL), worlds,
-                                  points, step, [bytes(crash)], textures)
+            return assemble_level(level, t, size, zones, step, spawn_zone, tpag_eids, pages)
         except EntryTooBig as e:
-            if e.entry.type != 4 or step >= MAP_PIECE:  # only the sort list shrinks
+            if e.entry.type != 4 or step >= MAP_PIECE:  # only the sort lists shrink
                 raise
-            step *= 2  # fewer points, so a smaller sort list
+            step *= 2  # fewer points, so smaller sort lists
 
 
 def type_name(etype):
