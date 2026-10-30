@@ -849,6 +849,72 @@ class Map(unittest.TestCase):
         w, h, d = struct.unpack_from("<III", zone.items[1], 12)
         self.assertGreater(w, d)
 
+    # a floor 100 m long: 40000 units at the default scale, so 3 zones of 16384
+    LONG_OBJ = "o Floor\nv -4 0 -50\nv -4 0 50\nv 4 0 50\nv 4 0 -50\nf 1 2 3 4\n"
+
+    def long_zones(self):
+        level, entries, _ = self.make(self.LONG_OBJ)
+        zones = sorted((e for e in entries.values() if e.type == 7),
+                       key=lambda z: -struct.unpack_from("<i", z.items[1], 8)[0])  # from the route's start (+z)
+        return level, entries, zones
+
+    def neighbors(self, zone):
+        count = struct.unpack_from("<I", zone.items[0], nslevel.ZONE_PATHS_IDX + 12)[0]
+        return list(struct.unpack_from("<%dI" % count, zone.items[0], nslevel.ZONE_NEIGHBORS))
+
+    def test_a_long_map_is_a_chain_of_zones_along_the_route(self):
+        level, entries, zones = self.long_zones()
+        self.assertEqual(3, len(zones))
+        rects = [struct.unpack_from("<iiiIII", z.items[1], 0) for z in zones]
+        for (x, y, z, w, h, d), nxt in zip(rects, rects[1:]):
+            self.assertEqual(16384, d)
+            self.assertEqual(z - 16384, nxt[2])  # the next one along -z, touching
+            self.assertEqual((x, y, w, h), nxt[:2] + nxt[3:5])
+
+    def test_each_zone_lists_itself_then_the_zones_either_side(self):
+        level, entries, zones = self.long_zones()
+        a, b, c = (z.eid for z in zones)
+        self.assertEqual([[a, b], [b, a, c], [c, b]], [self.neighbors(z) for z in zones])
+
+    def test_paths_lead_on_to_the_next_zones_and_back(self):
+        level, entries, zones = self.long_zones()
+        links = []
+        for z in zones:
+            paths_idx, path_count = struct.unpack_from("<2I", z.items[0], nslevel.ZONE_PATHS_IDX)
+            for p in z.items[paths_idx:paths_idx + path_count]:
+                n = struct.unpack_from("<I", p, 8)[0]
+                links.append(sorted(struct.unpack_from("<4B", p, 12 + 4 * i) for i in range(n)))
+        # crash starts in the first zone, so all three have a path
+        self.assertEqual([[(2, 1, 0, 1)], [(1, 1, 0, 2), (2, 2, 0, 1)], [(1, 1, 0, 2)]], links)
+
+    def test_crash_is_in_the_zone_the_level_spawns_in(self):
+        level, entries, zones = self.long_zones()
+        spawn = entries[level.nsd.ldat.zone_spawn]
+        counts = [struct.unpack_from("<I", z.items[0], nslevel.ZONE_PATHS_IDX + 8)[0] for z in zones]
+        self.assertEqual(1, sum(counts))
+        self.assertEqual(1, struct.unpack_from("<I", spawn.items[0], nslevel.ZONE_PATHS_IDX + 8)[0])
+        paths_idx, path_count = struct.unpack_from("<2I", spawn.items[0], nslevel.ZONE_PATHS_IDX)
+        crash = spawn.items[paths_idx + path_count]
+        z = struct.unpack_from("<h", crash, nslevel.ENTITY_POINTS + 4)[0] * 4
+        self.assertTrue(0 <= z < 16384, z)  # relative to its zone
+
+    def test_every_zone_loads_the_texture_pages(self):
+        level, entries, zones = self.long_zones()
+        pages = sum(1 for p in level.pages if p.type == nslevel.PAGE_TEXTURE)
+        for z in zones:
+            self.assertEqual(pages, struct.unpack_from("<i", z.items[0], nslevel.ZONE_LOADLIST + 4)[0])
+
+    def test_a_zone_draws_its_own_and_the_next_zones_meshes(self):
+        level, entries, zones = self.long_zones()
+        worlds = []
+        for z in zones:
+            count = struct.unpack_from("<I", z.items[0], 0)[0]
+            worlds.append([struct.unpack_from("<I", z.items[0], 4 + i * nslevel.ZONE_WORLD_SIZE)[0]
+                           for i in range(count)])
+        for i in range(2):
+            self.assertTrue(set(worlds[i + 1]) & set(worlds[i]), "zone %d lists the next zone's meshes" % i)
+        self.assertLessEqual(max(len(w) for w in worlds), 8)
+
 
 @unittest.skipUnless(os.path.exists(os.path.join(STREAMS, "s0000009.nsd")),
                      "needs N. Sanity Beach in streams/")
