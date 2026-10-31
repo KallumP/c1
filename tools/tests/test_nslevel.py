@@ -918,6 +918,45 @@ class Map(unittest.TestCase):
         level, entries, zone = self.make(scale=256)
         self.assertEqual([], self.warp_pads(entries))
 
+    def boxes(self, zone):
+        """(subtype, id, position) of each box in a zone, in order"""
+        return [(nslevel.entity_type(e)[1], nslevel.entity_id(e),
+                 tuple(c * 4 for c in struct.unpack_from("<3h", e, nslevel.ENTITY_POINTS)))
+                for e in self.entities(zone) if nslevel.entity_type(e)[0] == nslevel.BOX_TYPE]
+
+    def test_a_box_goes_on_the_ground_below_it(self):
+        # blender (1, 2, 0.5) is the .obj's (1, 0.5, -2)
+        box = nslevel.levelobjects.LevelObject("box", (1, 2, 0.5), subtype=6)
+        level, entries, zone = self.make(scale=256, objects=[box])
+        [(subtype, _, (x, y, z))] = self.boxes(zone)
+        self.assertEqual(6, subtype)
+        self.assertAlmostEqual(128 + 5 * 256, x, delta=16)
+        self.assertAlmostEqual(128 + 6 * 256, z, delta=16)
+        self.assertEqual(128, y)
+
+    def test_a_stack_is_boxes_one_on_another_one_after_another(self):
+        # GoolObjectSpawn in src/gool.c stacks a box on the box spawned just
+        # before it when it's at the same x and z and 100 (in units of 4) higher
+        box = nslevel.levelobjects.LevelObject("box", (1, 2, 0.5), subtype=2, stack=3)
+        level, entries, zone = self.make(scale=256, objects=[box])
+        stack = self.boxes(zone)
+        self.assertEqual(3, len(stack))
+        for (_, _, below), (_, _, above) in zip(stack, stack[1:]):
+            self.assertEqual(below[0], above[0])
+            self.assertEqual(below[2], above[2])
+            self.assertEqual(below[1] + nslevel.BOX_HEIGHT, above[1])
+
+    def test_every_object_has_its_own_id(self):
+        objects = [nslevel.levelobjects.LevelObject("box", (1, 2, 0.5), subtype=2, stack=2),
+                   nslevel.levelobjects.LevelObject("box", (-1, 2, 0.5), subtype=13),
+                   nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5))]
+        level, entries, zone = self.make(scale=256, objects=objects)
+        ids = [nslevel.entity_id(e) for z in entries.values() if z.type == 7 for e in self.entities(z)]
+        self.assertEqual(5, len(ids))  # crash, 3 boxes and the warp pad
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertTrue(all(i not in nslevel.ENTITY_MAIN_IDS and i <= nslevel.ENTITY_IDS_MAX
+                            for i in ids if i != nslevel.entity_id(nslevel.Templates(level).crash)))
+
     def test_an_end_object_needs_ground_below_it(self):
         end = nslevel.levelobjects.LevelObject("end", (-20, 4, 0.5))
         with self.assertRaises(ValueError) as e:
