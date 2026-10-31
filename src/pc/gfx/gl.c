@@ -259,18 +259,20 @@ static void GLDrawTri(poly3i *poly, int depth, int z_offs) {
 
 void GLDrawPrims(void *data, int count) {
   poly3i *poly;
-  int i, texid, flags, mode, depth, depth_on;
+  int i, texid, flags, mode, depth, depth_on, custom_level;
 
   texid = -1;
   flags = 3;
   depth_on = 0;
+  custom_level = ns.ldat && ns.ldat->lid == LID_TEST;
   poly = (poly3i*)data;
   glActiveTexture(GL_TEXTURE0);
   glDisable(GL_TEXTURE_2D);
   glEnable(GL_BLEND);
   /*
-   * model tris are depth tested against each other (fix_model_draw_order);
-   * they don't write depth while drawing, see below
+   * model tris are depth tested against each other (fix_model_draw_order)
+   * and, in custom levels, against the level (see GL_PRIM_LEVEL); they
+   * don't write depth while drawing, see below
    */
   glDisable(GL_DEPTH_TEST);
   glDepthFunc(GL_LEQUAL);
@@ -311,27 +313,30 @@ void GLDrawPrims(void *data, int count) {
       }
       texid = poly->texid;
     }
-    depth = game_settings.fix_model_draw_order && poly->type == 1
-      && GLPrimDepthTested(poly->flags);
+    depth = poly->type == 1 && GLPrimModelDepthTested(poly->flags,
+      game_settings.fix_model_draw_order, custom_level);
     if (depth != depth_on) {
       if (depth) { glEnable(GL_DEPTH_TEST); }
       else { glDisable(GL_DEPTH_TEST); }
       depth_on = depth;
     }
     GLDrawTri(poly, depth, 0);
-    if (depth && GLPrimWritesDepth(poly->flags)) {
+    if ((depth && game_settings.fix_model_draw_order && GLPrimWritesDepth(poly->flags))
+      || (poly->type == 1 && GLPrimLevelWritesDepth(poly->flags, custom_level))) {
       /*
        * then write its depth, for fully opaque texels only, pushed back by
        * the tolerance so that a model only just behind it (e.g. a shadow on
-       * a crate top) can still draw over it
+       * a crate top, or crash's feet on the ground) can still draw over it
        */
+      if (!depth_on) { glEnable(GL_DEPTH_TEST); }
       glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
       glDepthMask(GL_TRUE);
       glEnable(GL_ALPHA_TEST);
-      GLDrawTri(poly, depth, GL_DEPTH_TOLERANCE);
+      GLDrawTri(poly, 1, GL_DEPTH_TOLERANCE);
       glDisable(GL_ALPHA_TEST);
       glDepthMask(GL_FALSE);
       glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+      if (!depth_on) { glDisable(GL_DEPTH_TEST); }
     }
   }
   glDisable(GL_DEPTH_TEST);
@@ -410,7 +415,8 @@ static void GLConvertToTris(void *ot, poly3i **tris, int *count) {
     if (prim->type == 1) {
       *(poly3i*)dst = *(poly3i*)src;
 #ifdef CFLAGS_GFX_SW_PERSP
-      if (!GLPrimDepthTested(((poly3i*)src)->flags)) /* model tris keep their depth */
+      if (!GLPrimDepthTested(((poly3i*)src)->flags)
+        && !(((poly3i*)src)->flags & GL_PRIM_LEVEL)) /* model and level tris keep their depth */
         for (i=0;i<3;i++)
           ((poly3i*)dst)->verts[i].z = -1;
 #endif

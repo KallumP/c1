@@ -18,6 +18,7 @@
 
 ### Fixed
 
+- custom levels: models (boxes, Crash) were drawn over level geometry in front of them, e.g. a crate just behind a pillar showed through it, as the level's polygons are only sorted along the path; in custom levels the level now writes depth and models are depth tested against it
 - bug fixes ported from upstream (wurlyfox/c1, most of them from mateusfavarin/c1):
   - GOOL multiply, divide and modulo are signed; changing state clears the exit handler; the x scale flip cases in GoolOpChangeAnim/GoolOpChangeAnimFrame are the right way round; GoolObjectOrientOnPath's signed distance; GoolFindNearestObject's conditions; GoolObjectColors case 4 reads the collider's header; GoolZoneObjectTerminate's condition and zone check
   - TNT boxes don't fall through the floor (an object's floor_y is signed)
