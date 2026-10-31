@@ -4,7 +4,6 @@
 
 - colors are slightly different from psx (map differently?)
 - some death sequences are cut short (not rechecked since the fix for the instant level end, which had the same symptom)
-- main death sequence camera behavior is incorrect
 - title sequence background images become too bright in some instances
 - it is sometimes (but rarely) possible to jump in mid-air when beside walls
 - demo mode does not function correctly
@@ -37,7 +36,6 @@
 
 ### Hog Wild
 
-- player dies after respawning at a checkpoint
 - crash skips the 'look back at camera and then jump on hog' animation sequence that typically begins hog levels
 
 ### Native Fortress
@@ -70,7 +68,6 @@
 
 ### Koala Kong
 
-- TNT boxes fall through the floor
 - boulders launched by Koala Kong do not appear or are not thrown in the destined direction
 
 ### Heavy Machinery
@@ -83,12 +80,10 @@
 
 ### Toxic Waste
 
-- solid ceiling is not detected
 - game crashes when dying in certain zones
 
 ### Pinstripe
 
-- gun bullets do not do any damage to Crash
 
 ### The High Road
 

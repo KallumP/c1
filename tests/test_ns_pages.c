@@ -64,6 +64,75 @@ UTEST(ns_box_total, the_games_own_test_level_has_none) {
   ASSERT_EQ(0, NSCustomBoxTotal());
 }
 
+static nsd probe_nsd;
+static nsd_pte probe_table[3];
+static nsd_pte *probe_buckets[NSD_PTB_COUNT];
+
+/* a page table of three entries, all in the bucket the eids hash to (0) */
+static void set_probe_table() {
+  int i;
+
+  for (i=0;i<3;i++) {
+    probe_table[i].pgid = i;
+    probe_table[i].eid = 0x10 + i;
+  }
+  probe_nsd.page_table_size = 3;
+  probe_buckets[0] = probe_table;
+  ns.nsd = &probe_nsd;
+  ns.page_table = probe_table;
+  ns.pte_buckets = probe_buckets;
+}
+
+UTEST(ns_probe, finds_an_entry_in_the_table) {
+  set_probe_table();
+  ASSERT_EQ(&probe_table[1], NSProbeSafe(0x11));
+}
+
+UTEST(ns_probe, finds_the_last_entry_in_the_table) {
+  set_probe_table();
+  ASSERT_EQ(&probe_table[2], NSProbeSafe(0x12));
+}
+
+UTEST(ns_probe, an_entry_not_in_the_table_is_an_invalid_ref) {
+  set_probe_table();
+  ASSERT_EQ((nsd_pte*)ERROR_INVALID_REF, NSProbeSafe(0x13));
+}
+
+static entry lookup_entries[4];
+static nsd_pte lookup_table[4]; /* three in the page table, and one past its end */
+
+/* a page table of three loaded entries (eids are odd), with a fourth entry
+   just past its end that the lookup mustn't reach */
+static void set_lookup_table() {
+  int i;
+
+  for (i=0;i<4;i++) {
+    lookup_table[i].entry = &lookup_entries[i];
+    lookup_table[i].eid = 0x21 + 2*i;
+  }
+  probe_nsd.page_table_size = 3;
+  probe_buckets[0] = lookup_table;
+  ns.nsd = &probe_nsd;
+  ns.page_table = lookup_table;
+  ns.pte_buckets = probe_buckets;
+}
+
+UTEST(ns_lookup, finds_a_loaded_entry_by_its_eid) {
+  eid_t eid;
+
+  set_lookup_table();
+  eid = 0x23;
+  ASSERT_EQ(&lookup_entries[1], NSLookup(&eid));
+}
+
+UTEST(ns_lookup, an_eid_not_in_the_page_table_is_an_error) {
+  eid_t eid;
+
+  set_lookup_table();
+  eid = 0x27; /* only past the end of the table */
+  ASSERT_TRUE(ISERRORCODE(NSLookup(&eid)));
+}
+
 /* leave junk where the next call's locals will go, as the game's own calls would */
 static __attribute__((noinline)) void FillStackWithJunk() {
   volatile uint32_t junk[256];

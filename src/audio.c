@@ -169,11 +169,10 @@ static Volume AudioSpatialize(vec *v, int vol) {
 void AudioVoiceFree(gool_object *obj) {
   audio_voice *voice;
   generic res;
-  int i, count;
+  int i;
 
   if (!obj) { return; }
-  count = max_midi_voices;
-  for (i=0;i<24;i++) {
+  for (i=max_midi_voices;i<24;i++) {
     voice = &voices[i];
     if ((voice->flags & 8) && voice->obj == obj) {
       ramp_rate = 9;
@@ -281,6 +280,7 @@ int AudioVoiceCreate(gool_object *obj, eid_t *eid, int vol) {
   if (idx <= 0) { return -1; } /* return error on failure to allocate */
   voice = &voices[idx]; /* get the allocated voice */
   adio = NSLookup(eid);
+  if (ISERRORCODE(adio)) { return -1; } /* return error on failed lookup */
   size = adio->items[1]-adio->items[0];
   SwLoadSample(idx, adio->items[0], size);
   voice->params = voice_params;

@@ -29,7 +29,6 @@ int32_t dcam_trans_z = 0;         /* 800565D8; gp[0x77] */
 
 extern ns_struct ns;
 extern level_state savestate;
-extern vec cam_trans;
 extern int frames_elapsed;
 
 typedef struct {
@@ -50,11 +49,10 @@ typedef struct {
 
 extern entry *cur_zone;
 extern zone_path *cur_path;
-extern uint32_t cur_progress;
+extern int32_t cur_progress;
 
 extern pad pads[2];
 extern gool_object *crash;
-extern ang cam_rot;
 
 //----- (80029F6C) --------------------------------------------------------
 static void CamAdjustProgress(int32_t speed, cam_info *cam) {
@@ -283,7 +281,7 @@ static void CamFollow(gool_object *obj, uint32_t flag) {
   vec trans, cam_offset_new;
   int32_t progress, new_progress, old_progress;
   int32_t seek_pan, seek_zoom, new_pan, new_zoom, total_zoom;
-  int32_t delta_dist, dist_exit, dist_nearest, cam_speed;
+  int32_t delta_dist, dist_exit, dist_nearest;
   int32_t length;
   int i, path_idx, icam, flags, progress_made, same_dir, n_end;
 
@@ -471,9 +469,12 @@ static void CamFollow(gool_object *obj, uint32_t flag) {
     cam_speed = cam_nearest->delta_progress;
   }
   else {
-    /* TODO: what makes the camera too slow to keep up with the player
-             when the above limiting code is used? */
-    cam_speed = cam_nearest->delta_progress/2;
+    if (cam_nearest->delta_progress <= 0x200) /* change <= 2? */
+      cam_speed = cam_nearest->delta_progress/2; /* halve progress */
+    else if (cam_nearest->delta_progress < 0x500) /* from 2 to 5 non-inclusive? */
+      cam_speed = 0x200; /* limit to 2 */
+    else /* > 5 */
+      cam_speed = min((cam_nearest->delta_progress/2), cam_speed)+0x100;
     CamAdjustProgress(cam_speed, cam_nearest);
   }
 }
@@ -600,6 +601,8 @@ int CamUpdate() {
           }
           n_path_idx = i;
         }
+        else
+          neighbor_path = path_s1->neighbor_paths[n_path_idx];
         zone_s1 = path_s1->parent_zone;
         path_s1 = ZoneGetNeighborPath(zone_s1, path_s1, n_path_idx);
         if (neighbor_path.goal & 1)
@@ -673,6 +676,7 @@ int CamUpdate() {
   }
 }
 
+
 //----- (8002BAB4) --------------------------------------------------------
 int CamDeath(int *count) {
   entry *svtx, *tgeo;
@@ -694,7 +698,7 @@ int CamDeath(int *count) {
   tgeo = NSLookup(&frame->tgeo);
   /* get [unrotated] vertex in the current frame referenced by the gool object */
   vert = &frame->vertices[cam_spin_obj_vert >> 8];
-  t_header = (tgeo_header*)&tgeo->items[0];
+  t_header = (tgeo_header*)tgeo->items[0];
   u_vert.x = ((int8_t)(vert->x - 128) + frame->x) << 10; /* 10 bit frac to 20 bit frac */
   u_vert.y = ((int8_t)(vert->y - 128) + frame->y) << 10;
   u_vert.z = ((int8_t)(vert->z - 128) + frame->z) << 10;
@@ -719,7 +723,7 @@ int CamDeath(int *count) {
     dcam_rot_y2 = ang_xz; /* angular distance around the below circle circumference */
     dcam_accel = 22;
     cam_rot.x += dcam_angvel; /* rotate cam in xz plane towards the vertex */
-    *(count)++;
+    (*count)++;
   }
   /* calculate the angle in the yz plane */
   ang_yz = atan2(v_vert.y, dist_xz);
@@ -730,7 +734,7 @@ int CamDeath(int *count) {
   /* rotate cam in yz plane towards the vertex */
   cam_rot.y = GoolObjectRotate(cam_rot.y, -ang_yz, dcam_angvel2, 0);
   if (cur_display_flags & GOOL_FLAG_SPIN_ACCEL) {
-    dcam_angvel2 += dcam_accel; /* accelerate?? no further usage of this value... */
+    dcam_rot_y1 += dcam_accel; /* accelerate?? no further usage of this value... */
     cam_rot.x += dcam_accel; /* additional rotation??? */
   }
   /* move camera up towards the vertex */

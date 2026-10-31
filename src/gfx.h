@@ -14,6 +14,24 @@
 #include "formats/tgeo.h"
 #include "formats/zdat.h"
 
+/* the camera's position, rotation and scale, together, as the code reads
+   them as a gool_vectors */
+typedef struct {
+  vec trans;
+  ang rot;
+  vec scale;
+} cam_state;
+
+extern cam_state cam;
+extern cam_state cam_prev;
+
+#define cam_trans cam.trans
+#define cam_rot cam.rot
+#define cam_scale cam.scale
+#define cam_trans_prev cam_prev.trans
+#define cam_rot_prev cam_prev.rot
+#define cam_scale_prev cam_prev.scale
+
 extern int TgeoOnLoad(entry *tgeo);
 
 extern int GfxInitMatrices();

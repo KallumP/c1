@@ -44,8 +44,6 @@ extern uint16_t level_spawns[GOOL_LEVEL_SPAWN_COUNT];
 extern gool_handle handles[8];
 extern gool_bound object_bounds[GOOL_BOUND_COUNT];
 extern int object_bound_count;
-extern vec cam_trans;
-extern ang cam_rot;
 extern uint32_t screen_proj;
 
 #include "solid.h"
@@ -525,7 +523,9 @@ void LevelRestart(level_state *state) {
   path = (zone_path*)zone->items[idx];
   LevelUpdate(zone, path, state->progress, first_spawn==0);
   NSClose(&zone_eid, 1);
-  GoolObjectCreate(&handles[6], 0, 0, 0, 0, 1);
+  if (!crash) {
+    GoolObjectCreate(&handles[6], 0, 0, 0, 0, 1);
+  }
   crash->trans = state->player_trans;
   crash->rot = state->player_rot;
   crash->scale = state->player_scale;
@@ -651,6 +651,7 @@ entry *ZoneFindNeighbor(entry *zone, vec *v) {
 uint16_t ZoneFindNode(zone_rect *zone_rect, uint16_t root, rect _rect, vec *va, vec *vb, int level) {
   zone_octree *tree;
   rect child_rect;
+  bound child_bound;
   uint16_t node, child_node;
   uint16_t *child_nodes;
   vec corner;
@@ -720,8 +721,12 @@ uint16_t ZoneFindNode(zone_rect *zone_rect, uint16_t root, rect _rect, vec *va, 
           child_rect.loc.x = _rect.loc.x + (int32_t)(i?child_rect.dim.w:0);
           child_rect.loc.y = _rect.loc.y + (int32_t)(j?child_rect.dim.h:0);
           child_rect.loc.z = _rect.loc.z + (int32_t)(k?child_rect.dim.d:0);
+          child_bound.p1 = child_rect.loc;
+          child_bound.p2.x = child_rect.loc.x + child_rect.dim.w;
+          child_bound.p2.y = child_rect.loc.y + child_rect.dim.h;
+          child_bound.p2.z = child_rect.loc.z + child_rect.dim.d;
           child_node = child_nodes[idx++];
-          if (TestPointInRect(&child_rect, va)) {
+          if (TestPointInBound(va, &child_bound)) {
             res = ZoneFindNode(zone_rect, child_node, child_rect, va, vb, level+1);
             if (res) { return res; }
           }
@@ -772,14 +777,16 @@ uint16_t ZoneReboundVector(vec *va, vec *vb) {
 
   if (!vb->x && !vb->y && !vb->z) { return 0; }
   header = (zone_header*)cur_zone->items[0];
+  i = 0;
   while (1) { /* this will loop endlessly while ZoneFindNode returns 0 */
-    for (i=0;i<header->neighbor_count;i++) {
+    while (i<header->neighbor_count) {
       neighbor = NSLookup(&header->neighbors[i]);
       z_rect = (zone_rect*)neighbor->items[1];
       if (TestPointInRect((rect*)z_rect, va))
         break;
+      i++;
     }
-    if (i==header->neighbor_count) /* did not find a zone that contains va? */
+    if (i++==header->neighbor_count) /* did not find a zone that contains va? */
       return 1; /* return */
     _rect = *((rect*)z_rect);
     _rect.x<<=8;_rect.y<<=8;_rect.z<<=8;

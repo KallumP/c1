@@ -215,4 +215,5 @@ int _kill() {
   ReplayStop();
   GLKill();
   SDLKill();
+  return 0;
 }

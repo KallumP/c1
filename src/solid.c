@@ -777,7 +777,7 @@ static int ReplotWalls(int op, int flags, vec *next_trans, gool_object *obj) {
       node_bound.p2.y = node_bound.p1.y + (int32_t)node_rect.dim.h;
       dist.p1.y = node_bound.p1.y - next_trans->y;
       dist.p2.y = node_bound.p2.y - next_trans->y;
-      plot = ((flags == 0 && dist.p1.y<=(100<<8) && dist.p2.y>=(-400<<8)))
+      plot = ((flags == 0 && dist.p1.y<=(100<<8) && dist.p2.y>=-(400<<8)))
            || (flags == 1 && dist.p2.y>=0)
            || (flags != 0 && flags != 1);
       if (!plot) {
@@ -1227,7 +1227,7 @@ int FindCeilY(
     level = result->level;
     type = (node & 0xE) >> 1;
     subtype = (node & 0x3F0) >> 4;
-    if (type != (type_a-1) || type != (type_b-1)) { continue; }
+    if (type != (type_a-1) && type != (type_b-1)) { continue; }
     nbound.p1.x = (result->x << 4) + nodes_bound->p1.x;
     nbound.p1.y = (result->y << 4) + nodes_bound->p1.y;
     nbound.p1.z = (result->z << 4) + nodes_bound->p1.z;

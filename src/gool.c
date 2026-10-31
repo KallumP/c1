@@ -143,7 +143,6 @@ extern vec v_zero;
 extern vec2 screen;
 extern uint32_t screen_proj;
 extern mat16 mn_trans;
-extern vec cam_trans, cam_trans_prev;
 extern mat16 ms_rot, ms_cam_rot;
 extern int32_t cam_rot_xz;
 extern quad28_t uv_map[600];
@@ -209,8 +208,7 @@ int GoolObjectOrientOnPath(gool_object *obj, int progress, vec *loc) {
   uint32_t status_a, status_b;
   vec *trans, *zone_loc, loc_next, dist_obj, dot, dir;
   zone_entity_path_point *path_pt, *next_pt; // $a0
-  uint32_t dist_xz;
-  int32_t x, z, proj, proj_part;
+  int32_t x, z, dist_xz, proj, proj_part;
 
   entity = obj->entity;
   if (!obj || !entity) { return ERROR; }
@@ -262,7 +260,7 @@ int GoolObjectOrientOnPath(gool_object *obj, int progress, vec *loc) {
     dot.x = (dist_obj.x>>4)*(dir.x>>4);
     dot.z = (dist_obj.z>>4)*(dir.z>>4);
     /* compute the scalar projection: (A . B) / ||B||^2 */
-    proj = (dot.x+dot.z)/((int32_t)dist_xz*(int32_t)dist_xz);
+    proj = (dot.x+dot.z)/(dist_xz*dist_xz);
     if (proj >= 0x100) { /* too far of a corresponding change in progress? */
       idx_next = idx+1;
       if (idx < path_length-1)
@@ -272,16 +270,16 @@ int GoolObjectOrientOnPath(gool_object *obj, int progress, vec *loc) {
        [compute the vector projection in the order:
        ((A . B) / ||B||) x (B / ||B||)
        to avoid precision errors] */
-    proj_part = ((dot.x + dot.z)/(int32_t)dist_xz);
-    x = abs((((proj_part>>4)*(dir.x>>4))/(int32_t)dist_xz) - dist_obj.x);
-    z = abs((((proj_part>>4)*(dir.z>>4))/(int32_t)dist_xz) - dist_obj.z);
+    proj_part = ((dot.x + dot.z)/dist_xz);
+    x = abs((((proj_part>>4)*(dir.x>>4))/dist_xz) - dist_obj.x);
+    z = abs((((proj_part>>4)*(dir.z>>4))/dist_xz) - dist_obj.z);
     /* do a sort of manhattan distance calc
        is this moment of inertia? */
     if (z<x)
       obj->misc_c.y = x + z/2;
     else
       obj->misc_c.y = z + x/2;
-    if (obj->misc_c.y > obj->_154 || proj >= 0x100 || idx == 0) {
+    if (obj->misc_c.y > obj->_154 || proj >= 0x100 || (proj < 0 && idx == 0)) {
       obj->status_a |= 0x200;
     }
     if (dir.z*(trans->x>>8)-dir.x*(trans->z>>8)
@@ -399,6 +397,7 @@ int GoolObjectSearchTree(
   }
   child = GoolObjectGetChildren(obj);
   if (!child) { return 0; }
+  res = 0;
   while (!res && child) {
     sibling = child->sibling;
     res = GoolObjectSearchTree(child, func, arg);
@@ -450,7 +449,6 @@ int GoolObjectHandleTraverseTreePostorder(
   while (child) {
     grandchild = child->children;
     sibling = child->sibling;
-    /* TODO: verify-should there be an else block somewhere here */
     while (grandchild) {
       next_grandchild = grandchild->sibling;
       res = GoolObjectTraverseTreePostorder(grandchild, func, arg);
@@ -499,7 +497,7 @@ int GoolFindNearestObject(gool_object *obj, gool_nearest_query *query) {
   category = header->category >> 8;
   if (!((1 << category) & query->categories)) { return 0; }
   dist = ApxDist(&obj->trans, &query->obj->trans);
-  if (dist >= query->dist) { return 0; } /* return if farther than current min dist */
+  if ((int32_t)dist >= query->dist) { return 0; } /* return if farther than current min dist */
   if (query->event == 0xFF) { /* null event? */
     query->nearest_obj = obj; /* set as new nearest obj */
     query->dist = dist; /* set as new min dist */
@@ -508,16 +506,15 @@ int GoolFindNearestObject(gool_object *obj, gool_nearest_query *query) {
   maps = (gool_state_maps*)obj->global->items[3];
   state_idx = maps->event_map[query->event >> 8];
   if (state_idx == 0xFF) { /* null state index? */
-    if (query->event != GOOL_EVENT_HIT /* not a hit a event? */
-      || obj->invincibility_state == 2
-      || obj->invincibility_state == 3
-      || obj->invincibility_state == 4
-      || obj->status_c & 2) {
-      if ((query->event == GOOL_EVENT_HIT_INVINCIBLE && !(obj->state_flags & 0x800))
-        || query->event == GOOL_EVENT_WIN_BOSS) { /* hit when invincible or win boss? */
-        query->nearest_obj = obj; /* set as new nearest obj */
-        query->dist = dist; /* set as new min dist */
-      }
+    if ((query->event == GOOL_EVENT_HIT 
+      && obj->invincibility_state != 2 
+      && obj->invincibility_state != 3 
+      && obj->invincibility_state != 4
+      && !(obj->status_c & 2))
+     || (query->event == GOOL_EVENT_HIT_INVINCIBLE && !(obj->state_flags & 0x800))
+     || (query->event == GOOL_EVENT_WIN_BOSS)) { /* hit when invincible or win boss? */
+      query->nearest_obj = obj; /* set as new nearest obj */
+      query->dist = dist; /* set as new min dist */
     }
     return 0;
   }
@@ -539,7 +536,9 @@ int GoolFindNearestObject(gool_object *obj, gool_nearest_query *query) {
   }
   states = (gool_state*)obj->global->items[4];
   state = &states[state_idx];
-  if (obj->invincibility_state >= 2 && obj->invincibility_state <= 4)
+  if (obj->invincibility_state == 2 
+   || obj->invincibility_state == 3
+   || obj->invincibility_state == 4)
     flag = (obj->status_c | 0x1002) & state->flags;
   else
     flag = obj->status_c & state->flags;
@@ -853,11 +852,13 @@ int GoolObjectKill(gool_object *obj, int sig) {
 
 //----- (8001D11C) --------------------------------------------------------
 int GoolZoneObjectTerminate(gool_object *obj, entry *zone) {
+  entry *old_zone;
   if (obj->handle.type == 0 || obj->zone != zone
-   || ((obj->status_b & 0x1000000) && (obj->state_flags & 0x40000)))
+   || (obj->status_b & 0x1000000) || (obj->state_flags & 0x40000))
     return SUCCESS;
+  old_zone = obj->zone;
   GoolSendEvent(0, obj, GOOL_EVENT_TERMINATE, 0, 0);
-  if (obj->zone == zone || (int)obj_zone == -1)
+  if (obj->zone == old_zone || (int)obj_zone == -1)
     return GoolObjectKill(obj, 0);
   return SUCCESS;
 }
@@ -995,6 +996,7 @@ int GoolObjectChangeState(gool_object *obj, uint32_t state, int argc, uint32_t *
   else
     obj->tp = 0;
   header = (gool_header*)exec->items[0];
+  obj->once_p = 0; 
   obj->fp = (uint32_t*)&obj->process;
   obj->sp = (uint32_t*)&obj->process + header->init_sp;
   obj->status_a |= GOOL_FLAG_FIRST_FRAME | GOOL_FLAG_KEEP_EVENT_STACK;
@@ -1213,6 +1215,7 @@ void GoolObjectTransform(gool_object *obj) {
   switch (anim->type) {
   case GOOL_ANIM_TYPE_VTX:
     en = NSLookup(&anim->v.eid);
+    if (ISERRORCODE(en)) { return; } /* pc */
     if (en->type != 20) {
       svtx = NSLookup(&anim->v.eid);
       GfxTransformSvtx((svtx_frame*)svtx->items[frame_idx], ot, obj);
@@ -1463,28 +1466,27 @@ static inline int GoolObjectColorByZone(gool_object *obj) {
   header = (zone_header*)zone->items[0];
   colors = obj == crash ? &header->player_colors : &header->object_colors;
   obj->colors.intensity = colors->intensity;
+  return 0;
 }
 
 //----- (8001EB28) --------------------------------------------------------
 int GoolObjectColors(gool_object *obj) {
-  entry *zone;
-  zone_header *header;
   gool_header *g_header;
+  gool_object *collider;
   int invincibility_state, elapsed_since;
   int mod, val;
 
   invincibility_state = obj->invincibility_state;
   elapsed_since = frames_elapsed - obj->invincibility_stamp;
-  zone = obj->zone ? obj->zone : cur_zone;
-  header = (zone_header*)zone->items[0];
   switch (invincibility_state) { /* cases 3, 4, 5 all fall down to case 2 */
   case 4:
     if (elapsed_since > 60) /* 1s at 60fps */
       GoolObjectColorByZone(obj);
     if (obj->collider) {
-      g_header = (gool_header*)obj->global->items[0];
+      collider = obj->collider;
+      g_header = (gool_header*)collider->global->items[0];
       if (g_header->category == 0x300)
-        GoolSendEvent(obj, obj->collider, GOOL_EVENT_HIT_INVINCIBLE, 1, 0);
+        GoolSendEvent(obj, collider, GOOL_EVENT_HIT_INVINCIBLE, 1, 0);
     }
   case 3:
     if (invincibility_state == 3 && elapsed_since > 451) /* 7.5s at 60fps */
@@ -1608,6 +1610,7 @@ int GoolObjectBound(gool_object *obj) {
     else
       obj->collider = 0;
   }
+  return 0;
 }
 
 static inline int32_t GoolObjectControlDir(gool_object *obj, int scale) {
@@ -1764,6 +1767,7 @@ int GoolObjectPhysics(gool_object *obj) {
       !OutOfRange(obj, &obj->trans, &crash->trans, 0x7D000, 0xAF000, 0x7D000))
       GoolObjectBound(obj); /* compute and record object rect */
   }
+  return 0;
 }
 
 //----- (8001FB20) --------------------------------------------------------
@@ -1953,10 +1957,13 @@ static inline void GoolOpReactSolidSurfaces(gool_object*,uint32_t);
 #define G_OPB(ins) ((ins      ) & 0xFFF)
 #define G_OP(ins) G_OPB(ins)
 
+/* pc: an operand that refers to nothing (such as a link to no object) reads 0 */
+#define G_DEREF(x) ({ uint32_t *p = x; ((p) ? *(p) : 0); })
+
 #define G_TRANS_GOPA(obj,ins,a) \
-a = *(GoolTranslateInGop(obj,G_OPA(ins)))
+a = G_DEREF(GoolTranslateInGop(obj,G_OPA(ins)))
 #define G_TRANS_GOPB(obj,ins,b) \
-b = *(GoolTranslateInGop(obj,G_OPB(ins)))
+b = G_DEREF(GoolTranslateInGop(obj,G_OPB(ins)))
 #define G_TRANS_GOPA_IN(obj,ins,a) \
 a = GoolTranslateInGop(obj,G_OPA(ins))
 #define G_TRANS_GOPB_IN(obj,ins,b) \
@@ -2029,12 +2036,12 @@ int GoolObjectInterpret(gool_object *obj, uint32_t flags, gool_state_ref *transi
       GoolObjectPush(obj,l-r);
       break;
     case 2:
-      G_TRANS_GOPS(obj,instruction,r,l);
-      GoolObjectPush(obj,l*r);
+      G_TRANS_GOPS(obj,instruction,sr,sl);
+      GoolObjectPush(obj,sl*sr);
       break;
     case 3:
-      G_TRANS_GOPS(obj,instruction,r,l);
-      GoolObjectPush(obj,l/r);
+      G_TRANS_GOPS(obj,instruction,sr,sl);
+      GoolObjectPush(obj,sl/sr);
       break;
     case 4:
       G_TRANS_GOPS(obj,instruction,a,b);
@@ -2074,8 +2081,8 @@ int GoolObjectInterpret(gool_object *obj, uint32_t flags, gool_state_ref *transi
       GoolObjectPush(obj,sl<=sr);
       break;
     case 0xD:
-      G_TRANS_GOPS(obj,instruction,r,l);
-      GoolObjectPush(obj,l%r);
+      G_TRANS_GOPS(obj,instruction,sr,sl);
+      GoolObjectPush(obj,sl%sr);
       break;
     case 0xE:
       G_TRANS_GOPS(obj,instruction,a,b);
@@ -2850,9 +2857,9 @@ int GoolOpChangeAnim(gool_object *obj, uint32_t instruction, uint32_t *flags) {
   obj->anim_seq = anim;
   GoolObjectPush(obj, (wait << 24) | frames_elapsed);
   if (flip == 0)
-    obj->scale.x = -abs(obj->scale.x);
-  else if (flip == 1)
     obj->scale.x = abs(obj->scale.x);
+  else if (flip == 1)
+    obj->scale.x = -abs(obj->scale.x);
   else if (flip == 2)
     obj->scale.x = -obj->scale.x;
   if (obj->status_b & 0x18) { /* object is solid and stopped by solid matter */
@@ -2875,9 +2882,9 @@ int GoolOpChangeAnimFrame(gool_object *obj, uint32_t instruction, uint32_t *flag
   obj->anim_frame = frame_idx;
   GoolObjectPush(obj, (wait << 24) | frames_elapsed);
   if (flip == 0)
-    obj->scale.x = -abs(obj->scale.x);
-  else if (flip == 1)
     obj->scale.x = abs(obj->scale.x);
+  else if (flip == 1)
+    obj->scale.x = -abs(obj->scale.x);
   else if (flip == 2)
     obj->scale.x = -obj->scale.x;
   GoolObjectLocalBound(obj, &obj->scale);
@@ -3233,7 +3240,7 @@ static inline void GoolOpReactSolidSurfaces(gool_object *obj, uint32_t instructi
   case 4:
   case 5:
     flag1 = 0; flag2 = 0;
-    if (sop == 3 || sop == 4) { flag1 = 1; }
+    if (sop == 4 || sop == 5) { flag1 = 1; }
     if (sop == 3 || sop == 5) { flag2 = 1; }
     trans3 = obj->trans;
     zone = obj->zone ? obj->zone : cur_zone;
@@ -3475,6 +3482,7 @@ int GoolTransform(vec *in, vec *trans, ang *rot, vec *scale, vec *out) {
   s_out.y += trans->y;
   s_out.z += trans->z;
   *out = s_out;
+  return 0;
 }
 
 //----- (800248A0) --------------------------------------------------------
