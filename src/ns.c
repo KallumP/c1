@@ -695,7 +695,7 @@ nsd_pte* NSProbe(eid_t eid) {
 
 //----- (800159C4) --------------------------------------------------------
 // unreferenced; exists as inline code elsewhere
-static inline nsd_pte *NSProbeSafe(eid_t eid) {
+nsd_pte *NSProbeSafe(eid_t eid) {
   int hash;
   nsd_pte *pte;
 
@@ -703,10 +703,8 @@ static inline nsd_pte *NSProbeSafe(eid_t eid) {
   pte = ns.pte_buckets[hash];
   do {
     if (pte - ns.page_table >= ns.nsd->page_table_size)
-      break;
+      return (nsd_pte*)ERROR_INVALID_REF;
   } while ((pte++)->eid != eid);
-  if (pte - ns.page_table >= ns.nsd->page_table_size)
-    return (nsd_pte*)ERROR_INVALID_REF;
   return --pte;
 }
 
