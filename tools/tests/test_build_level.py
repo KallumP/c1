@@ -91,5 +91,35 @@ class LevelCfg(unittest.TestCase):
         self.assertEqual(1, build_level.main([folder]))
 
 
+def objects_folder(text=None):
+    """a temporary level source folder, holding objects.json with text (if given)"""
+    folder = tempfile.mkdtemp()
+    if text is not None:
+        with open(os.path.join(folder, "objects.json"), "w") as f:
+            f.write(text)
+    return folder
+
+
+class ObjectsJson(unittest.TestCase):
+    def test_without_objects_json_there_are_no_objects(self):
+        self.assertEqual([], build_level.read_objects_file(objects_folder()))
+
+    def test_objects_json_gives_the_levels_objects(self):
+        folder = objects_folder('[{"kind": "end", "at": [0, 40, 1]}]')
+        self.assertEqual([("end", (0, 40, 1))], [(o.kind, o.at) for o in build_level.read_objects_file(folder)])
+
+    def test_a_bad_objects_json_is_an_error_naming_the_file(self):
+        with self.assertRaises(ValueError) as e:
+            build_level.read_objects_file(objects_folder('[{"kind": "crate", "at": [0, 0, 0]}]'))
+        self.assertIn("objects.json", str(e.exception))
+        self.assertIn("crate", str(e.exception))
+
+    def test_a_bad_objects_json_stops_with_a_message(self):
+        folder = objects_folder('[{"kind": "crate", "at": [0, 0, 0]}]')
+        with open(os.path.join(folder, "x.obj"), "w") as f:
+            f.write("")
+        self.assertEqual(1, build_level.main([folder]))
+
+
 if __name__ == "__main__":
     unittest.main()
