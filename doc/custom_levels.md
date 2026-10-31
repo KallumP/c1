@@ -1,6 +1,6 @@
 # Custom levels
 
-A map modelled in Blender can be built into a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. An `objects.json` beside the map can set where he starts and put a warp pad where the level ends (see [Objects](#objects)); there are no other objects yet (eg: enemies, fruit or crates). What a level is built from is its *level source*, a folder in `level_src/`; the built level goes to `build/levels/`, next to the game. One level source is included to try it with, `level_src/tide_ruins` (see [level_src/README.md](../level_src/README.md) for instructions to play it); the sources you add are ignored by git.
+A map modelled in Blender can be built into a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. An `objects.json` beside the map can set where he starts, put a warp pad where the level ends, and place boxes (see [Objects](#objects)); there are no other objects yet (eg: enemies or fruit). What a level is built from is its *level source*, a folder in `level_src/`; the built level goes to `build/levels/`, next to the game. One level source is included to try it with, `level_src/tide_ruins` (see [level_src/README.md](../level_src/README.md) for instructions to play it); the sources you add are ignored by git.
 
 ## From Blender to the game
 
@@ -62,14 +62,18 @@ Make a folder in `level_src/` for it, such as `level_src/tide_ruins/`, and start
 
 ### Objects
 
-Objects go in an `objects.json` in the level source's folder, next to the `.obj`. It's a list of objects, each with a `kind` and where it is in Blender (`at`, as `[x, y, z]` in metres, which is what Blender's N panel shows as an object's Location). For example, `level_src/tide_ruins/objects.json`:
+Objects go in an `objects.json` in the level source's folder, next to the `.obj`. It's a list of objects, each with a `kind` and where it is in Blender (`at`, as `[x, y, z]` in metres, which is what Blender's N panel shows as an object's Location). For example:
 
 ```json
 [
   {"kind": "spawn", "at": [0.5, 3.5, 0.3]},
+  {"kind": "box", "subtype": 2, "at": [7.5, 25.5, 0.7]},
+  {"kind": "box", "subtype": 2, "at": [-9.5, 35.5, 0], "stack": 3},
   {"kind": "end", "at": [0, 50, 1.2], "raise": 0.15}
 ]
 ```
+
+That's part of `level_src/tide_ruins/objects.json`, which also has a row of one box of each subtype across the route just after the start.
 
 (`tide_ruins` also has a `spawn` object in its `.obj`, from before `objects.json`, at the same place. The `spawn` in `objects.json` is the one used.)
 
@@ -77,14 +81,17 @@ Objects go in an `objects.json` in the level source's folder, next to the `.obj`
 |---|---|
 | `spawn` | Crash starts on the ground below it. It takes the place of a `spawn` object in the map (see [Modelling](#modelling)). |
 | `end` | N. Sanity Beach's warp pad goes on the ground below it. Crash stepping on it ends the level. |
+| `box` | A box goes on the ground below it: a copy of one of N. Sanity Beach's, by its `subtype`. With `stack`, that many boxes go one on top of another. |
 
 In the game's own levels, the warp pad object (`WarpC`) is only the animated part: the stone base it stands on is part of the level's terrain, about 3 m across and sunk 1 m into the ground with its top level with the floor. So for an `end`, the build also copies that base out of N. Sanity Beach's terrain (from your copy of the game, like its textures) and puts it under the pad, centred on it with its top on the floor. It only shows; Crash walks on the floor under it, so the floor there should be flat, about 3 m across.
 
 An object can also have `raise`, in metres, to put it that far above the ground it goes on, such as when the warp pad clips into the floor around it. The floor Crash stands on is made of 0.3 m steps (see [Limits](#limits)), so it can be a little above or below the floor you see, and raising by 0.1 to 0.2 m usually covers it.
 
-A level can have one of each, and neither is needed. "On the ground below it" means the highest floor below `at`, or less than 0.3 m (at the default scale) above it, so `at` can be on the floor itself. If there's no floor there, the build stops and says so.
+A box's `subtype` is which of the game's boxes it is, as a number. The ones N. Sanity Beach has, and so the ones a custom level can use, are 2, 3, 4, 5, 6, 7, 8, 9, 10 and 13; 2 is the beach's most common. The game's files don't name them, so to see which is which, play `tide_ruins`: its row of boxes just after the start goes 2, 3, 4, 5, 6, 7, 8, 9, 10, 13 from left to right. `stack` (1 by default) is how many boxes high it is. The game stacks a box on another when it's 400 units (1 m at the default scale) above it, at the same place, and comes straight after it in the level, which is how a stack is built.
 
-`objects.json` is read every time the level is built, so after changing it, run step 6 again. If it isn't valid (not JSON, an unknown `kind` or setting, a second `spawn` or `end`, `at` that isn't three numbers, or `raise` that isn't a number), the build stops with a message saying which object is wrong.
+A level can have one `spawn` and one `end`, and neither is needed, and any number of boxes, up to about 300 objects in all (the game has 304 places to keep track of objects, by their ids). "On the ground below it" means the highest floor below `at`, or less than 0.3 m (at the default scale) above it, so `at` can be on the floor itself. If there's no floor there, the build stops and says so.
+
+`objects.json` is read every time the level is built, so after changing it, run step 6 again. If it isn't valid (not JSON, an unknown `kind` or setting, a second `spawn` or `end`, `at` that isn't three numbers, `raise` that isn't a number, a box `subtype` the beach doesn't have, or a `stack` that isn't a whole number of at least 1), the build stops with a message saying which object is wrong.
 
 ### Modelling
 
