@@ -849,6 +849,42 @@ class Map(unittest.TestCase):
             self.make(scale=256, objects=[spawn])
         self.assertIn("spawn", str(e.exception))
 
+    def entities(self, zone):
+        paths_idx, path_count, entity_count = struct.unpack_from("<3I", zone.items[0], nslevel.ZONE_PATHS_IDX)
+        return zone.items[paths_idx + path_count:paths_idx + path_count + entity_count]
+
+    def warp_pads(self, entries):
+        """(zone, position in it) of each warp pad (WarpC) in the level"""
+        return [(zone, tuple(c * 4 for c in struct.unpack_from("<3h", e, nslevel.ENTITY_POINTS)))
+                for zone in entries.values() if zone.type == 7
+                for e in self.entities(zone) if nslevel.entity_type(e) == nslevel.WARP_PAD]
+
+    def test_an_end_object_puts_a_warp_pad_on_the_ground_below_it(self):
+        # blender (-2, 4, 0.5) is the .obj's (-2, 0.5, -4)
+        end = nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5))
+        level, entries, zone = self.make(scale=256, objects=[end])
+        [(pad_zone, (x, y, z))] = self.warp_pads(entries)
+        self.assertEqual(zone.eid, pad_zone.eid)
+        self.assertAlmostEqual(128 + 2 * 256, x, delta=16)
+        self.assertAlmostEqual(128 + 4 * 256, z, delta=16)
+        self.assertEqual(128, y)  # on the floor's top
+        self.assertEqual((0, 0), nslevel.entity_type(self.entities(zone)[0]))  # crash stays first
+
+    def test_the_warp_pads_code_comes_with_it(self):
+        end = nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5))
+        level, entries, zone = self.make(scale=256, objects=[end])
+        self.assertIn(level.nsd.ldat.exec_map[nslevel.WARP_PAD[0]], entries)
+
+    def test_without_an_end_object_theres_no_warp_pad(self):
+        level, entries, zone = self.make(scale=256)
+        self.assertEqual([], self.warp_pads(entries))
+
+    def test_an_end_object_needs_ground_below_it(self):
+        end = nslevel.levelobjects.LevelObject("end", (-20, 4, 0.5))
+        with self.assertRaises(ValueError) as e:
+            self.make(scale=256, objects=[end])
+        self.assertIn("end", str(e.exception))
+
     def test_world_meshes_are_its_faces(self):
         level, entries, zone = self.make()
         header = zone.items[0]
@@ -895,6 +931,18 @@ class Map(unittest.TestCase):
     def neighbors(self, zone):
         count = struct.unpack_from("<I", zone.items[0], nslevel.ZONE_PATHS_IDX + 12)[0]
         return list(struct.unpack_from("<%dI" % count, zone.items[0], nslevel.ZONE_NEIGHBORS))
+
+    def test_an_end_object_far_along_a_long_map_is_in_the_last_zone(self):
+        # blender y 45 is the .obj's z -45: 5 m from the far end, in the third zone
+        end = nslevel.levelobjects.LevelObject("end", (0, 45, 0))
+        level, entries, _ = self.make(self.LONG_OBJ, objects=[end])
+        zones = sorted((e for e in entries.values() if e.type == 7),
+                       key=lambda z: -struct.unpack_from("<i", z.items[1], 8)[0])
+        [(pad_zone, (x, y, z))] = self.warp_pads(entries)
+        self.assertEqual(zones[2].eid, pad_zone.eid)
+        # the floor's far end is a cell (128) in from the third zone's corner,
+        # and the pad 5 m (2000) on from that
+        self.assertAlmostEqual(128 + 2000, z, delta=16)
 
     def test_a_long_map_is_a_chain_of_zones_along_the_route(self):
         level, entries, zones = self.long_zones()
