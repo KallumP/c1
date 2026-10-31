@@ -6,6 +6,7 @@
 #define SETTINGS_LOADING_SCREEN_MAX_MS 60000
 #define SETTINGS_REPLAY_SPEED_MAX      16
 #define SETTINGS_BOOT_LEVEL_MAX        31
+#define LEVELS_DIR "levels" /* next to the executable; built levels to boot into, by name */
 
 /* game settings (pc), read from settings.cfg */
 typedef struct {

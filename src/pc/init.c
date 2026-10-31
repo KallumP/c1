@@ -131,19 +131,23 @@ static void FindDataDir() {
 lid_t boot_lid = LID_BOOTLEVEL; /* level the game starts in */
 
 /*
- * boot into custom_levels/<boot_level> (as the test level) if boot_level is
- * set and the level's files are there
+ * boot into levels/<boot_level> next to the executable (as the test level)
+ * if boot_level is set and the level's files are there
  */
 static void InitBootLevel() {
-  char path[128];
+  char level[900], path[1024], *base;
 
   if (!game_settings.boot_level[0]) { return; }
-  snprintf(path, sizeof(path), "custom_levels/%s.nsd", game_settings.boot_level);
+  base = SDL_GetBasePath();
+  snprintf(level, sizeof(level), "%s%s/%s", base ? base : "", LEVELS_DIR,
+    game_settings.boot_level);
+  SDL_free(base);
+  snprintf(path, sizeof(path), "%s.nsd", level);
   if (access(path, 0) != 0) {
-    fprintf(stderr, "no custom level %s, starting normally\n", path);
+    fprintf(stderr, "no level %s, starting normally\n", path);
     return;
   }
-  NSSetCustomLevel(game_settings.boot_level);
+  NSSetCustomLevel(level);
   boot_lid = LID_TEST;
 }
 

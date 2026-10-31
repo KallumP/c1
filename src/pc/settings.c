@@ -30,7 +30,7 @@ void SettingsReset(pc_settings *s) {
 
 /*
  * parse a level name (letters, digits, _ and -, so it can't leave the
- * custom_levels folder) into name; returns 0 if it isn't one
+ * levels folder) into name; returns 0 if it isn't one
  */
 static int SettingsParseLevelName(const char *value, char *name) {
   const char *c;
