@@ -6,6 +6,8 @@
 #include "tex.h"
 #include "gldepth.h"
 #include "math.h"
+#include "gte.h"
+#include "gpu.h"
 #include "pc/reach.h"
 
 #define gte_divide(a,b) ((a)/(b))
@@ -726,11 +728,13 @@ static void SwTransformAndShadeWorlds(
         vert_id.vert_idx = ii;
         pre_shader(vert_id, &u_verts[ii], &colors[ii], params);
       }
-#ifdef CFLAGS_GFX_SW_PERSP
-      SwRotTransPers(&u_verts[ii], &r_verts[ii], &world->trans, &params->m_rot,
-        &params->screen, params->screen_proj);
-#else
       SwRotTrans(&u_verts[ii], &r_verts[ii], &world->trans, &params->m_rot);
+#ifdef CFLAGS_GFX_SW_PERSP
+      /* as the gte, so a corner beside or behind the camera goes to the
+         edge of its range instead of being mirrored across the screen */
+      GtePerspectiveAt(r_verts[ii].x, r_verts[ii].y, r_verts[ii].z,
+        params->screen_proj, params->screen.x, params->screen.y,
+        &r_verts[ii].x, &r_verts[ii].y, &r_verts[ii].z);
 #endif
       if (post_shader) {
         vert_id.world_idx = world_idx;
@@ -739,6 +743,9 @@ static void SwTransformAndShadeWorlds(
         post_shader(vert_id, &r_verts[ii], &colors[ii], params);
       }
     }
+#ifdef CFLAGS_GFX_SW_PERSP
+    if (!GpuPolygonFits(r_verts)) { continue; } /* as the gpu */
+#endif
     if (!world->header->is_backdrop)
       terrain_reach = ReachWithPolygon(terrain_reach, r_verts);
     info_idx = poly->tinf_idx;

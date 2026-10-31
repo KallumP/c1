@@ -55,3 +55,13 @@ UTEST(gte, depth_is_clamped_to_16_bits) {
   GtePerspective(0, 0, 0x12345, PROJ, &sx, &sy, &sz);
   ASSERT_EQ(0xFFFF, sz);
 }
+
+UTEST(gte, the_screen_offset_is_added_before_clamping) {
+  int32_t sx, sy, sz;
+
+  GtePerspectiveAt(100, -50, 400, PROJ, 10, 20, &sx, &sy, &sz);
+  ASSERT_EQ(80, sx); /* 10 + 100*280/400 */
+  ASSERT_EQ(-15, sy);
+  GtePerspectiveAt(1000, 0, 280, PROJ, 0x80, 0, &sx, &sy, &sz);
+  ASSERT_EQ(0x3FF, sx); /* 0x80 + 1000, clamped */
+}
