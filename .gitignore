@@ -8,6 +8,7 @@ __pycache__/
 streams/*
 level_src/*
 !level_src/tide_ruins/
+!level_src/mossy_creek/
 imgui.ini
 controls.cfg
 settings.cfg
