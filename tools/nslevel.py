@@ -831,7 +831,7 @@ def assemble_level(level, templates, size, zones, step, spawn_zone, tpag_eids=()
     tpags = struct.unpack_from("<8I", t.world.items[0], 32)
     exec_map = level.nsd.ldat.exec_map
     slots = set(CORE_EXEC_SLOTS) | {entity_type(e)[0] for z in zones for e in z.entities}
-    keep = [exec_map[i] for i in slots] + [tp for tp in tpags if tp]
+    keep = [exec_map[i] for i in slots] + [tp for tp in tpags if tp] + list(tpag_eids)  # pages of the level's own the meshes use
     out = cut_level(level, keep)
     out.pages = pack_entries(entries) + out.pages + list(texture_pages)
     out.nsd.ldat.lid = LID_TEST
@@ -942,11 +942,44 @@ def map_images(obj_path, text):
     return images
 
 
+def add_warp_pad_base(worlds, texinfos, tpag_eids, base, at, template, candidates):
+    """worlds, texinfos and tpag_eids (as map_textures gives them, for mesh
+    headers from template) with the warp pad's base (WarpPadBase) added
+    where the pad stands, at (x, y, z relative to its zone), to whichever
+    of the meshes candidates (indices into worlds) has the fewest polygons,
+    with its texinfos and texture page"""
+    fields = struct.unpack_from(WGEO_HEADER, template, 0)
+    slots = list(struct.unpack_from("<%dI" % WGEO_TPAGS, template, 32))[:fields[6]] + list(tpag_eids)
+    if base.page not in slots:
+        if len(slots) >= WGEO_TPAGS:
+            raise ValueError("no texture page slot left for the warp pad's base")
+        slots.append(base.page)
+    slot = slots.index(base.page)
+    m = min(candidates, key=lambda i: len(worlds[i][1]))
+    verts, polys = worlds[m]
+    words = bytearray(texinfos[m])
+    index = {}
+    for tinf in sorted(base.texinfos):
+        index[tinf] = fields[5] + len(words) // 4
+        words += base.texinfos[tinf]
+    if fields[5] + len(words) // 4 > TEXINFO_WORDS_MAX:
+        raise ValueError("no room in the mesh's texinfos for the warp pad's base")
+    dx, dy, dz = (int(c) // 8 * 8 for c in at)
+    new_verts = verts + [(x + dx, y + dy, z + dz, colour) for x, y, z, colour in base.verts]
+    new_polys = polys + [(a + len(verts), b + len(verts), c + len(verts), index[tinf], slot)
+                         for a, b, c, tinf in base.polys]
+    if len(new_verts) > blendmap.WGEO_MAX or len(new_polys) > blendmap.WGEO_MAX:
+        raise ValueError("no room in the mesh for the warp pad's base")
+    worlds, texinfos = list(worlds), list(texinfos)
+    worlds[m], texinfos[m] = (new_verts, new_polys), bytes(words)
+    return worlds, texinfos, slots[fields[6]:]
+
+
 def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
     """a level from a map exported from blender as .obj (its text): its
     faces as the world meshes and collision, crash, and objects
     (levelobjects.LevelObject: a spawn object puts crash on the ground below
-    it, an end object the warp pad); built from level (a real level such as N. Sanity Beach) for crash
+    it, an end object the warp pad and its base); built from level (a real level such as N. Sanity Beach) for crash
     and the textures. faces of materials with an image in
     images ({material: PIL image}) get it, the rest the beach's textures"""
     t = Templates(level)
@@ -983,6 +1016,10 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
         pad = bytearray(t.entities[WARP_PAD])
         struct.pack_into("<3h", pad, ENTITY_POINTS, x // 4, y // 4, (z - spans[end_zone][0]) // 4)
         entities[end_zone].append(bytes(pad))
+        first = sum(len(w) for w in zone_worlds[:end_zone])
+        flat, texinfos, tpag_eids = add_warp_pad_base(
+            flat, texinfos, tpag_eids, warp_pad_base(level), (x, y, z - spans[end_zone][0]), t.world.items[0],
+            range(first, first + len(zone_worlds[end_zone])))
     step = MAP_PATH_STEP
     while True:
         paths = blendmap.zone_paths(blendmap.camera_path(cells, fit.size, MAP_CELL, start, step), spans)
