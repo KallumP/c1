@@ -488,7 +488,7 @@ int CamUpdate() {
   zone_path_point *point;
   int next_island_cam_state;
   int i, cam_mode, skip, n_path_idx, pt_idx;
-  int32_t path_x;
+  int32_t path_x, path_y;
 
   if (!crash) { return 0; }
   if (cur_display_flags & GOOL_FLAG_SPIN_DEATH) {
@@ -503,12 +503,18 @@ int CamUpdate() {
     game_state = GAME_STATE_PLAYING;
     CamFollow(crash, 0);
     return 1;
-  case FOLLOW_CAM_MODE: /* follow crash, sideways too (custom levels) */
+  case FOLLOW_CAM_MODE: /* follow crash, sideways and up too (custom levels) */
     game_state = GAME_STATE_PLAYING;
-    CamFollow(crash, 0); /* along the path; LevelUpdate keeps the offset on */
+    CamFollow(crash, 0); /* along the path; LevelUpdate keeps the offsets on */
     path_x = cam_trans.x - follow_cam_offset;
     follow_cam_offset = FollowCamOffset(follow_cam_offset, crash->trans.x - path_x);
     cam_trans.x = path_x + follow_cam_offset;
+    path_y = cam_trans.y - follow_cam_offset_y;
+    follow_cam_ground_y = FollowCamGroundY(follow_cam_ground_y, crash->trans.y,
+      crash->status_a & GOOL_FLAG_GROUNDLAND);
+    follow_cam_offset_y = FollowCamOffset(follow_cam_offset_y,
+      FollowCamHeightTarget(follow_cam_ground_y, path_y));
+    cam_trans.y = path_y + follow_cam_offset_y;
     return 1;
   case 0: /* no camera */
     game_state = GAME_STATE_PLAYING;
