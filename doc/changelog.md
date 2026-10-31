@@ -16,6 +16,7 @@
 
 ### Fixed
 
+- terrain flashing across the screen when the camera passes close to it (e.g. walking forward in N. Sanity Beach): a polygon with a corner beside or behind the camera was projected mirrored and drawn stretched over the view. terrain is now projected with the gte's limits and polygons too big for the ps1's gpu (over 1023 x 511) aren't drawn, as on the ps1
 - landing on the warp pad at the end of a level skipped Crash's 'win level' animation and went straight to the level end screen
 - fixed the gem briefly showing small in the top left of the level end screen before flying in, after a level with every box broken
 
