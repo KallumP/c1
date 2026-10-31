@@ -21,7 +21,6 @@
   {"kind": "box", "type": "checkpoint", "at": [0, 30, 0.6]},
   {"kind": "box", "type": "arrow", "at": [-9.5, 30.5, 0]},
   {"kind": "box", "type": "basic", "at": [-9.5, 30.5, 0], "raise": 2.5},
-  {"kind": "box", "type": "basic", "at": [6.5, 33, 0], "stack": 2},
 
   {"kind": "box", "type": "basic", "at": [-9.5, 35.5, 0], "stack": 3},
   {"kind": "box", "type": "question", "at": [-4.5, 35.5, 0]},
