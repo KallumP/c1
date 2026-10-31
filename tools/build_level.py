@@ -8,6 +8,7 @@ import os
 import sys
 
 import blendmap
+import levelobjects
 import nslevel
 
 USAGE = """usage:
@@ -21,9 +22,11 @@ USAGE = """usage:
            runs along x
 
   a level.cfg next to the .obj can set scale and turn for the level (one
-  "key = value" a line); --scale and --turn override it""" % nslevel.MAP_SCALE
+  "key = value" a line); --scale and --turn override it. an objects.json
+  next to it places objects: where crash starts and the level ends""" % nslevel.MAP_SCALE
 
 LEVEL_CFG = "level.cfg"
+OBJECTS_JSON = "objects.json"
 
 
 def parse_args(argv):
@@ -82,6 +85,20 @@ def level_options(folder, scale, turn):
     return scale, turn
 
 
+def read_objects_file(folder):
+    """the objects (levelobjects.LevelObject) the objects.json in folder
+    places (none without one); a bad one is a ValueError naming it"""
+    path = os.path.join(folder, OBJECTS_JSON)
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        text = f.read()
+    try:
+        return levelobjects.read_objects(text)
+    except ValueError as e:
+        raise ValueError("%s: %s" % (path, e))
+
+
 def fitting_scale(scale, too_big):
     """the largest scale (rounded down to a 10) at which a map that was
     too_big (blendmap.TooBig) at scale fits"""
@@ -100,6 +117,7 @@ def main(argv):
     name = name or default_name
     try:
         scale, turn = level_options(os.path.dirname(path), scale, turn)
+        objects = read_objects_file(os.path.dirname(path))
     except ValueError as e:
         print(e)
         return 1
@@ -107,11 +125,14 @@ def main(argv):
         text = f.read()
     images = nslevel.map_images(path, text)
     try:
-        level = nslevel.make_map(nslevel.read_level(nslevel.STREAMS_DIR, 9), text, scale, turn, images)
+        level = nslevel.make_map(nslevel.read_level(nslevel.STREAMS_DIR, 9), text, scale, turn, images, objects)
     except blendmap.TooBig as e:
         print("%s: at --scale %d it's %d units along %s, and the game's collision only reaches %d. "
               "use --scale %d or less" % (source, scale, e.extent, "xyz"[e.axis], e.side_max,
                                           fitting_scale(scale, e)))
+        return 1
+    except ValueError as e:
+        print("%s: %s" % (source, e))
         return 1
     nslevel.write_level(level, nslevel.LEVELS_DIR, name)
     print("wrote %s" % os.path.join(nslevel.LEVELS_DIR, name))

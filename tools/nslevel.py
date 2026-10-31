@@ -10,6 +10,7 @@ import os
 import struct
 
 import blendmap
+import levelobjects
 import tpage
 
 MAGIC_PAGE = 0x1234
@@ -520,6 +521,22 @@ def world_vertex_bytes(x, y, z, color):
     return struct.pack("<BBBBHH", color[0], color[1], color[2], z & 0xFF, h0, h1)
 
 
+def world_vertex(data):
+    """(x, y, z, colour) of a vertex from world_vertex_bytes, relative to
+    its mesh in zone units"""
+    r, g, b, z8, h0, h1 = struct.unpack("<BBBBHH", data)
+    def signed(v, bits):
+        return v - (1 << bits) if v & (1 << (bits - 1)) else v
+    z = signed(z8 | (((h0 >> 1) & 3) << 8) | ((h1 & 7) << 10), 13)
+    return (signed(h0 >> 3, 13) * 8, signed(h1 >> 3, 13) * 8, z * 8, (r, g, b))
+
+
+def world_polygon(data):
+    """(a, b, c, tinf, tpag) of a polygon from world_polygon_bytes"""
+    w0, w1 = struct.unpack("<II", data)
+    return (w1 >> 20, (w1 >> 8) & 0xFFF, w0 >> 20, (w0 >> 8) & 0xFFF, (w0 >> 5) & 7)
+
+
 def world_polygon_bytes(a, b, c, tinf, tpag):
     """a triangle of vertex indices a, b, c with texture info tinf (a word
     index into the mesh's texinfos) on texture page tpag, not animated"""
@@ -645,6 +662,7 @@ def zone_slst_items(listed, cam_zs, step):
 
 ENTITY_TYPE = 18
 ENTITY_POINTS = 20
+WARP_PAD = (32, 1)  # WarpC: the warp pad that ends a level, as on n. sanity beach
 
 
 def entity_type(item):
@@ -665,6 +683,65 @@ def used_textures(world):
         key = ((w0 >> 8) & 0xFFF, (w0 >> 5) & 7)
         counts[key] = counts.get(key, 0) + 1
     return sorted(counts, key=counts.get, reverse=True)
+
+
+WARP_PAD_REACH = 700  # how far around the warp pad (zone units) its base can go
+
+
+class WarpPadBase:
+    """the base the warp pad stands on, which is part of the terrain: its
+    vertices (x, y, z, colour) relative to where the pad stands, polygons
+    (a, b, c, tinf), the texinfos they use ({tinf: 8 bytes}) and the
+    texture page they're on"""
+    def __init__(self, verts, polys, texinfos, page):
+        self.verts, self.polys, self.texinfos, self.page = verts, polys, texinfos, page
+
+
+def warp_pad_base(level):
+    """the warp pad's base in level (N. Sanity Beach): the polygons of the
+    world mesh under its warp pad on the texture pages only the base uses,
+    which are those all around the pad"""
+    entries = {e.eid: e for p in level.pages for e in p.entries}
+    for zone in (e for e in entries.values() if e.type == 7):
+        paths_idx, path_count, entity_count, _ = struct.unpack_from("<4I", zone.items[0], ZONE_PATHS_IDX)
+        for item in zone.items[paths_idx + path_count:paths_idx + path_count + entity_count]:
+            if entity_type(item) != WARP_PAD:
+                continue
+            origin = struct.unpack_from("<iii", zone.items[1], 0)
+            pad = [o + 4 * c for o, c in zip(origin, struct.unpack_from("<3h", item, ENTITY_POINTS))]
+            for w in range(struct.unpack_from("<I", zone.items[0], 0)[0]):
+                world = entries.get(struct.unpack_from("<I", zone.items[0], 4 + w * ZONE_WORLD_SIZE)[0])
+                if world is None:
+                    continue
+                base = world_warp_pad_base(world, pad)
+                if base:
+                    return base
+    raise ValueError("there's no warp pad base in the level")
+
+
+def world_warp_pad_base(world, pad):
+    """the WarpPadBase in a world mesh around pad (where the pad stands,
+    zone units), or None"""
+    fields = struct.unpack_from(WGEO_HEADER, world.items[0], 0)
+    trans = fields[0:3]
+    verts = [world_vertex(world.items[2][8 * i:8 * i + 8]) for i in range(fields[4])]
+    verts = [(x + trans[0] - pad[0], y + trans[1] - pad[1], z + trans[2] - pad[2], c) for x, y, z, c in verts]
+    polys = [world_polygon(world.items[1][8 * i:8 * i + 8]) for i in range(fields[3])]
+
+    def around(poly):
+        return all(abs(verts[v][0]) <= WARP_PAD_REACH and abs(verts[v][2]) <= WARP_PAD_REACH
+                   and -WARP_PAD_REACH <= verts[v][1] <= 64 for v in poly[:3])
+    slots = {p[4] for p in polys if around(p)}
+    slots = [s for s in slots if all(around(p) for p in polys if p[4] == s)]
+    if len(slots) != 1:
+        return None
+    mine = [p for p in polys if p[4] == slots[0]]
+    used = sorted({v for p in mine for v in p[:3]})
+    index = {v: i for i, v in enumerate(used)}
+    texinfos = {p[3]: world.items[0][64 + 4 * p[3]:64 + 4 * p[3] + 8] for p in mine}
+    page = struct.unpack_from("<I", world.items[0], 32 + 4 * slots[0])[0]
+    return WarpPadBase([verts[v] for v in used], [(index[a], index[b], index[c], tinf) for a, b, c, tinf, _ in mine],
+                       texinfos, page)
 
 
 class Templates:
@@ -754,7 +831,7 @@ def assemble_level(level, templates, size, zones, step, spawn_zone, tpag_eids=()
     tpags = struct.unpack_from("<8I", t.world.items[0], 32)
     exec_map = level.nsd.ldat.exec_map
     slots = set(CORE_EXEC_SLOTS) | {entity_type(e)[0] for z in zones for e in z.entities}
-    keep = [exec_map[i] for i in slots] + [tp for tp in tpags if tp]
+    keep = [exec_map[i] for i in slots] + [tp for tp in tpags if tp] + list(tpag_eids)  # pages of the level's own the meshes use
     out = cut_level(level, keep)
     out.pages = pack_entries(entries) + out.pages + list(texture_pages)
     out.nsd.ldat.lid = LID_TEST
@@ -865,11 +942,45 @@ def map_images(obj_path, text):
     return images
 
 
-def make_map(level, text, scale=MAP_SCALE, turn=0, images=None):
+def add_warp_pad_base(worlds, texinfos, tpag_eids, base, at, template, candidates):
+    """worlds, texinfos and tpag_eids (as map_textures gives them, for mesh
+    headers from template) with the warp pad's base (WarpPadBase) added
+    where the pad stands, at (x, y, z relative to its zone), to whichever
+    of the meshes candidates (indices into worlds) has the fewest polygons,
+    with its texinfos and texture page"""
+    fields = struct.unpack_from(WGEO_HEADER, template, 0)
+    slots = list(struct.unpack_from("<%dI" % WGEO_TPAGS, template, 32))[:fields[6]] + list(tpag_eids)
+    if base.page not in slots:
+        if len(slots) >= WGEO_TPAGS:
+            raise ValueError("no texture page slot left for the warp pad's base")
+        slots.append(base.page)
+    slot = slots.index(base.page)
+    m = min(candidates, key=lambda i: len(worlds[i][1]))
+    verts, polys = worlds[m]
+    words = bytearray(texinfos[m])
+    index = {}
+    for tinf in sorted(base.texinfos):
+        index[tinf] = fields[5] + len(words) // 4
+        words += base.texinfos[tinf]
+    if fields[5] + len(words) // 4 > TEXINFO_WORDS_MAX:
+        raise ValueError("no room in the mesh's texinfos for the warp pad's base")
+    dx, dy, dz = (int(c) // 8 * 8 for c in at)
+    new_verts = verts + [(x + dx, y + dy, z + dz, colour) for x, y, z, colour in base.verts]
+    new_polys = polys + [(a + len(verts), b + len(verts), c + len(verts), index[tinf], slot)
+                         for a, b, c, tinf in base.polys]
+    if len(new_verts) > blendmap.WGEO_MAX or len(new_polys) > blendmap.WGEO_MAX:
+        raise ValueError("no room in the mesh for the warp pad's base")
+    worlds, texinfos = list(worlds), list(texinfos)
+    worlds[m], texinfos[m] = (new_verts, new_polys), bytes(words)
+    return worlds, texinfos, slots[fields[6]:]
+
+
+def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
     """a level from a map exported from blender as .obj (its text): its
-    faces as the world meshes and collision, and crash, with nothing else;
-    built from level (a real level such as N. Sanity Beach) for crash and
-    the textures. faces of materials with an image in
+    faces as the world meshes and collision, crash, and objects
+    (levelobjects.LevelObject: a spawn object puts crash on the ground below
+    it, an end object the warp pad and its base); built from level (a real level such as N. Sanity Beach) for crash
+    and the textures. faces of materials with an image in
     images ({material: PIL image}) get it, the rest the beach's textures"""
     t = Templates(level)
     fit = blendmap.fit(blendmap.read_obj(text, scale, turn), MAP_CELL, MAP_HEADROOM, margin=MAP_CELL,
@@ -888,11 +999,30 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None):
     tpag_eids, texinfos, pages = (), [b""] * len(flat), []
     if images:
         flat, (tpag_eids, texinfos, pages) = map_textures(flat, images, t.world.items[0])
-    start = blendmap.spawn(mesh, cells, fit.size, MAP_CELL)
+    placed = {o.kind: levelobjects.to_zone(o.at, scale, turn, fit.offset) for o in objects}
+    raised = {o.kind: int(round(o.raise_by * scale)) for o in objects}
+    if "spawn" in placed:
+        x, y, z = blendmap.ground_below(cells, placed["spawn"], MAP_CELL, "the spawn object")
+        start = (x, y + raised["spawn"], z)
+    else:
+        start = blendmap.spawn(mesh, cells, fit.size, MAP_CELL)
     spawn_zone = blendmap.zone_index(spans, start[2])
     crash = bytearray(t.crash)
     struct.pack_into("<3h", crash, ENTITY_POINTS, start[0] // 4, (start[1] + 100) // 4,
                      (start[2] - spans[spawn_zone][0]) // 4)
+    entities = [[] for _ in spans]
+    entities[spawn_zone].append(bytes(crash))  # crash first, where the level spawns
+    if "end" in placed:
+        x, y, z = blendmap.ground_below(cells, placed["end"], MAP_CELL, "the end object")
+        y += raised["end"]
+        end_zone = blendmap.zone_index(spans, z)
+        pad = bytearray(t.entities[WARP_PAD])
+        struct.pack_into("<3h", pad, ENTITY_POINTS, x // 4, y // 4, (z - spans[end_zone][0]) // 4)
+        entities[end_zone].append(bytes(pad))
+        first = sum(len(w) for w in zone_worlds[:end_zone])
+        flat, texinfos, tpag_eids = add_warp_pad_base(
+            flat, texinfos, tpag_eids, warp_pad_base(level), (x, y, z - spans[end_zone][0]), t.world.items[0],
+            range(first, first + len(zone_worlds[end_zone])))
     step = MAP_PATH_STEP
     while True:
         paths = blendmap.zone_paths(blendmap.camera_path(cells, fit.size, MAP_CELL, start, step), spans)
@@ -902,7 +1032,7 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None):
             zones.append(ZonePlan(span[0] - spans[0][0], cell_blocks(blendmap.zone_cells(cells, span, MAP_CELL),
                                                                      MAP_CELL),
                                   flat[n:n + count], texinfos[n:n + count], paths[i],
-                                  [bytes(crash)] if i == spawn_zone else []))
+                                  entities[i]))
             n += count
         try:
             return assemble_level(level, t, size, zones, step, spawn_zone, tpag_eids, pages)

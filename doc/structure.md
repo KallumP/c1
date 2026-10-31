@@ -103,6 +103,7 @@ Project structure is listed below, including descriptions for each file.
 │   ├── build_level.py       # builds a level from its source in level_src/: python tools/build_level.py level_src/<name>
 │   ├── nslevel.py           # reads and writes level files, and makes a level from a level source's parts
 │   ├── blendmap.py          # turns a map exported from blender into the parts of a level, for nslevel.py
+│   ├── levelobjects.py      # reads a level source's objects.json: where crash starts and the level ends
 │   ├── tpage.py             # texture pages: images as 16 colour tiles, and texture infos for parts of them
 │   └── tests                # the tools' tests (python -m unittest discover -s tools/tests)
 ├── level_src                # level sources: maps modelled in blender, a folder each, to build levels from (ignored by git, apart from the included tide_ruins)

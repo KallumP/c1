@@ -1,6 +1,6 @@
 # Custom levels
 
-A map modelled in Blender can be built into a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. There are no objects yet (eg: enemies, fruit or crates). What a level is built from is its *level source*, a folder in `level_src/`; the built level goes to `build/levels/`, next to the game. One level source is included to try it with, `level_src/tide_ruins` (see [level_src/README.md](../level_src/README.md) for instructions to play it); the sources you add are ignored by git.
+A map modelled in Blender can be built into a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. An `objects.json` beside the map can set where he starts and put a warp pad where the level ends (see [Objects](#objects)); there are no other objects yet (eg: enemies, fruit or crates). What a level is built from is its *level source*, a folder in `level_src/`; the built level goes to `build/levels/`, next to the game. One level source is included to try it with, `level_src/tide_ruins` (see [level_src/README.md](../level_src/README.md) for instructions to play it); the sources you add are ignored by git.
 
 ## From Blender to the game
 
@@ -37,12 +37,12 @@ The examples below use the included level source, `level_src/tide_ruins`. It's r
    - Once the turn and scale look right, save them in a `level.cfg` in the level source's folder, so the level always builds the same without the flags. `--turn` and `--scale` on the command line still override it. It holds one setting a line, and lines starting with `#` are comments:
 
      ```
-     # level_src/tide_ruins/level.cfg
-     turn = 90
-     scale = 2000
+     # the route runs along blender's +y, modelled at 1 m to a unit, so the defaults suit it
+     turn = 0
+     scale = 400
      ```
 
-     (`tide_ruins` doesn't actually need one: it's modelled at 1 m to a unit with its route along Y, so the defaults suit it.)
+     That's `level_src/tide_ruins/level.cfg`. Its values are the defaults, so it builds the same without it; it's there as an example. A map whose route runs along X, modelled at a different size, would have something like `turn = 90` and `scale = 2000`.
 
      A setting other than `turn` or `scale`, or a value that isn't a whole number, stops the tool with a message naming the line.
 7. **Setup which level to boot into** In `settings.cfg`:
@@ -60,12 +60,38 @@ To change the level, edit the map in Blender, export over the old files, and run
 
 Make a folder in `level_src/` for it, such as `level_src/tide_ruins/`, and start at step 5. The `.obj` should have Y up, with the route running towards -Z in the file, which is what Blender's default export gives. Without a `.mtl`, the map uses N. Sanity Beach's textures. If it comes out on its side or facing the wrong way, re-export it from Blender with the default axes, or use `--turn`.
 
+### Objects
+
+Objects go in an `objects.json` in the level source's folder, next to the `.obj`. It's a list of objects, each with a `kind` and where it is in Blender (`at`, as `[x, y, z]` in metres, which is what Blender's N panel shows as an object's Location). For example, `level_src/tide_ruins/objects.json`:
+
+```json
+[
+  {"kind": "spawn", "at": [0.5, 3.5, 0.3]},
+  {"kind": "end", "at": [0, 50, 1.2], "raise": 0.15}
+]
+```
+
+(`tide_ruins` also has a `spawn` object in its `.obj`, from before `objects.json`, at the same place. The `spawn` in `objects.json` is the one used.)
+
+| Kind | What it does |
+|---|---|
+| `spawn` | Crash starts on the ground below it. It takes the place of a `spawn` object in the map (see [Modelling](#modelling)). |
+| `end` | N. Sanity Beach's warp pad goes on the ground below it. Crash stepping on it ends the level. |
+
+In the game's own levels, the warp pad object (`WarpC`) is only the animated part: the stone base it stands on is part of the level's terrain, about 3 m across and sunk 1 m into the ground with its top level with the floor. So for an `end`, the build also copies that base out of N. Sanity Beach's terrain (from your copy of the game, like its textures) and puts it under the pad, centred on it with its top on the floor. It only shows; Crash walks on the floor under it, so the floor there should be flat, about 3 m across.
+
+An object can also have `raise`, in metres, to put it that far above the ground it goes on, such as when the warp pad clips into the floor around it. The floor Crash stands on is made of 0.3 m steps (see [Limits](#limits)), so it can be a little above or below the floor you see, and raising by 0.1 to 0.2 m usually covers it.
+
+A level can have one of each, and neither is needed. "On the ground below it" means the highest floor below `at`, or less than 0.3 m (at the default scale) above it, so `at` can be on the floor itself. If there's no floor there, the build stops and says so.
+
+`objects.json` is read every time the level is built, so after changing it, run step 6 again. If it isn't valid (not JSON, an unknown `kind` or setting, a second `spawn` or `end`, `at` that isn't three numbers, or `raise` that isn't a number), the build stops with a message saying which object is wrong.
+
 ### Modelling
 
 - Model the route so Crash runs towards +Y (forward in Blender's front view, away from you). The camera follows him from behind along that direction. It also slides sideways after him and keeps the same height above the floor he's on (a camera mode c1x adds for custom levels), so he can take paths that run beside each other, such as several walkways, and climb onto higher floors or drop to lower ones without leaving the view. It rises when he lands somewhere higher, not with each jump, and follows him straight down when he drops. It doesn't turn, so the route as a whole should run straight.
 - 1 m is 400 of the game's units; Crash is about 1.7 m tall. Use `--scale <units per m>` for another scale.
 - Faces have to point towards where Crash can be (normals out of the walkable side; Blender's Face Orientation overlay shows them blue). Faces pointing up are floors, the rest are walls. Faces pointing down, such as ceilings, are left out, so the camera can see in from above.
-- Name an object `spawn` (it can be any small mesh) to put Crash on the floor below it. Without one, he starts down the middle of the map, at the beginning of the longest stretch of floor he can walk along the route. Each step can go up or down at most 128 units (about 0.3 m at the default scale), so a ledge or a building he can't get past doesn't count. He starts far enough along that stretch for the camera behind him to be over it too.
+- Name an object `spawn` (it can be any small mesh) to put Crash on the floor below it, or use a `spawn` in [`objects.json`](#objects). Without either, he starts down the middle of the map, at the beginning of the longest stretch of floor he can walk along the route. Each step can go up or down at most 128 units (about 0.3 m at the default scale), so a ledge or a building he can't get past doesn't count. He starts far enough along that stretch for the camera behind him to be over it too.
 - Name objects `pit…` (e.g. `pit.001`) for floors that kill Crash when he lands on them.
 
 ### Textures

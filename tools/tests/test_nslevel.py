@@ -826,6 +826,105 @@ class Map(unittest.TestCase):
         self.assertGreater(y, 128)
         self.assertLessEqual(y, 128 + 128)
 
+    def crash_at(self, zone):
+        """crash's position in a zone (zone units)"""
+        paths_idx, path_count = struct.unpack_from("<2I", zone.items[0], nslevel.ZONE_PATHS_IDX)
+        crash = zone.items[paths_idx + path_count]
+        self.assertEqual((0, 0), nslevel.entity_type(crash))
+        return tuple(c * 4 for c in struct.unpack_from("<3h", crash, nslevel.ENTITY_POINTS))
+
+    def test_a_spawn_object_puts_crash_on_the_ground_below_it(self):
+        # blender (2, -3, 0) is the .obj's (2, 0, 3): over the floor, away from the marker
+        spawn = nslevel.levelobjects.LevelObject("spawn", (2, -3, 0.5))
+        level, entries, zone = self.make(scale=256, objects=[spawn])
+        x, y, z = self.crash_at(zone)
+        self.assertAlmostEqual(128 + 6 * 256, x, delta=16)
+        self.assertAlmostEqual(128 + 11 * 256, z, delta=16)
+        self.assertGreater(y, 128)
+        self.assertLessEqual(y, 128 + 128)
+
+    def test_a_spawn_object_needs_ground_below_it(self):
+        spawn = nslevel.levelobjects.LevelObject("spawn", (20, -3, 0.5))  # off the side of the map
+        with self.assertRaises(ValueError) as e:
+            self.make(scale=256, objects=[spawn])
+        self.assertIn("spawn", str(e.exception))
+
+    def entities(self, zone):
+        paths_idx, path_count, entity_count = struct.unpack_from("<3I", zone.items[0], nslevel.ZONE_PATHS_IDX)
+        return zone.items[paths_idx + path_count:paths_idx + path_count + entity_count]
+
+    def warp_pads(self, entries):
+        """(zone, position in it) of each warp pad (WarpC) in the level"""
+        return [(zone, tuple(c * 4 for c in struct.unpack_from("<3h", e, nslevel.ENTITY_POINTS)))
+                for zone in entries.values() if zone.type == 7
+                for e in self.entities(zone) if nslevel.entity_type(e) == nslevel.WARP_PAD]
+
+    def test_an_end_object_puts_a_warp_pad_on_the_ground_below_it(self):
+        # blender (-2, 4, 0.5) is the .obj's (-2, 0.5, -4)
+        end = nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5))
+        level, entries, zone = self.make(scale=256, objects=[end])
+        [(pad_zone, (x, y, z))] = self.warp_pads(entries)
+        self.assertEqual(zone.eid, pad_zone.eid)
+        self.assertAlmostEqual(128 + 2 * 256, x, delta=16)
+        self.assertAlmostEqual(128 + 4 * 256, z, delta=16)
+        self.assertEqual(128, y)  # on the floor's top
+        self.assertEqual((0, 0), nslevel.entity_type(self.entities(zone)[0]))  # crash stays first
+
+    def test_raise_lifts_the_warp_pad_and_its_base(self):
+        end = nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5), raise_by=0.25)  # 64 at scale 256
+        level, entries, zone = self.make(scale=256, objects=[end])
+        [(_, (x, y, z))] = self.warp_pads(entries)
+        self.assertEqual(128 + 64, y)
+
+    def test_the_warp_pads_code_comes_with_it(self):
+        end = nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5))
+        level, entries, zone = self.make(scale=256, objects=[end])
+        self.assertIn(level.nsd.ldat.exec_map[nslevel.WARP_PAD[0]], entries)
+
+    def test_without_an_end_object_theres_no_warp_pad(self):
+        level, entries, zone = self.make(scale=256)
+        self.assertEqual([], self.warp_pads(entries))
+
+    def test_an_end_object_needs_ground_below_it(self):
+        end = nslevel.levelobjects.LevelObject("end", (-20, 4, 0.5))
+        with self.assertRaises(ValueError) as e:
+            self.make(scale=256, objects=[end])
+        self.assertIn("end", str(e.exception))
+
+    def test_the_warp_pads_base_is_in_the_beachs_terrain_under_it(self):
+        base = nslevel.warp_pad_base(nslevel.read_level(STREAMS, 9))
+        self.assertGreater(len(base.polys), 20)
+        xs, ys, zs = zip(*((x, y, z) for x, y, z, _ in base.verts))
+        # relative to the pad: around it, and from its top down
+        self.assertLessEqual(max(map(abs, xs + zs)), 700)
+        self.assertLessEqual(max(ys), 16)
+        self.assertGreaterEqual(min(ys), -600)
+        self.assertTrue(all(len(base.texinfos[tinf]) == 8 for *_, tinf in base.polys))  # 2 words each
+        self.assertIn(base.page, {p.eid for p in nslevel.read_level(STREAMS, 9).pages})
+
+    def test_an_end_object_has_the_warp_pads_base_under_it(self):
+        end = nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5))
+        level, entries, zone = self.make(scale=256, objects=[end])
+        base = nslevel.warp_pad_base(nslevel.read_level(STREAMS, 9))
+        [(_, (px, py, pz))] = self.warp_pads(entries)
+        on_page = []
+        for w in range(struct.unpack_from("<I", zone.items[0], 0)[0]):
+            world = entries[struct.unpack_from("<I", zone.items[0], 4 + w * nslevel.ZONE_WORLD_SIZE)[0]]
+            fields = struct.unpack_from(nslevel.WGEO_HEADER, world.items[0], 0)
+            tpags = struct.unpack_from("<8I", world.items[0], 32)
+            verts = [decode_vertex(world.items[2][8 * i:8 * i + 8]) for i in range(fields[4])]
+            for i in range(fields[3]):
+                a, b, c, tinf, tpag = decode_polygon(world.items[1][8 * i:8 * i + 8])
+                if tpags[tpag] == base.page:
+                    self.assertLess(tinf + 1, fields[5])  # within the mesh's texinfos
+                    on_page += [verts[a], verts[b], verts[c]]
+        self.assertEqual(len(base.polys), len(on_page) // 3)
+        xs, ys, zs = zip(*(v[:3] for v in on_page))
+        self.assertAlmostEqual(px, (min(xs) + max(xs)) / 2, delta=64)
+        self.assertAlmostEqual(pz, (min(zs) + max(zs)) / 2, delta=64)
+        self.assertAlmostEqual(py, max(ys), delta=16)  # its top on the floor, where the pad stands
+        self.assertIn(base.page, {p.eid for p in level.pages if p.type == nslevel.PAGE_TEXTURE})
+
     def test_world_meshes_are_its_faces(self):
         level, entries, zone = self.make()
         header = zone.items[0]
@@ -872,6 +971,18 @@ class Map(unittest.TestCase):
     def neighbors(self, zone):
         count = struct.unpack_from("<I", zone.items[0], nslevel.ZONE_PATHS_IDX + 12)[0]
         return list(struct.unpack_from("<%dI" % count, zone.items[0], nslevel.ZONE_NEIGHBORS))
+
+    def test_an_end_object_far_along_a_long_map_is_in_the_last_zone(self):
+        # blender y 45 is the .obj's z -45: 5 m from the far end, in the third zone
+        end = nslevel.levelobjects.LevelObject("end", (0, 45, 0))
+        level, entries, _ = self.make(self.LONG_OBJ, objects=[end])
+        zones = sorted((e for e in entries.values() if e.type == 7),
+                       key=lambda z: -struct.unpack_from("<i", z.items[1], 8)[0])
+        [(pad_zone, (x, y, z))] = self.warp_pads(entries)
+        self.assertEqual(zones[2].eid, pad_zone.eid)
+        # the floor's far end is a cell (128) in from the third zone's corner,
+        # and the pad 5 m (2000) on from that
+        self.assertAlmostEqual(128 + 2000, z, delta=16)
 
     def test_a_long_map_is_a_chain_of_zones_along_the_route(self):
         level, entries, zones = self.long_zones()

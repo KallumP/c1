@@ -459,6 +459,16 @@ def walk_starts(cells, i, cell):
     return t, k
 
 
+def ground_below(cells, at, cell, what):
+    """(x, y, z) on the highest ground below at (x, y, z), or at most a cell
+    above it; with none, a ValueError naming what"""
+    x, y, z = at
+    tops = [t for t in ground_tops(cells, int(x // cell), int(z // cell), cell) if t <= y + cell]
+    if not tops:
+        raise ValueError("there's no ground below %s" % what)
+    return (int(round(x)), tops[-1], int(round(z)))
+
+
 def spawn(mesh, cells, size, cell):
     """where crash starts, (x, y, z): on the ground below the middle of an
     object named spawn..., or without one, where the longest walk along the
@@ -470,11 +480,7 @@ def spawn(mesh, cells, size, cell):
         x = sum(mesh.verts[i][0] for i in marker) / len(marker)
         z = sum(mesh.verts[i][2] for i in marker) / len(marker)
         bottom = min(mesh.verts[i][1] for i in marker)
-        tops = [t for t in ground_tops(cells, int(x // cell), int(z // cell), cell)
-                if t <= bottom + cell]
-        if not tops:
-            raise ValueError("there's no ground below the spawn object")
-        return (int(round(x)), tops[-1], int(round(z)))
+        return ground_below(cells, (x, bottom, z), cell, "the spawn object")
     middle = (min(i for i, _ in columns) + max(i for i, _ in columns) + 1) * cell / 2 if columns else 0
     for i in sorted({i for i, _ in columns}, key=lambda i: abs((i + 0.5) * cell - middle)):
         start = walk_starts(cells, i, cell)
