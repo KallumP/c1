@@ -19,6 +19,17 @@ class ReadObjects(unittest.TestCase):
                                             ' {"kind": "end", "at": [1, 40, 3]}]')
         self.assertEqual([("spawn", (0, 2, 0.5)), ("end", (1, 40, 3))], [(o.kind, o.at) for o in objects])
 
+    def test_raise_lifts_an_object_off_the_ground_it_goes_on(self):
+        [end] = levelobjects.read_objects('[{"kind": "end", "at": [0, 40, 1], "raise": 0.25}]')
+        self.assertEqual(0.25, end.raise_by)
+
+    def test_raise_is_0_by_default(self):
+        [end] = levelobjects.read_objects('[{"kind": "end", "at": [0, 40, 1]}]')
+        self.assertEqual(0, end.raise_by)
+
+    def test_raise_has_to_be_a_number(self):
+        self.assert_error('[{"kind": "end", "at": [0, 0, 0], "raise": "up"}]', "object 1", "raise")
+
     def test_no_objects_is_fine(self):
         self.assertEqual([], levelobjects.read_objects("[]"))
 

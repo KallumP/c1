@@ -870,6 +870,12 @@ class Map(unittest.TestCase):
         self.assertEqual(128, y)  # on the floor's top
         self.assertEqual((0, 0), nslevel.entity_type(self.entities(zone)[0]))  # crash stays first
 
+    def test_raise_lifts_the_warp_pad_and_its_base(self):
+        end = nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5), raise_by=0.25)  # 64 at scale 256
+        level, entries, zone = self.make(scale=256, objects=[end])
+        [(_, (x, y, z))] = self.warp_pads(entries)
+        self.assertEqual(128 + 64, y)
+
     def test_the_warp_pads_code_comes_with_it(self):
         end = nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5))
         level, entries, zone = self.make(scale=256, objects=[end])
