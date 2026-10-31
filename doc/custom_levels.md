@@ -66,7 +66,7 @@ Objects go in an `objects.json` in the level source's folder, next to the `.obj`
 
 ```json
 [
-  {"kind": "end", "at": [0, 50, 1.2]}
+  {"kind": "end", "at": [0, 50, 1.2], "raise": 0.15}
 ]
 ```
 
@@ -77,9 +77,11 @@ Objects go in an `objects.json` in the level source's folder, next to the `.obj`
 
 In the game's own levels, the warp pad object (`WarpC`) is only the animated part: the stone base it stands on is part of the level's terrain, about 3 m across and sunk 1 m into the ground with its top level with the floor. So for an `end`, the build also copies that base out of N. Sanity Beach's terrain (from your copy of the game, like its textures) and puts it under the pad, centred on it with its top on the floor. It only shows; Crash walks on the floor under it, so the floor there should be flat, about 3 m across.
 
+An object can also have `raise`, in metres, to put it that far above the ground it goes on, such as when the warp pad's base clips into the floor around it. The floor Crash stands on is made of 0.3 m steps (see [Limits](#limits)), so it can be a little above or below the floor you see, and raising by 0.1 to 0.2 m usually covers it.
+
 A level can have one of each, and neither is needed. "On the ground below it" means the highest floor below `at`, or less than 0.3 m (at the default scale) above it, so `at` can be on the floor itself. If there's no floor there, the build stops and says so.
 
-`objects.json` is read every time the level is built, so after changing it, run step 6 again. If it isn't valid (not JSON, an unknown `kind` or setting, a second `spawn` or `end`, or `at` that isn't three numbers), the build stops with a message saying which object is wrong.
+`objects.json` is read every time the level is built, so after changing it, run step 6 again. If it isn't valid (not JSON, an unknown `kind` or setting, a second `spawn` or `end`, `at` that isn't three numbers, or `raise` that isn't a number), the build stops with a message saying which object is wrong.
 
 ### Modelling
 
