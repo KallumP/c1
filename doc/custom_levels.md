@@ -1,10 +1,10 @@
 # Custom levels
 
-A map modelled in Blender can be built into a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. An `objects.json` beside the map can set where he starts and put a warp pad where the level ends (see [Objects](#objects)); there are no other objects yet (eg: enemies, fruit or crates). What a level is built from is its *level source*, a folder in `level_src/`; the built level goes to `build/levels/`, next to the game. One level source is included to try it with, `level_src/tide_ruins` (see [level_src/README.md](../level_src/README.md) for instructions to play it); the sources you add are ignored by git.
+A map modelled in Blender can be built into a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. An `objects.json` beside the map can set where he starts, put a warp pad where the level ends, and place boxes (see [Objects](#objects)); there are no other objects yet (eg: enemies or fruit). What a level is built from is its *level source*, a folder in `level_src/`; the built level goes to `build/levels/`, next to the game. Some level sources are included to try it with, (see [level_src/README.md](../level_src/README.md) for instructions to play them); new level sources you add are ignored by git.
 
 ## From Blender to the game
 
-The examples below use the included level source, `level_src/tide_ruins`. It's ready to use, so to try it, do step 1 and then start at step 6.
+The examples below use one of the included level sources, `level_src/tide_ruins`. It's ready to use, so to try it, do step 1 and then start at step 6.
 
 1. **Get set up (once).** You need the game built (see [Building](building.md)), its files in `streams/` (see [Running](running.md)), Python 3, and [Pillow](https://pypi.org/project/pillow/) for textures (`pip install pillow`). Without Pillow, a map with no images still works.
 2. **Get the map ready in Blender** (see [Modelling](#modelling) below): the route running towards +Y, faces pointing the right way, and optionally a `spawn` object and `pit` objects.
@@ -52,7 +52,7 @@ The examples below use the included level source, `level_src/tide_ruins`. It's r
    ```
 8. **Run the game** (`build/c1.exe`). It starts in your level. Crash runs with the camera behind him, looking along the route. If the level named in `boot_level` doesn't exist, the game says so in the console and starts normally. Remove `boot_level` to start at the title screen again.
 
-Levels are built from your copy of the game, so they go in `build/`, which is ignored by git (and emptied by `make clean`; build them again afterwards). `level_src/` is ignored too, apart from the included `tide_ruins` source and `level_src/README.md`.
+Levels are built from your copy of the game, so they go in `build/`, which is ignored by git (and emptied by `make clean`). `level_src/` is ignored too, apart from the included level sources and `level_src/README.md`.
 
 To change the level, edit the map in Blender, export over the old files, and run step 6 again. `settings.cfg` doesn't need changing, and you don't need to rebuild the game.
 
@@ -62,14 +62,18 @@ Make a folder in `level_src/` for it, such as `level_src/tide_ruins/`, and start
 
 ### Objects
 
-Objects go in an `objects.json` in the level source's folder, next to the `.obj`. It's a list of objects, each with a `kind` and where it is in Blender (`at`, as `[x, y, z]` in metres, which is what Blender's N panel shows as an object's Location). For example, `level_src/tide_ruins/objects.json`:
+Objects go in an `objects.json` in the level source's folder, next to the `.obj`. It's a list of objects, each with a `kind` and where it is in Blender (`at`, as `[x, y, z]` in metres, which is what Blender's N panel shows as an object's Location). For example:
 
 ```json
 [
   {"kind": "spawn", "at": [0.5, 3.5, 0.3]},
+  {"kind": "box", "type": "basic", "at": [7.5, 25.5, 0.7]},
+  {"kind": "box", "type": "basic", "at": [-9.5, 35.5, 0], "stack": 3},
   {"kind": "end", "at": [0, 50, 1.2], "raise": 0.15}
 ]
 ```
+
+That's part of `level_src/tide_ruins/objects.json`.
 
 (`tide_ruins` also has a `spawn` object in its `.obj`, from before `objects.json`, at the same place. The `spawn` in `objects.json` is the one used.)
 
@@ -77,14 +81,38 @@ Objects go in an `objects.json` in the level source's folder, next to the `.obj`
 |---|---|
 | `spawn` | Crash starts on the ground below it. It takes the place of a `spawn` object in the map (see [Modelling](#modelling)). |
 | `end` | N. Sanity Beach's warp pad goes on the ground below it. Crash stepping on it ends the level. |
+| `box` | A box goes on the ground below it: a copy of one of N. Sanity Beach's, by its `type`. With `stack`, that many boxes go one on top of another. |
 
 In the game's own levels, the warp pad object (`WarpC`) is only the animated part: the stone base it stands on is part of the level's terrain, about 3 m across and sunk 1 m into the ground with its top level with the floor. So for an `end`, the build also copies that base out of N. Sanity Beach's terrain (from your copy of the game, like its textures) and puts it under the pad, centred on it with its top on the floor. It only shows; Crash walks on the floor under it, so the floor there should be flat, about 3 m across.
 
 An object can also have `raise`, in metres, to put it that far above the ground it goes on, such as when the warp pad clips into the floor around it. The floor Crash stands on is made of 0.3 m steps (see [Limits](#limits)), so it can be a little above or below the floor you see, and raising by 0.1 to 0.2 m usually covers it.
 
-A level can have one of each, and neither is needed. "On the ground below it" means the highest floor below `at`, or less than 0.3 m (at the default scale) above it, so `at` can be on the floor itself. If there's no floor there, the build stops and says so.
+A box's `type` is which of the game's boxes it is. A custom level can have the boxes N. Sanity Beach has, named here by how they look in the game:
 
-`objects.json` is read every time the level is built, so after changing it, run step 6 again. If it isn't valid (not JSON, an unknown `kind` or setting, a second `spawn` or `end`, `at` that isn't three numbers, or `raise` that isn't a number), the build stops with a message saying which object is wrong.
+| `type` | Looks like | `subtype` |
+|---|---|---|
+| `basic` | a wooden crate with an X on it | 2 |
+| `arrow` | a wooden crate with an up arrow | 3 |
+| `checkpoint` | a wooden crate with a C | 4 |
+| `iron` | a plain metal crate | 5 |
+| `slatted` | a crate of wooden slats | 6 |
+| `switch` | a metal crate with a ! | 7 |
+| `life` | a wooden crate with Crash's face | 8 |
+| `aku_aku` | a wooden crate with Aku Aku's mask | 9 |
+| `question` | a wooden crate with a ? | 10 |
+| `outline` | only the crate's edges, until a `switch` makes it solid | 13 |
+
+`subtype` is the game's own number for it, which a box can have instead of `type`. Other boxes, such as TNT, aren't on the beach, and the other subtypes either crash the game (0, 1, 11, 12 and 15) or aren't boxes (14), so a custom level can't have them yet.
+
+A `switch` makes every `outline` box in the level solid; with more than one switch, any of them does.
+
+The level end screen says how many boxes were missed, out of every box that can be broken: all of them but `iron` and `switch`, counting each box in a stack. Breaking them all gets the gem, as in the game's own levels. The build counts them and writes the total into the level.
+
+`stack` (1 by default) is how many boxes high it is. The game stacks a box on another when it's 400 units (1 m at the default scale) above it, at the same place, and comes straight after it in the level, which is how a stack is built. So a box of another type can go on top of one with `raise` 1, straight after it in `objects.json`. With another `raise`, a box floats, such as above an `arrow` box.
+
+A level can have one `spawn` and one `end`, and neither is needed, and any number of boxes, up to about 300 objects in all (the game has 304 places to keep track of objects, by their ids). "On the ground below it" means the highest floor below `at`, or less than 0.3 m (at the default scale) above it, so `at` can be on the floor itself. If there's no floor there, the build stops and says so. A `pit…` isn't floor, so an object can't go over water, even raised.
+
+`objects.json` is read every time the level is built, so after changing it, run step 6 again. If it isn't valid (not JSON, an unknown `kind` or setting, a second `spawn` or `end`, `at` that isn't three numbers, `raise` that isn't a number, a box `type` or `subtype` the beach doesn't have, or both or neither of them, or a `stack` that isn't a whole number of at least 1), the build stops with a message saying which object is wrong.
 
 ### Modelling
 
@@ -110,5 +138,5 @@ A level can have one of each, and neither is needed. "On the ground below it" me
 - Along the route, the map can be any length. A level is made of zones, as the game's own levels are, and the game's collision can't reach further than 16,384 units in one zone. So a longer map is split into a chain of zones, each 16,384 units long, that lead on to each other.
 - Across and up, the map has to fit in one zone: at most 16,384 units, including a margin of 128 at each side (about 40 m at the default scale).
 - On a long map, each zone can have at most 4 world meshes, because a zone also draws the next zone's meshes as the camera looks ahead into it. A zone that needs more is an error; use fewer faces there.
-- The game draws at most 4095 polygons of a custom level at once (its own levels draw 1460), and faces are cut into pieces about 1.3 m long along the route and 2.6 m across, so a big, detailed map leaves out what's farthest from the camera. `tide_ruins` is drawn about 28 m ahead.
+- The game draws at most 4095 polygons of a custom level at once (its own levels draw 1460), and faces are cut into pieces about 1.3 m long along the route and 2.6 m across, so a big, detailed map leaves out what's farthest from the camera. `tide_ruins` is drawn about 28 m ahead. Objects past where the terrain stops aren't drawn either, so they come into view with the ground they're on.
 - The game has no depth test for level geometry: it draws faces farthest first, by the middle of each piece along the route. Where two big faces overlap at about the same distance, one can show through the other a little.

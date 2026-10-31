@@ -30,6 +30,46 @@ class ReadObjects(unittest.TestCase):
     def test_raise_has_to_be_a_number(self):
         self.assert_error('[{"kind": "end", "at": [0, 0, 0], "raise": "up"}]', "object 1", "raise")
 
+    def test_a_box_has_a_subtype_and_stacks_one_high_by_default(self):
+        [box] = levelobjects.read_objects('[{"kind": "box", "subtype": 2, "at": [0, 5, 0]}]')
+        self.assertEqual(("box", (0, 5, 0), 2, 1), (box.kind, box.at, box.subtype, box.stack))
+
+    def test_a_box_can_be_a_stack(self):
+        [box] = levelobjects.read_objects('[{"kind": "box", "subtype": 2, "at": [0, 5, 0], "stack": 3}]')
+        self.assertEqual(3, box.stack)
+
+    def test_a_level_can_have_many_boxes(self):
+        objects = levelobjects.read_objects('[{"kind": "box", "subtype": 2, "at": [0, 5, 0]},'
+                                            ' {"kind": "box", "subtype": 13, "at": [1, 5, 0]}]')
+        self.assertEqual([2, 13], [o.subtype for o in objects])
+
+    def test_a_boxs_subtype_has_to_be_one_the_beach_has(self):
+        self.assert_error('[{"kind": "box", "at": [0, 0, 0]}]', "object 1", "subtype")
+        self.assert_error('[{"kind": "box", "subtype": 1, "at": [0, 0, 0]}]', "object 1", "subtype", "13")
+        self.assert_error('[{"kind": "box", "subtype": 2.5, "at": [0, 0, 0]}]', "object 1", "subtype")
+
+    def test_a_box_can_be_named_by_its_type(self):
+        [box] = levelobjects.read_objects('[{"kind": "box", "type": "checkpoint", "at": [0, 5, 0]}]')
+        self.assertEqual(4, box.subtype)
+
+    def test_every_subtype_has_a_name(self):
+        self.assertEqual(sorted(levelobjects.BOX_SUBTYPES), sorted(levelobjects.BOX_TYPES.values()))
+
+    def test_an_unknown_type_is_an_error_listing_them(self):
+        self.assert_error('[{"kind": "box", "type": "tnt", "at": [0, 0, 0]}]', "object 1", "tnt", "basic", "outline")
+
+    def test_a_box_has_a_type_or_a_subtype_not_both(self):
+        self.assert_error('[{"kind": "box", "type": "basic", "subtype": 2, "at": [0, 0, 0]}]', "object 1", "type")
+        self.assert_error('[{"kind": "box", "at": [0, 0, 0]}]', "object 1", "type")
+
+    def test_a_stack_is_at_least_one_box(self):
+        self.assert_error('[{"kind": "box", "subtype": 2, "at": [0, 0, 0], "stack": 0}]', "object 1", "stack")
+        self.assert_error('[{"kind": "box", "subtype": 2, "at": [0, 0, 0], "stack": 1.5}]', "object 1", "stack")
+
+    def test_only_a_box_takes_a_subtype_or_stack(self):
+        self.assert_error('[{"kind": "end", "subtype": 2, "at": [0, 0, 0]}]', "object 1", "subtype")
+        self.assert_error('[{"kind": "spawn", "stack": 2, "at": [0, 0, 0]}]', "object 1", "stack")
+
     def test_no_objects_is_fine(self):
         self.assertEqual([], levelobjects.read_objects("[]"))
 

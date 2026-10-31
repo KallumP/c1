@@ -38,7 +38,7 @@ NSD_PTB_COUNT = 256
 NSD_COMPRESSED_PAGE_COUNT = 64
 NSD_EXEC_COUNT = 64
 NSD_HEADER = "<iIIiIIIi"  # page_count .. compressed_page_count
-LDAT_HEADER = "<IIIiI"    # magic, lid, zone_spawn, path_idx_spawn, unk_10
+LDAT_HEADER = "<IIIiI"    # magic, lid, zone_spawn, path_idx_spawn, box_total
 LDAT_IMAGE_SIZE = 0xF5F8
 
 
@@ -64,12 +64,12 @@ def str_to_eid(name):
 
 class Ldat:
     """the level header at the end of the nsd"""
-    def __init__(self, magic, lid, zone_spawn, path_idx_spawn, unk_10, exec_map, fov, image):
+    def __init__(self, magic, lid, zone_spawn, path_idx_spawn, box_total, exec_map, fov, image):
         self.magic = magic
         self.lid = lid
         self.zone_spawn = zone_spawn
         self.path_idx_spawn = path_idx_spawn
-        self.unk_10 = unk_10
+        self.box_total = box_total  # 0 in the game's own levels; a custom level's boxes to break
         self.exec_map = exec_map
         self.fov = fov
         self.image = image
@@ -257,7 +257,7 @@ def nsd_bytes(nsd, pages):
         data += struct.pack("<II", *pte)
     ldat = nsd.ldat
     data += struct.pack(LDAT_HEADER, ldat.magic, ldat.lid, ldat.zone_spawn,
-                        ldat.path_idx_spawn, ldat.unk_10)
+                        ldat.path_idx_spawn, ldat.box_total)
     data += struct.pack("<%dI" % NSD_EXEC_COUNT, *ldat.exec_map)
     data += struct.pack("<I", ldat.fov) + ldat.image.ljust(LDAT_IMAGE_SIZE, b"\0")
     return data
@@ -660,14 +660,45 @@ def zone_slst_items(listed, cam_zs, step):
     return slst_items(world_zmax, cam_zs, step, SLST_NEAR, world_zmid)
 
 
+ENTITY_ID = 8
+ENTITY_INIT_FLAGS = 12  # init_flags_a, _b, _c (int16 each)
 ENTITY_TYPE = 18
 ENTITY_POINTS = 20
+ENTITY_IDS_MAX = 303  # ids index spawns[GOOL_SPAWN_COUNT] in src/gool.c
+ENTITY_MAIN_IDS = range(1, 5)  # ids that make the main object (crash): GoolObjectSpawn in src/gool.c
 WARP_PAD = (32, 1)  # WarpC: the warp pad that ends a level, as on n. sanity beach
+BOX_TYPE = 34       # BoxsC: boxes, by subtype
+BOX_HEIGHT = 400    # a box on top of another is this much higher (GoolObjectSpawn in src/gool.c)
+UNBREAKABLE_BOXES = (levelobjects.BOX_TYPES["iron"], levelobjects.BOX_TYPES["switch"])  # not in the total
+# a switch (! box) makes the outline boxes solid along a chain of ids in
+# their entities' init_flags_c: the switch's is the first outline box's id,
+# each outline box's the next one's, and the last's 0. the first is marked
+# 12 in its init_flags_b, the rest 4 (as on n. sanity beach)
+OUTLINE_FIRST, OUTLINE_REST = 12, 4
 
 
 def entity_type(item):
     """an entity's type (its exec map slot) and subtype"""
     return item[ENTITY_TYPE], item[ENTITY_TYPE + 1]
+
+
+def entity_id(item):
+    return struct.unpack_from("<H", item, ENTITY_ID)[0]
+
+
+def with_entity_id(item, eid):
+    item = bytearray(item)
+    struct.pack_into("<H", item, ENTITY_ID, eid)
+    return bytes(item)
+
+
+def new_entity_ids(count, taken):
+    """count ids for new entities, from the lowest up: not in taken, nor
+    the main object's, and at most ENTITY_IDS_MAX"""
+    ids = [i for i in range(1, ENTITY_IDS_MAX + 1) if i not in ENTITY_MAIN_IDS and i not in taken][:count]
+    if len(ids) < count:
+        raise ValueError("%d objects, more than the game can have in a level (%d)" % (count + len(taken), len(ids) + len(taken)))
+    return ids
 
 
 # custom levels
@@ -975,11 +1006,34 @@ def add_warp_pad_base(worlds, texinfos, tpag_eids, base, at, template, candidate
     return worlds, texinfos, slots[fields[6]:]
 
 
+def link_switches(entities, placed_boxes):
+    """chain the outline boxes of placed_boxes ((subtype, zone, index,
+    id) each) and point every switch at the first, so any switch makes
+    them all solid; in place, in entities (a list of entities per zone)"""
+    outlines = [b for b in placed_boxes if b[0] == levelobjects.BOX_TYPES["outline"]]
+    switches = [b for b in placed_boxes if b[0] == levelobjects.BOX_TYPES["switch"]]
+    first = outlines[0][3] if outlines else 0
+    for _, zone, idx, _ in switches:
+        entities[zone][idx] = with_init_flag_c(entities[zone][idx], first)
+    for n, (_, zone, idx, _) in enumerate(outlines):
+        nxt = outlines[n + 1][3] if n + 1 < len(outlines) else 0
+        item = bytearray(with_init_flag_c(entities[zone][idx], nxt))
+        struct.pack_into("<h", item, ENTITY_INIT_FLAGS + 2, OUTLINE_REST if n else OUTLINE_FIRST)
+        entities[zone][idx] = bytes(item)
+
+
+def with_init_flag_c(item, value):
+    item = bytearray(item)
+    struct.pack_into("<h", item, ENTITY_INIT_FLAGS + 4, value)
+    return bytes(item)
+
+
 def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
     """a level from a map exported from blender as .obj (its text): its
     faces as the world meshes and collision, crash, and objects
     (levelobjects.LevelObject: a spawn object puts crash on the ground below
-    it, an end object the warp pad and its base); built from level (a real level such as N. Sanity Beach) for crash
+    it, an end object the warp pad and its base, a box object a stack of
+    boxes); built from level (a real level such as N. Sanity Beach) for crash
     and the textures. faces of materials with an image in
     images ({material: PIL image}) get it, the rest the beach's textures"""
     t = Templates(level)
@@ -1012,11 +1066,27 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
                      (start[2] - spans[spawn_zone][0]) // 4)
     entities = [[] for _ in spans]
     entities[spawn_zone].append(bytes(crash))  # crash first, where the level spawns
+    boxes = [o for o in objects if o.kind == "box"]
+    ids = iter(new_entity_ids(("end" in placed) + sum(o.stack for o in boxes), {entity_id(t.crash)}))
+    placed_boxes = []  # (subtype, zone, index in its entities, id), in order
+    for o in boxes:
+        x, y, z = blendmap.ground_below(cells, levelobjects.to_zone(o.at, scale, turn, fit.offset), MAP_CELL,
+                                        "a box object")
+        y += int(round(o.raise_by * scale))
+        box_zone = blendmap.zone_index(spans, z)
+        for k in range(o.stack):  # one after another, so the game stacks them
+            box_id = next(ids)
+            box = bytearray(with_entity_id(t.entities[(BOX_TYPE, o.subtype)], box_id))
+            struct.pack_into("<3h", box, ENTITY_POINTS, x // 4, (y + k * BOX_HEIGHT) // 4,
+                             (z - spans[box_zone][0]) // 4)
+            placed_boxes.append((o.subtype, box_zone, len(entities[box_zone]), box_id))
+            entities[box_zone].append(bytes(box))
+    link_switches(entities, placed_boxes)
     if "end" in placed:
         x, y, z = blendmap.ground_below(cells, placed["end"], MAP_CELL, "the end object")
         y += raised["end"]
         end_zone = blendmap.zone_index(spans, z)
-        pad = bytearray(t.entities[WARP_PAD])
+        pad = bytearray(with_entity_id(t.entities[WARP_PAD], next(ids)))
         struct.pack_into("<3h", pad, ENTITY_POINTS, x // 4, y // 4, (z - spans[end_zone][0]) // 4)
         entities[end_zone].append(bytes(pad))
         first = sum(len(w) for w in zone_worlds[:end_zone])
@@ -1035,7 +1105,9 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
                                   entities[i]))
             n += count
         try:
-            return assemble_level(level, t, size, zones, step, spawn_zone, tpag_eids, pages)
+            out = assemble_level(level, t, size, zones, step, spawn_zone, tpag_eids, pages)
+            out.nsd.ldat.box_total = sum(o.stack for o in boxes if o.subtype not in UNBREAKABLE_BOXES)
+            return out
         except EntryTooBig as e:
             if e.entry.type != 4 or step >= MAP_PIECE:  # only the sort lists shrink
                 raise

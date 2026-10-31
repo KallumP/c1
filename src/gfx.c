@@ -2,6 +2,7 @@
 #include "ns.h"
 #include "math.h"
 #include "slst.h"
+#include "pc/reach.h"
 #include "level.h"
 
 #include "formats/svtx.h"
@@ -994,6 +995,7 @@ int GfxCalcObjectMatrices(svtx_frame *frame, tgeo_header *t_header,
     header=(zone_header*)cur_zone->items[0];
     far=header->visibility_depth>>8;
     //if (r_trans->z > (far?far:12000)) { return 0; }
+    if (ReachHidesObject(ns.ldat->lid, terrain_reach, r_trans->z)) { return 0; } /* pc */
     status_b = obj->process.status_b;
     colors = &obj->colors;
     if ((status_b & 0x40000) == 0) {

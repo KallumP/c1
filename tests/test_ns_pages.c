@@ -35,6 +35,35 @@ UTEST(ns_files, other_levels_still_load_from_streams) {
   ASSERT_STREQ("./streams/s0000001.nsf", NSGetFilename(1, LID_TEST));
 }
 
+static nsd_ldat ldat; /* big (its loading image), so not on the stack */
+
+UTEST(ns_box_total, a_custom_level_keeps_its_box_total) {
+  NSSetCustomLevel("build/levels/mock");
+  ldat.box_total = 58;
+  NSKeepBoxTotal(LID_TEST, &ldat);
+  ASSERT_EQ(58, NSCustomBoxTotal());
+  NSSetCustomLevel("");
+  NSKeepBoxTotal(LID_TEST, &ldat);
+}
+
+UTEST(ns_box_total, the_total_stays_while_the_level_end_screen_loads) {
+  NSSetCustomLevel("build/levels/mock");
+  ldat.box_total = 58;
+  NSKeepBoxTotal(LID_TEST, &ldat);
+  ldat.box_total = 0;
+  NSKeepBoxTotal(LID_NSANITYBEACH, &ldat); /* another level's nsd, such as the end screen's */
+  ASSERT_EQ(58, NSCustomBoxTotal());
+  NSSetCustomLevel("");
+  NSKeepBoxTotal(LID_TEST, &ldat);
+}
+
+UTEST(ns_box_total, the_games_own_test_level_has_none) {
+  NSSetCustomLevel("");
+  ldat.box_total = 7;
+  NSKeepBoxTotal(LID_TEST, &ldat);
+  ASSERT_EQ(0, NSCustomBoxTotal());
+}
+
 /* leave junk where the next call's locals will go, as the game's own calls would */
 static __attribute__((noinline)) void FillStackWithJunk() {
   volatile uint32_t junk[256];

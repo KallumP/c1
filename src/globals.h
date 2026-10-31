@@ -83,7 +83,7 @@ typedef struct {
   int debug;
   int32_t checkpoint_id;
   uint32_t dword_000619A4;
-  uint32_t dword_800619A8;
+  uint32_t ended_lid; /* 800619A8: id of the level that ended, for the level end screen */
   uint32_t item_pool2;
   uint32_t map_level_links;
   int title_pause_state;
@@ -168,6 +168,7 @@ extern gool_globals globals;
 #define bonus_round globals.bonus_round
 #define card_part_count_ro globals.card_part_count_ro
 #define box_count globals.box_count
+#define ended_lid globals.ended_lid
 #define item_pool1 globals.item_pool1
 #define map_level_links globals.map_level_links
 #define island_cam_rot_x globals.island_cam_rot_x

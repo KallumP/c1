@@ -42,7 +42,7 @@ extern gool_object *crash;
 extern uint32_t spawns[GOOL_SPAWN_COUNT];
 extern uint16_t level_spawns[GOOL_LEVEL_SPAWN_COUNT];
 extern gool_handle handles[8];
-extern gool_bound object_bounds[28];
+extern gool_bound object_bounds[GOOL_BOUND_COUNT];
 extern int object_bound_count;
 extern vec cam_trans;
 extern ang cam_rot;

@@ -8,10 +8,12 @@
 #include "math.h"
 #include "gte.h"
 #include "gpu.h"
+#include "pc/reach.h"
 
 #define gte_divide(a,b) ((a)/(b))
 
 sw_transform_struct params;
+int32_t terrain_reach = REACH_UNKNOWN;
 
 extern entry *cur_zone;
 
@@ -744,6 +746,8 @@ static void SwTransformAndShadeWorlds(
 #ifdef CFLAGS_GFX_SW_PERSP
     if (!GpuPolygonFits(r_verts)) { continue; } /* as the gpu */
 #endif
+    if (!world->header->is_backdrop)
+      terrain_reach = ReachWithPolygon(terrain_reach, r_verts);
     info_idx = poly->tinf_idx;
     tpag = tpags[poly->tpag_idx];
     wgeo_info = (wgeo_texinfo*)(&((uint32_t*)texinfos)[info_idx]);
