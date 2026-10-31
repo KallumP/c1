@@ -18,6 +18,7 @@
 
 ### Fixed
 
+- a `switch` box in a custom level didn't make its `outline` boxes solid: the switch finds them by a chain of ids in their entities, which still pointed at n. sanity beach's boxes. the build now chains the level's own outline boxes to its switches
 - objects in custom levels were drawn past where the terrain stops, floating in the sky: a zone's objects are all loaded, but the terrain only reaches as far as its sort lists' polygons go. objects further away than the farthest terrain drawn are no longer drawn
 - the level end screen of a custom level said PERFECT, or 'you missed' a wrong number of boxes: it looks up a level's box total by its id, which only the game's own levels have, so it used whatever was left in its memory. the build now writes the total into the level and the game gives it to the end screen
 - crash in a level with more than 28 solid objects (boxes, Crash, the warp pad) loaded at once: the game's per-frame list of object bounds had 28 places and no check, so the 29th overwrote what came after it. it now has a place for every object

@@ -104,6 +104,8 @@ A box's `type` is which of the game's boxes it is. A custom level can have the b
 
 `subtype` is the game's own number for it, which a box can have instead of `type`. Other boxes, such as TNT, aren't on the beach, and the other subtypes either crash the game (0, 1, 11, 12 and 15) or aren't boxes (14), so a custom level can't have them yet.
 
+A `switch` makes every `outline` box in the level solid; with more than one switch, any of them does.
+
 The level end screen says how many boxes were missed, out of every box that can be broken: all of them but `iron` and `switch`, counting each box in a stack. Breaking them all gets the gem, as in the game's own levels. The build counts them and writes the total into the level.
 
 `stack` (1 by default) is how many boxes high it is. The game stacks a box on another when it's 400 units (1 m at the default scale) above it, at the same place, and comes straight after it in the level, which is how a stack is built. So a box of another type can go on top of one with `raise` 1, straight after it in `objects.json`. With another `raise`, a box floats, such as above an `arrow` box.
