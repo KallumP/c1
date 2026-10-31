@@ -48,6 +48,20 @@ class ReadObjects(unittest.TestCase):
         self.assert_error('[{"kind": "box", "subtype": 1, "at": [0, 0, 0]}]', "object 1", "subtype", "13")
         self.assert_error('[{"kind": "box", "subtype": 2.5, "at": [0, 0, 0]}]', "object 1", "subtype")
 
+    def test_a_box_can_be_named_by_its_type(self):
+        [box] = levelobjects.read_objects('[{"kind": "box", "type": "checkpoint", "at": [0, 5, 0]}]')
+        self.assertEqual(4, box.subtype)
+
+    def test_every_subtype_has_a_name(self):
+        self.assertEqual(sorted(levelobjects.BOX_SUBTYPES), sorted(levelobjects.BOX_TYPES.values()))
+
+    def test_an_unknown_type_is_an_error_listing_them(self):
+        self.assert_error('[{"kind": "box", "type": "tnt", "at": [0, 0, 0]}]', "object 1", "tnt", "basic", "outline")
+
+    def test_a_box_has_a_type_or_a_subtype_not_both(self):
+        self.assert_error('[{"kind": "box", "type": "basic", "subtype": 2, "at": [0, 0, 0]}]', "object 1", "type")
+        self.assert_error('[{"kind": "box", "at": [0, 0, 0]}]', "object 1", "type")
+
     def test_a_stack_is_at_least_one_box(self):
         self.assert_error('[{"kind": "box", "subtype": 2, "at": [0, 0, 0], "stack": 0}]', "object 1", "stack")
         self.assert_error('[{"kind": "box", "subtype": 2, "at": [0, 0, 0], "stack": 1.5}]', "object 1", "stack")
