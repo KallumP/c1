@@ -51,3 +51,47 @@ UTEST(gldepth, unmarked_prims_do_not_write_depth) {
   ASSERT_FALSE(GLPrimWritesDepth(3));
 }
 
+UTEST(gldepth, level_mark_is_not_a_model) {
+  ASSERT_FALSE(GLPrimDepthTested(GL_PRIM_LEVEL | 3));
+  ASSERT_FALSE(GLPrimWritesDepth(GL_PRIM_LEVEL | 0));
+}
+
+UTEST(gldepth, level_mark_does_not_change_blend_mode) {
+  ASSERT_EQ(0, GLPrimBlendMode(GL_PRIM_LEVEL | 0));
+  ASSERT_EQ(3, GLPrimBlendMode(GL_PRIM_LEVEL | 3));
+}
+
+UTEST(gldepth, marked_level_prims_write_depth_in_custom_levels) {
+  ASSERT_TRUE(GLPrimLevelWritesDepth(GL_PRIM_LEVEL | 0, 1));
+  ASSERT_TRUE(GLPrimLevelWritesDepth(GL_PRIM_LEVEL | 3, 1));
+}
+
+UTEST(gldepth, level_prims_do_not_write_depth_in_original_levels) {
+  ASSERT_FALSE(GLPrimLevelWritesDepth(GL_PRIM_LEVEL | 0, 0));
+}
+
+UTEST(gldepth, unmarked_and_effect_level_prims_do_not_write_depth) {
+  ASSERT_FALSE(GLPrimLevelWritesDepth(0, 1));
+  ASSERT_FALSE(GLPrimLevelWritesDepth(GL_PRIM_LEVEL | 1, 1));
+  ASSERT_FALSE(GLPrimLevelWritesDepth(GL_PRIM_LEVEL | 2, 1));
+}
+
+UTEST(gldepth, models_are_tested_in_custom_levels_or_with_the_setting) {
+  ASSERT_FALSE(GLPrimModelDepthTested(GL_PRIM_DEPTH, 0, 0));
+  ASSERT_TRUE(GLPrimModelDepthTested(GL_PRIM_DEPTH, 1, 0));
+  ASSERT_TRUE(GLPrimModelDepthTested(GL_PRIM_DEPTH, 0, 1));
+  ASSERT_FALSE(GLPrimModelDepthTested(GL_PRIM_LEVEL, 1, 1));
+}
+
+UTEST(gldepth, level_tri_in_front_of_the_camera_has_depth) {
+  ASSERT_TRUE(GLLevelTriHasDepth(400, 500, 600, 300));
+}
+
+UTEST(gldepth, level_tri_with_a_corner_the_gte_saturated_has_no_depth) {
+  /* a corner at or under half the projection distance is pushed to the
+     side of the screen (see gte.h), so depths across the tri are wrong */
+  ASSERT_FALSE(GLLevelTriHasDepth(150, 500, 600, 300));
+  ASSERT_FALSE(GLLevelTriHasDepth(400, 0, 600, 300));
+  ASSERT_TRUE(GLLevelTriHasDepth(400, 151, 600, 300));
+}
+
