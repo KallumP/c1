@@ -957,6 +957,22 @@ class Map(unittest.TestCase):
         self.assertTrue(all(i not in nslevel.ENTITY_MAIN_IDS and i <= nslevel.ENTITY_IDS_MAX
                             for i in ids if i != nslevel.entity_id(nslevel.Templates(level).crash)))
 
+    def test_the_level_header_has_how_many_boxes_can_be_broken(self):
+        # the level end screen (GamOC) only knows the totals of the game's own
+        # levels; the game gives it this one for a custom level (src/level.c)
+        objects = [nslevel.levelobjects.LevelObject("box", (1, 2, 0.5), subtype=2, stack=2),
+                   nslevel.levelobjects.LevelObject("box", (-1, 2, 0.5), subtype=13),
+                   nslevel.levelobjects.LevelObject("box", (1, 3, 0.5), subtype=5),   # iron
+                   nslevel.levelobjects.LevelObject("box", (-1, 3, 0.5), subtype=7)]  # switch
+        level, entries, zone = self.make(scale=256, objects=objects)
+        self.assertEqual(3, level.nsd.ldat.box_total)
+        back = nslevel.read_nsd(nslevel.nsd_bytes(level.nsd, level.pages))
+        self.assertEqual(3, back.ldat.box_total)
+
+    def test_a_level_without_boxes_has_none_to_break(self):
+        level, entries, zone = self.make(scale=256)
+        self.assertEqual(0, level.nsd.ldat.box_total)
+
     def test_an_end_object_needs_ground_below_it(self):
         end = nslevel.levelobjects.LevelObject("end", (-20, 4, 0.5))
         with self.assertRaises(ValueError) as e:
