@@ -11,6 +11,8 @@ see doc/custom_levels.md. tools/nslevel.py puts them in the level.
 import json
 import numbers
 
+import blendmap
+
 KINDS = ("spawn", "end")  # each at most once
 SETTINGS = ("kind", "at")
 
@@ -58,3 +60,13 @@ def read_objects(text):
             raise ValueError("object %d: at should be its position in blender, [x, y, z] in metres" % n)
         objects.append(LevelObject(kind, tuple(at)))
     return objects
+
+
+def to_zone(at, scale, turn, offset):
+    """where at (a position in blender: x, y, z with z up, in metres) is in
+    the level (zone units, (x, y up, z)), as a vertex there in the .obj is:
+    the .obj has blender's (x, z, -y), which read_obj scales and turns by
+    turn degrees and fit moves by offset (Fit.offset)"""
+    x, y, z = at[0] * scale, at[2] * scale, -at[1] * scale
+    x, z = blendmap.turned(x, z, turn)
+    return (x - offset[0], y - offset[1], z - offset[2])
