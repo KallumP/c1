@@ -25,8 +25,10 @@ static inline int32_t GteLimit(int32_t v, int32_t min, int32_t max) {
   return v < min ? min : (v > max ? max : v);
 }
 
-static inline void GtePerspective(int32_t x, int32_t y, int32_t z,
-  int32_t proj, int32_t *sx, int32_t *sy, int32_t *sz) {
+/* the same, with the screen offset (ofx, ofy) added before the clamp, as
+   the gte does */
+static inline void GtePerspectiveAt(int32_t x, int32_t y, int32_t z,
+  int32_t proj, int32_t ofx, int32_t ofy, int32_t *sx, int32_t *sy, int32_t *sz) {
   int64_t px, py;
 
   *sz = GteLimit(z, 0, GTE_SZ_MAX);
@@ -38,8 +40,15 @@ static inline void GtePerspective(int32_t x, int32_t y, int32_t z,
     px = ((int64_t)x * ((int64_t)proj << 16) / *sz) >> 16;
     py = ((int64_t)y * ((int64_t)proj << 16) / *sz) >> 16;
   }
+  px += ofx;
+  py += ofy;
   *sx = (int32_t)(px < GTE_SXY_MIN ? GTE_SXY_MIN : (px > GTE_SXY_MAX ? GTE_SXY_MAX : px));
   *sy = (int32_t)(py < GTE_SXY_MIN ? GTE_SXY_MIN : (py > GTE_SXY_MAX ? GTE_SXY_MAX : py));
+}
+
+static inline void GtePerspective(int32_t x, int32_t y, int32_t z,
+  int32_t proj, int32_t *sx, int32_t *sy, int32_t *sz) {
+  GtePerspectiveAt(x, y, z, proj, 0, 0, sx, sy, sz);
 }
 
 #endif /* _PC_GFX_GTE_H_ */
