@@ -11,6 +11,7 @@
 #endif
 #include "pc/gfx/soft.h"
 #include "pc/gfx/gte.h"
+#include "pc/levelend.h"
 int CardControl(int op, int part_idx) { return 1; }
 
 /* forward declarations for unexported funcs */
@@ -802,6 +803,10 @@ int GoolObjectInit(gool_object *obj, int exec, int subtype, int argc, int *argv)
   state = maps->subtype_map[idx_states+subtype];
   if (state == 0xFF)
     return ERROR_INVALID_STATE;
+  /* pc: the level end screen looks up the level's box total by its id, and
+     custom levels aren't in its list; it never sets it for them, so the
+     total would be whatever this (reused) object's memory held */
+  LevelEndBoxTotal(exec, ended_lid, &obj->memory[LEVELEND_BOX_TOTAL]);
   res = GoolObjectChangeState(obj, state, argc, argv);
   if (ISERRORCODE(res))
     return ERROR;
