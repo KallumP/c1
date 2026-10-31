@@ -17,6 +17,12 @@ typedef union {
   uint8_t u8;
 } generic;
 
+/* the master volume (0 to 0x7F, as SsSetMVol takes it) for a fade volume
+   (0 to 0x3FFF) */
+static inline uint32_t AudioFadeMVol(uint32_t fade_vol) {
+  return fade_vol >> 7;
+}
+
 extern int AudioInit();
 extern int AudioKill();
 extern void AudioSetVoiceMVol(uint32_t vol);

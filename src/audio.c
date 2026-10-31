@@ -504,7 +504,7 @@ void AudioUpdate() {
       fade_vol_step = 0; /* stop fading */
     }
     fade_vol += fade_vol_step; /* increase/decrease volume */
-    SwSetMVol(fade_vol);
+    SwSetMVol(AudioFadeMVol(fade_vol)); /* set master volume */
   }
 #define KEYS_STATUS_ON 1
   SwGetAllKeysStatus(keys_status);
