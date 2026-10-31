@@ -12,10 +12,7 @@ int SlstInit() {
   size_t size;
   int poly_id_count;
 
-  if (cur_lid == LID_TITLE || cur_lid == LID_INTRO)
-    poly_id_count = 2610;
-  else
-    poly_id_count = 1460;
+  poly_id_count = SlstPolyIdCount(cur_lid);
   size = sizeof(poly_id_list) + poly_id_count*sizeof(poly_id);
   poly_id_buf1 = malloc(size); /* gp[0xAF] */
   if (!poly_id_buf1) { return ERROR_MALLOC_FAILED; }
