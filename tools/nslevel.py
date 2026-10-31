@@ -521,6 +521,22 @@ def world_vertex_bytes(x, y, z, color):
     return struct.pack("<BBBBHH", color[0], color[1], color[2], z & 0xFF, h0, h1)
 
 
+def world_vertex(data):
+    """(x, y, z, colour) of a vertex from world_vertex_bytes, relative to
+    its mesh in zone units"""
+    r, g, b, z8, h0, h1 = struct.unpack("<BBBBHH", data)
+    def signed(v, bits):
+        return v - (1 << bits) if v & (1 << (bits - 1)) else v
+    z = signed(z8 | (((h0 >> 1) & 3) << 8) | ((h1 & 7) << 10), 13)
+    return (signed(h0 >> 3, 13) * 8, signed(h1 >> 3, 13) * 8, z * 8, (r, g, b))
+
+
+def world_polygon(data):
+    """(a, b, c, tinf, tpag) of a polygon from world_polygon_bytes"""
+    w0, w1 = struct.unpack("<II", data)
+    return (w1 >> 20, (w1 >> 8) & 0xFFF, w0 >> 20, (w0 >> 8) & 0xFFF, (w0 >> 5) & 7)
+
+
 def world_polygon_bytes(a, b, c, tinf, tpag):
     """a triangle of vertex indices a, b, c with texture info tinf (a word
     index into the mesh's texinfos) on texture page tpag, not animated"""
@@ -667,6 +683,65 @@ def used_textures(world):
         key = ((w0 >> 8) & 0xFFF, (w0 >> 5) & 7)
         counts[key] = counts.get(key, 0) + 1
     return sorted(counts, key=counts.get, reverse=True)
+
+
+WARP_PAD_REACH = 700  # how far around the warp pad (zone units) its base can go
+
+
+class WarpPadBase:
+    """the base the warp pad stands on, which is part of the terrain: its
+    vertices (x, y, z, colour) relative to where the pad stands, polygons
+    (a, b, c, tinf), the texinfos they use ({tinf: 8 bytes}) and the
+    texture page they're on"""
+    def __init__(self, verts, polys, texinfos, page):
+        self.verts, self.polys, self.texinfos, self.page = verts, polys, texinfos, page
+
+
+def warp_pad_base(level):
+    """the warp pad's base in level (N. Sanity Beach): the polygons of the
+    world mesh under its warp pad on the texture pages only the base uses,
+    which are those all around the pad"""
+    entries = {e.eid: e for p in level.pages for e in p.entries}
+    for zone in (e for e in entries.values() if e.type == 7):
+        paths_idx, path_count, entity_count, _ = struct.unpack_from("<4I", zone.items[0], ZONE_PATHS_IDX)
+        for item in zone.items[paths_idx + path_count:paths_idx + path_count + entity_count]:
+            if entity_type(item) != WARP_PAD:
+                continue
+            origin = struct.unpack_from("<iii", zone.items[1], 0)
+            pad = [o + 4 * c for o, c in zip(origin, struct.unpack_from("<3h", item, ENTITY_POINTS))]
+            for w in range(struct.unpack_from("<I", zone.items[0], 0)[0]):
+                world = entries.get(struct.unpack_from("<I", zone.items[0], 4 + w * ZONE_WORLD_SIZE)[0])
+                if world is None:
+                    continue
+                base = world_warp_pad_base(world, pad)
+                if base:
+                    return base
+    raise ValueError("there's no warp pad base in the level")
+
+
+def world_warp_pad_base(world, pad):
+    """the WarpPadBase in a world mesh around pad (where the pad stands,
+    zone units), or None"""
+    fields = struct.unpack_from(WGEO_HEADER, world.items[0], 0)
+    trans = fields[0:3]
+    verts = [world_vertex(world.items[2][8 * i:8 * i + 8]) for i in range(fields[4])]
+    verts = [(x + trans[0] - pad[0], y + trans[1] - pad[1], z + trans[2] - pad[2], c) for x, y, z, c in verts]
+    polys = [world_polygon(world.items[1][8 * i:8 * i + 8]) for i in range(fields[3])]
+
+    def around(poly):
+        return all(abs(verts[v][0]) <= WARP_PAD_REACH and abs(verts[v][2]) <= WARP_PAD_REACH
+                   and -WARP_PAD_REACH <= verts[v][1] <= 64 for v in poly[:3])
+    slots = {p[4] for p in polys if around(p)}
+    slots = [s for s in slots if all(around(p) for p in polys if p[4] == s)]
+    if len(slots) != 1:
+        return None
+    mine = [p for p in polys if p[4] == slots[0]]
+    used = sorted({v for p in mine for v in p[:3]})
+    index = {v: i for i, v in enumerate(used)}
+    texinfos = {p[3]: world.items[0][64 + 4 * p[3]:64 + 4 * p[3] + 8] for p in mine}
+    page = struct.unpack_from("<I", world.items[0], 32 + 4 * slots[0])[0]
+    return WarpPadBase([verts[v] for v in used], [(index[a], index[b], index[c], tinf) for a, b, c, tinf, _ in mine],
+                       texinfos, page)
 
 
 class Templates:
