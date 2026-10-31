@@ -280,6 +280,7 @@ int AudioVoiceCreate(gool_object *obj, eid_t *eid, int vol) {
   if (idx <= 0) { return -1; } /* return error on failure to allocate */
   voice = &voices[idx]; /* get the allocated voice */
   adio = NSLookup(eid);
+  if (ISERRORCODE(adio)) { return -1; } /* return error on failed lookup */
   size = adio->items[1]-adio->items[0];
   SwLoadSample(idx, adio->items[0], size);
   voice->params = voice_params;
