@@ -570,6 +570,13 @@ class CameraPath(unittest.TestCase):
         cells = blendmap.solid_cells(mesh, self.SIZE, 128)
         return blendmap.camera_path(cells, self.SIZE, 128, start, step)
 
+    def test_the_game_keeps_the_camera_as_high_as_the_path_does(self):
+        # src/pc/follow.h's FOLLOW_CAM_HEIGHT (game units) is the height the
+        # follow camera keeps above crash's floor; the path has to agree
+        with open(os.path.join(TOOLS, "..", "src", "pc", "follow.h")) as f:
+            line = next(l for l in f if l.startswith("#define FOLLOW_CAM_HEIGHT"))
+        self.assertIn("(%d << 8)" % blendmap.CAM_OFFSET[1], line)
+
     def test_height_ignores_the_tops_of_walls(self):
         # a low wall running along z under crash's x: its top isn't somewhere to stand
         wall = quad_mesh([(1024, 0, 0), (1024, 1024, 0), (1024, 1024, 8192), (1024, 0, 8192)])
