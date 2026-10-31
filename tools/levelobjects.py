@@ -4,7 +4,7 @@ ends, boxes), from the objects.json in its level source: a list of objects,
 each a kind and a position in blender (metres, z up), e.g.
 
   [{"kind": "spawn", "at": [0, 2, 0]},
-   {"kind": "box", "subtype": 2, "at": [1, 10, 0], "stack": 2},
+   {"kind": "box", "type": "basic", "at": [1, 10, 0], "stack": 2},
    {"kind": "end", "at": [0, 48, 1.2]}]
 
 see doc/custom_levels.md. tools/nslevel.py puts them in the level.
@@ -17,8 +17,22 @@ import blendmap
 KINDS = ("spawn", "end", "box")
 ONCE = ("spawn", "end")  # a level has at most one of these
 SETTINGS = ("kind", "at", "raise")  # every kind takes these
-BOX_SETTINGS = ("subtype", "stack")  # and a box these
+BOX_SETTINGS = ("type", "subtype", "stack")  # and a box these
 BOX_SUBTYPES = (2, 3, 4, 5, 6, 7, 8, 9, 10, 13)  # the box subtypes n. sanity beach has, to copy
+# the beach's boxes by name, as they look in the game. its other subtypes
+# crash the game (0, 1, 11, 12, 15) or aren't boxes (14), so there's no tnt
+BOX_TYPES = {
+    "basic": 2,       # a wooden crate with an x on it
+    "arrow": 3,       # an up arrow
+    "checkpoint": 4,  # a c
+    "iron": 5,        # plain metal
+    "slatted": 6,     # wooden slats
+    "switch": 7,      # metal with a ! on it
+    "life": 8,        # crash's face
+    "aku_aku": 9,     # aku aku's mask
+    "question": 10,   # a ?
+    "outline": 13,    # just its edges, until a switch makes it solid
+}
 
 
 class LevelObject:
@@ -75,6 +89,14 @@ def read_objects(text):
             raise ValueError("object %d: raise should be how far to raise it off the ground, in metres" % n)
         subtype, stack = None, 1
         if kind == "box":
+            if ("type" in item) == ("subtype" in item):
+                raise ValueError("object %d: a box needs a type (%s) or a subtype number, not both"
+                                 % (n, ", ".join(BOX_TYPES)))
+            if "type" in item:
+                if item["type"] not in BOX_TYPES:
+                    raise ValueError("object %d: unknown box type %s (it can be %s)"
+                                     % (n, item["type"], ", ".join(BOX_TYPES)))
+                item = dict(item, subtype=BOX_TYPES[item["type"]])
             subtype = item.get("subtype")
             if subtype not in BOX_SUBTYPES or not is_whole(subtype):
                 raise ValueError("object %d: a box's subtype should be one of %s"
