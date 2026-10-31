@@ -660,14 +660,36 @@ def zone_slst_items(listed, cam_zs, step):
     return slst_items(world_zmax, cam_zs, step, SLST_NEAR, world_zmid)
 
 
+ENTITY_ID = 8
 ENTITY_TYPE = 18
 ENTITY_POINTS = 20
+ENTITY_IDS_MAX = 303  # ids index spawns[GOOL_SPAWN_COUNT] in src/gool.c
+ENTITY_MAIN_IDS = range(1, 5)  # ids that make the main object (crash): GoolObjectSpawn in src/gool.c
 WARP_PAD = (32, 1)  # WarpC: the warp pad that ends a level, as on n. sanity beach
 
 
 def entity_type(item):
     """an entity's type (its exec map slot) and subtype"""
     return item[ENTITY_TYPE], item[ENTITY_TYPE + 1]
+
+
+def entity_id(item):
+    return struct.unpack_from("<H", item, ENTITY_ID)[0]
+
+
+def with_entity_id(item, eid):
+    item = bytearray(item)
+    struct.pack_into("<H", item, ENTITY_ID, eid)
+    return bytes(item)
+
+
+def new_entity_ids(count, taken):
+    """count ids for new entities, from the lowest up: not in taken, nor
+    the main object's, and at most ENTITY_IDS_MAX"""
+    ids = [i for i in range(1, ENTITY_IDS_MAX + 1) if i not in ENTITY_MAIN_IDS and i not in taken][:count]
+    if len(ids) < count:
+        raise ValueError("%d objects, more than the game can have in a level (%d)" % (count + len(taken), len(ids) + len(taken)))
+    return ids
 
 
 # custom levels
