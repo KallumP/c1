@@ -73,7 +73,9 @@ Objects go in an `objects.json` in the level source's folder, next to the `.obj`
 | Kind | What it does |
 |---|---|
 | `spawn` | Crash starts on the ground below it. It takes the place of a `spawn` object in the map (see [Modelling](#modelling)). |
-| `end` | N. Sanity Beach's warp pad goes on the ground below it. Crash stepping on it ends the level. |
+| `end` | N. Sanity Beach's warp pad goes on the ground below it, on its base. Crash stepping on it ends the level. |
+
+In the game's own levels, the warp pad object (`WarpC`) is only the animated part: the stone base it stands on is part of the level's terrain, about 3 m across and sunk 1 m into the ground with its top level with the floor. So for an `end`, the build also copies that base out of N. Sanity Beach's terrain (from your copy of the game, like its textures) and puts it under the pad, centred on it with its top on the floor. It only shows; Crash walks on the floor under it, so the floor there should be flat, about 3 m across.
 
 A level can have one of each, and neither is needed. "On the ground below it" means the highest floor below `at`, or less than 0.3 m (at the default scale) above it, so `at` can be on the floor itself. If there's no floor there, the build stops and says so.
 

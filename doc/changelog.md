@@ -11,7 +11,7 @@
 - a follow camera for custom levels (`cam_mode` 9, which the map tool uses): it slides sideways after Crash as well as along its path, so he stays in view on paths beside each other, and keeps the same height above the floor he's on, so he stays in view on higher and lower floors
 - a level source's folder can hold a `level.cfg` setting its `turn` and `scale`, so `build_level.py` builds it the same way every time without flags (`--turn` and `--scale` still override it)
 - `level_src/tide_ruins`, a level source included to try custom levels with
-- a level source's folder can hold an `objects.json` placing objects by their position in Blender: a `spawn` (where Crash starts) and an `end` (N. Sanity Beach's warp pad, which ends the level). `tide_ruins` ends on its gold platform
+- a level source's folder can hold an `objects.json` placing objects by their position in Blender: a `spawn` (where Crash starts) and an `end` (N. Sanity Beach's warp pad, which ends the level, on its base, which the build copies out of the beach's terrain as the pad object is only the animated part). `tide_ruins` ends on its gold platform
 
 ### Fixed
 
