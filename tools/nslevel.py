@@ -10,6 +10,7 @@ import os
 import struct
 
 import blendmap
+import levelobjects
 import tpage
 
 MAGIC_PAGE = 0x1234
@@ -865,11 +866,12 @@ def map_images(obj_path, text):
     return images
 
 
-def make_map(level, text, scale=MAP_SCALE, turn=0, images=None):
+def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
     """a level from a map exported from blender as .obj (its text): its
-    faces as the world meshes and collision, and crash, with nothing else;
-    built from level (a real level such as N. Sanity Beach) for crash and
-    the textures. faces of materials with an image in
+    faces as the world meshes and collision, crash, and objects
+    (levelobjects.LevelObject: a spawn object puts crash on the ground below
+    it); built from level (a real level such as N. Sanity Beach) for crash
+    and the textures. faces of materials with an image in
     images ({material: PIL image}) get it, the rest the beach's textures"""
     t = Templates(level)
     fit = blendmap.fit(blendmap.read_obj(text, scale, turn), MAP_CELL, MAP_HEADROOM, margin=MAP_CELL,
@@ -888,7 +890,11 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None):
     tpag_eids, texinfos, pages = (), [b""] * len(flat), []
     if images:
         flat, (tpag_eids, texinfos, pages) = map_textures(flat, images, t.world.items[0])
-    start = blendmap.spawn(mesh, cells, fit.size, MAP_CELL)
+    placed = {o.kind: levelobjects.to_zone(o.at, scale, turn, fit.offset) for o in objects}
+    if "spawn" in placed:
+        start = blendmap.ground_below(cells, placed["spawn"], MAP_CELL, "the spawn object")
+    else:
+        start = blendmap.spawn(mesh, cells, fit.size, MAP_CELL)
     spawn_zone = blendmap.zone_index(spans, start[2])
     crash = bytearray(t.crash)
     struct.pack_into("<3h", crash, ENTITY_POINTS, start[0] // 4, (start[1] + 100) // 4,
