@@ -826,6 +826,29 @@ class Map(unittest.TestCase):
         self.assertGreater(y, 128)
         self.assertLessEqual(y, 128 + 128)
 
+    def crash_at(self, zone):
+        """crash's position in a zone (zone units)"""
+        paths_idx, path_count = struct.unpack_from("<2I", zone.items[0], nslevel.ZONE_PATHS_IDX)
+        crash = zone.items[paths_idx + path_count]
+        self.assertEqual((0, 0), nslevel.entity_type(crash))
+        return tuple(c * 4 for c in struct.unpack_from("<3h", crash, nslevel.ENTITY_POINTS))
+
+    def test_a_spawn_object_puts_crash_on_the_ground_below_it(self):
+        # blender (2, -3, 0) is the .obj's (2, 0, 3): over the floor, away from the marker
+        spawn = nslevel.levelobjects.LevelObject("spawn", (2, -3, 0.5))
+        level, entries, zone = self.make(scale=256, objects=[spawn])
+        x, y, z = self.crash_at(zone)
+        self.assertAlmostEqual(128 + 6 * 256, x, delta=16)
+        self.assertAlmostEqual(128 + 11 * 256, z, delta=16)
+        self.assertGreater(y, 128)
+        self.assertLessEqual(y, 128 + 128)
+
+    def test_a_spawn_object_needs_ground_below_it(self):
+        spawn = nslevel.levelobjects.LevelObject("spawn", (20, -3, 0.5))  # off the side of the map
+        with self.assertRaises(ValueError) as e:
+            self.make(scale=256, objects=[spawn])
+        self.assertIn("spawn", str(e.exception))
+
     def test_world_meshes_are_its_faces(self):
         level, entries, zone = self.make()
         header = zone.items[0]
