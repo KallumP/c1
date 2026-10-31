@@ -14,16 +14,17 @@ import numbers
 import blendmap
 
 KINDS = ("spawn", "end")  # each at most once
-SETTINGS = ("kind", "at")
+SETTINGS = ("kind", "at", "raise")
 
 
 class LevelObject:
-    """an object: its kind, and where it is in blender (x, y, z)"""
-    def __init__(self, kind, at):
-        self.kind, self.at = kind, at
+    """an object: its kind, where it is in blender (x, y, z), and how far
+    (metres) to raise it off the ground it goes on"""
+    def __init__(self, kind, at, raise_by=0):
+        self.kind, self.at, self.raise_by = kind, at, raise_by
 
     def __repr__(self):
-        return "LevelObject(%r, %r)" % (self.kind, self.at)
+        return "LevelObject(%r, %r, %r)" % (self.kind, self.at, self.raise_by)
 
 
 def is_number(v):
@@ -47,7 +48,7 @@ def read_objects(text):
         unknown = [k for k in item if k not in SETTINGS]
         if unknown:
             raise ValueError("object %d: unknown setting %s (an object takes %s)"
-                             % (n, unknown[0], " and ".join(SETTINGS)))
+                             % (n, unknown[0], ", ".join(SETTINGS)))
         kind = item.get("kind")
         if kind is None:
             raise ValueError("object %d has no kind" % n)
@@ -58,7 +59,10 @@ def read_objects(text):
         at = item.get("at")
         if not (isinstance(at, list) and len(at) == 3 and all(is_number(c) for c in at)):
             raise ValueError("object %d: at should be its position in blender, [x, y, z] in metres" % n)
-        objects.append(LevelObject(kind, tuple(at)))
+        raise_by = item.get("raise", 0)
+        if not is_number(raise_by):
+            raise ValueError("object %d: raise should be how far to raise it off the ground, in metres" % n)
+        objects.append(LevelObject(kind, tuple(at), raise_by))
     return objects
 
 

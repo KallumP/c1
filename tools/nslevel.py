@@ -1000,8 +1000,10 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
     if images:
         flat, (tpag_eids, texinfos, pages) = map_textures(flat, images, t.world.items[0])
     placed = {o.kind: levelobjects.to_zone(o.at, scale, turn, fit.offset) for o in objects}
+    raised = {o.kind: int(round(o.raise_by * scale)) for o in objects}
     if "spawn" in placed:
-        start = blendmap.ground_below(cells, placed["spawn"], MAP_CELL, "the spawn object")
+        x, y, z = blendmap.ground_below(cells, placed["spawn"], MAP_CELL, "the spawn object")
+        start = (x, y + raised["spawn"], z)
     else:
         start = blendmap.spawn(mesh, cells, fit.size, MAP_CELL)
     spawn_zone = blendmap.zone_index(spans, start[2])
@@ -1012,6 +1014,7 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
     entities[spawn_zone].append(bytes(crash))  # crash first, where the level spawns
     if "end" in placed:
         x, y, z = blendmap.ground_below(cells, placed["end"], MAP_CELL, "the end object")
+        y += raised["end"]
         end_zone = blendmap.zone_index(spans, z)
         pad = bytearray(t.entities[WARP_PAD])
         struct.pack_into("<3h", pad, ENTITY_POINTS, x // 4, y // 4, (z - spans[end_zone][0]) // 4)
