@@ -1,4 +1,22 @@
 [
   {"kind": "spawn", "at": [0.5, 3.5, 0.3]},
+
+  {"kind": "box", "subtype": 2, "at": [-4.5, 8.5, 0]},
+  {"kind": "box", "subtype": 3, "at": [-3.5, 8.5, 0]},
+  {"kind": "box", "subtype": 4, "at": [-2.5, 8.5, 0]},
+  {"kind": "box", "subtype": 5, "at": [-1.5, 8.5, 0]},
+  {"kind": "box", "subtype": 6, "at": [-0.5, 8.5, 0]},
+  {"kind": "box", "subtype": 7, "at": [0.5, 8.5, 0]},
+  {"kind": "box", "subtype": 8, "at": [1.5, 8.5, 0]},
+  {"kind": "box", "subtype": 9, "at": [2.5, 8.5, 0]},
+  {"kind": "box", "subtype": 10, "at": [3.5, 8.5, 0]},
+  {"kind": "box", "subtype": 13, "at": [4.5, 8.5, 0]},
+
+  {"kind": "box", "subtype": 2, "at": [7.5, 25.5, 0.7]},
+  {"kind": "box", "subtype": 2, "at": [9.5, 25.5, 0.7]},
+  {"kind": "box", "subtype": 2, "at": [-9.5, 30.5, 0]},
+  {"kind": "box", "subtype": 2, "at": [-9.5, 35.5, 0], "stack": 3},
+  {"kind": "box", "subtype": 2, "at": [8.5, 45.5, 0.4]},
+
   {"kind": "end", "at": [0, 50, 1.2], "raise": 0.15}
 ]
