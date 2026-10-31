@@ -571,7 +571,7 @@ def poly_id(world_idx, poly_idx):
     return (world_idx << 12) | poly_idx  # flag:1, world_idx:3, poly_idx:12
 
 
-POLY_IDS_MAX = 1460  # polygons the game can list (SlstInit in src/slst.c)
+POLY_IDS_MAX = 4095  # polygons the game lists for custom levels (SLST_CUSTOM_POLY_IDS in src/slst.h)
 SLST_FULL, SLST_DELTA = 0, 1  # item types: SlstUpdate copies an even one, applies an odd one
 SLST_RUN_MAX = 16             # ids a delta node can hold
 SLST_NEXT = 0x8000            # a node's id flag: this one goes one place on from the last

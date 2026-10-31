@@ -12,8 +12,9 @@ extern poly_id_list *next_poly_ids;
 #define prev_poly_ids poly_id_buf2
 
 /* custom levels (pc) list more polygons than the game's own levels, so
-   they draw further: as many as a delta node can index (12 bits) */
-#define SLST_CUSTOM_POLY_IDS 4096
+   they draw further: as many as a delta's remove node can reach (it holds
+   a place + 1 in 12 bits) */
+#define SLST_CUSTOM_POLY_IDS 4095
 
 /* how many polygons a level's sort lists hold */
 static inline int SlstPolyIdCount(lid_t lid) {
