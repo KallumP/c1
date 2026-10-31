@@ -37,12 +37,12 @@ The examples below use the included level source, `level_src/tide_ruins`. It's r
    - Once the turn and scale look right, save them in a `level.cfg` in the level source's folder, so the level always builds the same without the flags. `--turn` and `--scale` on the command line still override it. It holds one setting a line, and lines starting with `#` are comments:
 
      ```
-     # level_src/tide_ruins/level.cfg
-     turn = 90
-     scale = 2000
+     # the route runs along blender's +y, modelled at 1 m to a unit, so the defaults suit it
+     turn = 0
+     scale = 400
      ```
 
-     (`tide_ruins` doesn't actually need one: it's modelled at 1 m to a unit with its route along Y, so the defaults suit it.)
+     That's `level_src/tide_ruins/level.cfg`. Its values are the defaults, so it builds the same without it; it's there as an example. A map whose route runs along X, modelled at a different size, would have something like `turn = 90` and `scale = 2000`.
 
      A setting other than `turn` or `scale`, or a value that isn't a whole number, stops the tool with a message naming the line.
 7. **Setup which level to boot into** In `settings.cfg`:
@@ -66,9 +66,12 @@ Objects go in an `objects.json` in the level source's folder, next to the `.obj`
 
 ```json
 [
+  {"kind": "spawn", "at": [0.5, 3.5, 0.3]},
   {"kind": "end", "at": [0, 50, 1.2], "raise": 0.15}
 ]
 ```
+
+(`tide_ruins` also has a `spawn` object in its `.obj`, from before `objects.json`, at the same place. The `spawn` in `objects.json` is the one used.)
 
 | Kind | What it does |
 |---|---|
