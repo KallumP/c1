@@ -666,6 +666,8 @@ ENTITY_POINTS = 20
 ENTITY_IDS_MAX = 303  # ids index spawns[GOOL_SPAWN_COUNT] in src/gool.c
 ENTITY_MAIN_IDS = range(1, 5)  # ids that make the main object (crash): GoolObjectSpawn in src/gool.c
 WARP_PAD = (32, 1)  # WarpC: the warp pad that ends a level, as on n. sanity beach
+BOX_TYPE = 34       # BoxsC: boxes, by subtype
+BOX_HEIGHT = 400    # a box on top of another is this much higher (GoolObjectSpawn in src/gool.c)
 
 
 def entity_type(item):
@@ -1001,7 +1003,8 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
     """a level from a map exported from blender as .obj (its text): its
     faces as the world meshes and collision, crash, and objects
     (levelobjects.LevelObject: a spawn object puts crash on the ground below
-    it, an end object the warp pad and its base); built from level (a real level such as N. Sanity Beach) for crash
+    it, an end object the warp pad and its base, a box object a stack of
+    boxes); built from level (a real level such as N. Sanity Beach) for crash
     and the textures. faces of materials with an image in
     images ({material: PIL image}) get it, the rest the beach's textures"""
     t = Templates(level)
@@ -1034,11 +1037,23 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
                      (start[2] - spans[spawn_zone][0]) // 4)
     entities = [[] for _ in spans]
     entities[spawn_zone].append(bytes(crash))  # crash first, where the level spawns
+    boxes = [o for o in objects if o.kind == "box"]
+    ids = iter(new_entity_ids(("end" in placed) + sum(o.stack for o in boxes), {entity_id(t.crash)}))
+    for o in boxes:
+        x, y, z = blendmap.ground_below(cells, levelobjects.to_zone(o.at, scale, turn, fit.offset), MAP_CELL,
+                                        "a box object")
+        y += int(round(o.raise_by * scale))
+        box_zone = blendmap.zone_index(spans, z)
+        for k in range(o.stack):  # one after another, so the game stacks them
+            box = bytearray(with_entity_id(t.entities[(BOX_TYPE, o.subtype)], next(ids)))
+            struct.pack_into("<3h", box, ENTITY_POINTS, x // 4, (y + k * BOX_HEIGHT) // 4,
+                             (z - spans[box_zone][0]) // 4)
+            entities[box_zone].append(bytes(box))
     if "end" in placed:
         x, y, z = blendmap.ground_below(cells, placed["end"], MAP_CELL, "the end object")
         y += raised["end"]
         end_zone = blendmap.zone_index(spans, z)
-        pad = bytearray(t.entities[WARP_PAD])
+        pad = bytearray(with_entity_id(t.entities[WARP_PAD], next(ids)))
         struct.pack_into("<3h", pad, ENTITY_POINTS, x // 4, y // 4, (z - spans[end_zone][0]) // 4)
         entities[end_zone].append(bytes(pad))
         first = sum(len(w) for w in zone_worlds[:end_zone])
