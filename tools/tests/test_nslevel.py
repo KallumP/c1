@@ -153,7 +153,7 @@ def small_level():
 
 class WriteLevel(unittest.TestCase):
     def setUp(self):
-        self.dir = os.path.join(TOOLS, "..", "build", "test_custom_levels")
+        self.dir = os.path.join(TOOLS, "..", "build", "test_levels")
         os.makedirs(self.dir, exist_ok=True)
 
     def test_written_level_reads_back_the_same(self):
@@ -777,29 +777,29 @@ class Map(unittest.TestCase):
         self.assertEqual(["stone"], list(images))
         self.assertEqual((90, 90, 100), images["stone"].convert("RGB").getpixel((0, 0)))
 
-    def test_a_maps_folder_gives_its_obj_and_the_folders_name(self):
-        out = os.path.normpath(os.path.join(TOOLS, "..", "build", "test_map_source", "my_map"))
+    def test_a_level_sources_folder_gives_its_obj_and_the_folders_name(self):
+        out = os.path.normpath(os.path.join(TOOLS, "..", "build", "test_level_source", "my_level"))
         os.makedirs(out, exist_ok=True)
         for name in os.listdir(out):
             os.remove(os.path.join(out, name))
         open(os.path.join(out, "level.obj"), "w").close()
         open(os.path.join(out, "level.mtl"), "w").close()
-        self.assertEqual((os.path.join(out, "level.obj"), "my_map"), nslevel.map_source(out))
-        self.assertEqual((os.path.join(out, "level.obj"), "my_map"), nslevel.map_source(out + os.sep))
+        self.assertEqual((os.path.join(out, "level.obj"), "my_level"), nslevel.level_source(out))
+        self.assertEqual((os.path.join(out, "level.obj"), "my_level"), nslevel.level_source(out + os.sep))
 
-    def test_a_maps_obj_gives_itself_and_its_name(self):
-        path = os.path.join("maps", "x", "level.obj")
-        self.assertEqual((path, "level"), nslevel.map_source(path))
+    def test_a_level_sources_obj_gives_itself_and_its_name(self):
+        path = os.path.join("level_src", "x", "level.obj")
+        self.assertEqual((path, "level"), nslevel.level_source(path))
 
-    def test_a_maps_folder_needs_one_obj(self):
-        out = os.path.join(TOOLS, "..", "build", "test_map_source", "two")
+    def test_a_level_sources_folder_needs_one_obj(self):
+        out = os.path.join(TOOLS, "..", "build", "test_level_source", "two")
         os.makedirs(out, exist_ok=True)
         for name in ("a.obj", "b.obj"):
             open(os.path.join(out, name), "w").close()
         with self.assertRaises(ValueError):
-            nslevel.map_source(out)
+            nslevel.level_source(out)
         with self.assertRaises(ValueError):
-            nslevel.map_source(os.path.join(TOOLS, "..", "build", "test_map_source"))  # none
+            nslevel.level_source(os.path.join(TOOLS, "..", "build", "test_level_source"))  # none
 
     def test_map_is_one_zone_with_its_geometry_and_crash_only(self):
         level, entries, zone = self.make()
@@ -942,7 +942,7 @@ class RealLevel(unittest.TestCase):
         self.assertLess(len(cut.pages), len(level.pages))
     def test_written_n_sanity_beach_reads_back_the_same(self):
         level = nslevel.read_level(STREAMS, 9)
-        out = os.path.join(TOOLS, "..", "build", "test_custom_levels")
+        out = os.path.join(TOOLS, "..", "build", "test_levels")
         os.makedirs(out, exist_ok=True)
         nslevel.write_level(level, out, "beach_copy")
         copy = nslevel.read_level_files(os.path.join(out, "beach_copy"))

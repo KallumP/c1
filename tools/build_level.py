@@ -1,5 +1,5 @@
 """
-make a custom level from a map modelled in blender: its faces as the level's
+build a level from its source, a map modelled in blender: its faces as the level's
 geometry and collision, and crash, with nothing else. see
 doc/custom_levels.md for the whole process; nslevel.py and blendmap.py do
 the work.
@@ -11,23 +11,23 @@ import blendmap
 import nslevel
 
 USAGE = """usage:
-  python tools/generate_level_terrain.py <map> [name] [--scale <units per m>] [--turn <degrees>]
+  python tools/build_level.py <source> [name] [--scale <units per m>] [--turn <degrees>]
 
-  map    a map's folder, such as maps/my_map, holding its .obj, .mtl and
-         images (or a .obj)
-  name   the level to write, custom_levels/<name> (the folder's or file's name)
+  source a level source's folder, such as level_src/tide_ruins, holding its
+         .obj, .mtl and images (or a .obj)
+  name   the level to write, build/levels/<name> (the folder's or file's name)
   --scale  the game's units per blender metre (%d)
-  --turn   degrees to turn the map about the up axis, e.g. 90 if its route
+  --turn   degrees to turn the level about the up axis, e.g. 90 if its route
            runs along x
 
-  a map.cfg next to the .obj can set scale and turn for the map (one
+  a level.cfg next to the .obj can set scale and turn for the level (one
   "key = value" a line); --scale and --turn override it""" % nslevel.MAP_SCALE
 
-MAP_CFG = "map.cfg"
+LEVEL_CFG = "level.cfg"
 
 
 def parse_args(argv):
-    """(map, name or None, scale or None, turn or None) from the command
+    """(source, name or None, scale or None, turn or None) from the command
     line; scale and turn are None when not given"""
     args, options = [], {"--scale": None, "--turn": None}
     rest = iter(argv)
@@ -40,16 +40,16 @@ def parse_args(argv):
         else:
             args.append(arg)
     if not 1 <= len(args) <= 2:
-        raise ValueError("give a map, and optionally a name")
+        raise ValueError("give a level source, and optionally a name")
     return args[0], (args[1] if len(args) == 2 else None), options["--scale"], options["--turn"]
 
 
-def read_map_cfg(folder):
-    """{"scale": n, "turn": n} for the settings the map.cfg in folder gives
+def read_level_cfg(folder):
+    """{"scale": n, "turn": n} for the settings the level.cfg in folder gives
     (none without one). blank lines and lines starting with # are skipped;
     anything else that isn't scale or turn set to a whole number is a
     ValueError"""
-    path = os.path.join(folder, MAP_CFG)
+    path = os.path.join(folder, LEVEL_CFG)
     if not os.path.exists(path):
         return {}
     settings = {}
@@ -71,10 +71,10 @@ def read_map_cfg(folder):
     return settings
 
 
-def map_options(folder, scale, turn):
-    """(scale, turn) for the map in folder: scale and turn from the command
-    line if given, else from its map.cfg, else the defaults"""
-    settings = read_map_cfg(folder)
+def level_options(folder, scale, turn):
+    """(scale, turn) for the level source in folder: scale and turn from the command
+    line if given, else from its level.cfg, else the defaults"""
+    settings = read_level_cfg(folder)
     if scale is None:
         scale = settings.get("scale", nslevel.MAP_SCALE)
     if turn is None:
@@ -96,10 +96,10 @@ def main(argv):
         print(e)
         print(USAGE)
         return 1
-    path, default_name = nslevel.map_source(source)
+    path, default_name = nslevel.level_source(source)
     name = name or default_name
     try:
-        scale, turn = map_options(os.path.dirname(path), scale, turn)
+        scale, turn = level_options(os.path.dirname(path), scale, turn)
     except ValueError as e:
         print(e)
         return 1
@@ -113,8 +113,8 @@ def main(argv):
               "use --scale %d or less" % (source, scale, e.extent, "xyz"[e.axis], e.side_max,
                                           fitting_scale(scale, e)))
         return 1
-    nslevel.write_level(level, nslevel.CUSTOM_LEVELS_DIR, name)
-    print("wrote %s" % os.path.join(nslevel.CUSTOM_LEVELS_DIR, name))
+    nslevel.write_level(level, nslevel.LEVELS_DIR, name)
+    print("wrote %s" % os.path.join(nslevel.LEVELS_DIR, name))
     return 0
 
 

@@ -86,15 +86,15 @@ Kd 1 0 0
 """ % ABSOLUTE
 
     def test_reads_each_materials_image_relative_to_the_mtl(self):
-        images = blendmap.read_mtl(self.MTL, os.path.join("maps", "x"))
-        self.assertEqual(os.path.join("maps", "x", "textures", "floor.png"), images["floor"])
+        images = blendmap.read_mtl(self.MTL, os.path.join("level_src", "x"))
+        self.assertEqual(os.path.join("level_src", "x", "textures", "floor.png"), images["floor"])
 
     def test_options_before_the_image_are_skipped_and_absolute_paths_kept(self):
-        images = blendmap.read_mtl(self.MTL, "maps")
+        images = blendmap.read_mtl(self.MTL, "level_src")
         self.assertEqual(self.ABSOLUTE, images["wall"])
 
     def test_materials_without_an_image_are_left_out(self):
-        self.assertNotIn("plain", blendmap.read_mtl(self.MTL, "maps"))
+        self.assertNotIn("plain", blendmap.read_mtl(self.MTL, "level_src"))
 
     def test_obj_lists_its_material_libraries(self):
         mesh = blendmap.read_obj("mtllib level.mtl\nv 0 0 0\n", scale=1)
