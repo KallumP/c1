@@ -10,15 +10,26 @@ int TitleLoading(lid_t lid, uint8_t *image_data, nsd *nsd) { return 0; }
 
 extern ns_struct ns;
 
-UTEST(ns_files, custom_level_loads_from_custom_levels) {
-  NSSetCustomLevel("mock");
-  ASSERT_STREQ("./custom_levels/mock.nsd", NSGetFilename(0, LID_TEST));
-  ASSERT_STREQ("./custom_levels/mock.nsf", NSGetFilename(1, LID_TEST));
+UTEST(ns_files, custom_level_loads_from_its_path) {
+  NSSetCustomLevel("build/levels/mock");
+  ASSERT_STREQ("build/levels/mock.nsd", NSGetFilename(0, LID_TEST));
+  ASSERT_STREQ("build/levels/mock.nsf", NSGetFilename(1, LID_TEST));
+  NSSetCustomLevel("");
+}
+
+UTEST(ns_files, a_long_custom_level_path_isnt_cut_short) {
+  char path[300], nsd[310];
+
+  memset(path, 'a', 299);
+  path[299] = 0;
+  snprintf(nsd, sizeof(nsd), "%s.nsd", path);
+  NSSetCustomLevel(path);
+  ASSERT_STREQ(nsd, NSGetFilename(0, LID_TEST));
   NSSetCustomLevel("");
 }
 
 UTEST(ns_files, other_levels_still_load_from_streams) {
-  NSSetCustomLevel("mock");
+  NSSetCustomLevel("build/levels/mock");
   ASSERT_STREQ("./streams/s0000009.nsd", NSGetFilename(0, LID_NSANITYBEACH));
   NSSetCustomLevel("");
   ASSERT_STREQ("./streams/s0000001.nsf", NSGetFilename(1, LID_TEST));

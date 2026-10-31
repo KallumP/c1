@@ -1,7 +1,7 @@
 """
 turn a map modelled in blender (exported as .obj) into the parts of a
 custom level: collision cells, world meshes, crash's spawn and a camera
-path. tools/nslevel.py puts them together (python tools/generate_level_terrain.py).
+path. tools/nslevel.py puts them together (python tools/build_level.py).
 
 the .obj is read as blender exports it by default: y up, so its x, y and z
 are the zone's x, y (up) and z.

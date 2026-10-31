@@ -6,9 +6,11 @@
 
 - `fix_model_draw_order` setting (default off): 3D models are depth tested against each other, so a model behind another (e.g. a crate behind Crash) can't be drawn over it, which the original game's draw order sometimes allows
 - every run records the buttons held each frame to its own `.inputs` file in `build/recorded_inputs/`, for reproducing bugs; the `replay_inputs` setting (default off) plays the newest recording back instead, and `replay_speed` plays it back faster. Game time now moves exactly one frame per frame drawn, so that replays play out the same
-- `boot_level` setting to boot straight into a level from `custom_levels/`
-- `python tools/generate_level_terrain.py maps/<map>` makes a custom level from a map modelled in Blender and exported as `.obj` into a folder of its own: its geometry and Crash, with no other objects. faces get their material's image as a texture (from the `.mtl`). a map longer than one zone (16,384 units) is split into a chain of zones along its route
+- `boot_level` setting to boot straight into a level built to `levels/` next to the executable (`build/levels/`)
+- `python tools/build_level.py level_src/<name>` builds a custom level from its level source, a map modelled in Blender and exported as `.obj` into a folder of its own: its geometry and Crash, with no other objects. faces get their material's image as a texture (from the `.mtl`). a map longer than one zone (16,384 units) is split into a chain of zones along its route
 - a follow camera for custom levels (`cam_mode` 9, which the map tool uses): it slides sideways after Crash as well as along its path, so he stays in view on paths beside each other
+- a level source's folder can hold a `level.cfg` setting its `turn` and `scale`, so `build_level.py` builds it the same way every time without flags (`--turn` and `--scale` still override it)
+- `level_src/tide_ruins`, a level source included to try custom levels with
 
 ### Fixed
 

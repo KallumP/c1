@@ -6,13 +6,6 @@ The code was originally designed to compile for both psx and pc. As of 30 Octobe
 
 This repository is a fork of [wurlyfox/c1](https://github.com/wurlyfox/c1), the original port by wurlyfox (with contributions from others, such as ManDude). The port itself, and the reverse engineering behind it, is their work. The original repo has not been touched since 2024, so c1x can act as its successor. The executable is still built as `c1`.
 
-## Status
-
-- Code - 100% ported
-- Functionality - 78%
-
-At the moment the game is only partially playable with a number of currently identified [issues](doc/issues.md).
-
 ## Documentation
 
 - [Building](doc/building.md): dependencies, compiling on Linux and Windows, and running the tests

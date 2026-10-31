@@ -1,0 +1,37 @@
+# materials of tide_ruins.obj
+
+newmtl brick
+Kd 1.0 1.0 1.0
+map_Kd brick.png
+
+newmtl cliff
+Kd 1.0 1.0 1.0
+map_Kd cliff.png
+
+newmtl dirt
+Kd 1.0 1.0 1.0
+map_Kd dirt.png
+
+newmtl gold
+Kd 1.0 1.0 1.0
+map_Kd gold.png
+
+newmtl grass
+Kd 1.0 1.0 1.0
+map_Kd grass.png
+
+newmtl rock
+Kd 1.0 1.0 1.0
+map_Kd rock.png
+
+newmtl stone
+Kd 1.0 1.0 1.0
+map_Kd stone.png
+
+newmtl water
+Kd 1.0 1.0 1.0
+map_Kd water.png
+
+newmtl wood
+Kd 1.0 1.0 1.0
+map_Kd wood.png

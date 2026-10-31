@@ -100,13 +100,12 @@ Project structure is listed below, including descriptions for each file.
 │   └── test_sf2.c           # soundfont record struct sizes
 ├── tools                    # helper scripts
 │   ├── extract_streams.py   # extracts game assets from a disc image
-│   ├── generate_level_terrain.py  # makes a level from a map in maps/: python tools/generate_level_terrain.py maps/<map>
-│   ├── nslevel.py           # reads and writes level files, and makes a level from a map's parts
+│   ├── build_level.py       # builds a level from its source in level_src/: python tools/build_level.py level_src/<name>
+│   ├── nslevel.py           # reads and writes level files, and makes a level from a level source's parts
 │   ├── blendmap.py          # turns a map exported from blender into the parts of a level, for nslevel.py
 │   ├── tpage.py             # texture pages: images as 16 colour tiles, and texture infos for parts of them
 │   └── tests                # the tools' tests (python -m unittest discover -s tools/tests)
-├── maps                     # your maps modelled in blender, a folder each, to make levels from (ignored by git)
-├── custom_levels            # levels made with tools/generate_level_terrain.py, to boot into with boot_level
+├── level_src                # level sources: maps modelled in blender, a folder each, to build levels from (ignored by git, apart from the included tide_ruins)
 ├── controls.example.cfg     # example key bindings (copy to controls.cfg to change the controls)
 ├── settings.example.cfg     # example settings (copy to settings.cfg to change the settings)
 ├── Makefile                 # project makefile

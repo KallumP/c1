@@ -1,6 +1,6 @@
 """
-Read and write the game's level files, and make custom levels from maps
-(for tools/generate_level_terrain.py): a level is an .nsd (page table and
+Read and write the game's level files, and build custom levels from their sources
+(for tools/build_level.py): a level is an .nsd (page table and
 level header) and an .nsf (64 KB pages of entries).
 
 The layouts mirror the structs in src/ns.h, which the game loads as is.
@@ -827,16 +827,16 @@ def map_textures(worlds, images, template):
     return out, ([p.eid for p in pages], all_texinfos, pages)
 
 
-def map_source(path):
-    """the .obj to make a map's level from, and the level's name, for path:
-    a map's folder (holding its one .obj, named after the folder) or a .obj
-    (named after the file)"""
+def level_source(path):
+    """the .obj to build a level from, and the level's name, for path: a
+    level source's folder (holding its one .obj, named after the folder) or
+    a .obj (named after the file)"""
     path = os.path.normpath(path)
     if not os.path.isdir(path):
         return path, os.path.splitext(os.path.basename(path))[0]
     objs = sorted(f for f in os.listdir(path) if f.lower().endswith(".obj"))
     if len(objs) != 1:
-        raise ValueError("%s has %d .obj files; a map's folder needs exactly one" % (path, len(objs)))
+        raise ValueError("%s has %d .obj files; a level source's folder needs exactly one" % (path, len(objs)))
     return os.path.join(path, objs[0]), os.path.basename(path)
 
 
@@ -929,6 +929,6 @@ def count_by_type(pages):
 LID_TEST = 0x1  # custom levels use the test level id (see src/common.h)
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 STREAMS_DIR = os.path.join(ROOT, "streams")
-CUSTOM_LEVELS_DIR = os.path.join(ROOT, "custom_levels")
+LEVELS_DIR = os.path.join(ROOT, "build", "levels")  # next to the game; see LEVELS_DIR in src/pc/settings.h
 
 
