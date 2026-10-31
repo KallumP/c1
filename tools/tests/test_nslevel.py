@@ -917,7 +917,7 @@ class Map(unittest.TestCase):
         self.assertAlmostEqual(px, (min(xs) + max(xs)) / 2, delta=64)
         self.assertAlmostEqual(pz, (min(zs) + max(zs)) / 2, delta=64)
         self.assertAlmostEqual(py, max(ys), delta=16)  # its top on the floor, where the pad stands
-        self.assertIn(base.page, entries)
+        self.assertIn(base.page, {p.eid for p in level.pages if p.type == nslevel.PAGE_TEXTURE})
 
     def test_world_meshes_are_its_faces(self):
         level, entries, zone = self.make()
