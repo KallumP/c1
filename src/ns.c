@@ -145,6 +145,19 @@ void NSSetCustomLevel(const char *path) {
   snprintf(custom_level, sizeof(custom_level), "%s", path);
 }
 
+/* how many boxes the custom level has to break, from its nsd; kept while
+   other levels' nsds (such as the level end screen's) load */
+static int custom_box_total = 0;
+
+void NSKeepBoxTotal(uint32_t lid, nsd_ldat *ldat) {
+  if (lid == LID_TEST)
+    custom_box_total = custom_level[0] ? ldat->box_total : 0;
+}
+
+int NSCustomBoxTotal() {
+  return custom_box_total;
+}
+
 //----- (800128A4) --------------------------------------------------------
 char *NSGetFilename2(int type, uint32_t lid, char *path, char *subdir) {
   /* path and subdir args unused/ignored */
@@ -880,6 +893,7 @@ void NSInit(ns_struct *nss, uint32_t lid) {
   nss->pte_buckets = nsd->page_table_buckets;
   nss->page_table = nsd->page_table;
   nss->ldat = (nsd_ldat*)&nsd->page_table[nsd->page_table_size];
+  NSKeepBoxTotal(lid, nss->ldat);
   /* display loading screen */
   TitleLoading(lid, nss->ldat->image_data, nsd);
   nsd_size = sizeof(nsd) + sizeof(nsd_pte)*nsd->page_table_size + sizeof(nsd_ldat);
