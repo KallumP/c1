@@ -9,6 +9,7 @@ import unittest
 
 TOOLS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, TOOLS)
+import blendmap  # noqa: E402
 import levelobjects  # noqa: E402
 
 
@@ -56,6 +57,27 @@ class ReadObjects(unittest.TestCase):
                           "object 2", "spawn")
         self.assert_error('[{"kind": "end", "at": [0, 0, 0]}, {"kind": "end", "at": [0, 1, 0]}]',
                           "object 2", "end")
+
+
+
+class ToZone(unittest.TestCase):
+    def test_blenders_z_is_up_and_y_runs_along_minus_z(self):
+        # blender (x, y, z) is the .obj's (x, z, -y)
+        self.assertEqual((100, 300, -200), levelobjects.to_zone((1, 2, 3), 100, 0, (0, 0, 0)))
+
+    def test_it_turns_and_moves_as_the_map_does(self):
+        self.assertEqual((-200 - 10, 300 - 20, -100 - 30),
+                         levelobjects.to_zone((1, 2, 3), 100, 90, (10, 20, 30)))
+
+    def test_it_lands_where_a_vertex_there_does(self):
+        # a vertex in the .obj at blender (1.5, -2, 0.25), fitted into a zone
+        # with the rest of the map, ends up where to_zone puts the position
+        obj = "v 1.5 0.25 2\nv -4 0 -8\nv 4 2 8\nf 1 2 3\n"
+        for turn in (0, 90, 180, 270):
+            fit = blendmap.fit(blendmap.read_obj(obj, 256, turn), 128, 1024, margin=128, long_z=True)
+            at = levelobjects.to_zone((1.5, -2, 0.25), 256, turn, fit.offset)
+            for a, b in zip(fit.mesh.verts[0], at):
+                self.assertAlmostEqual(a, b, delta=4)
 
 
 if __name__ == "__main__":
