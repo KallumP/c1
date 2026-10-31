@@ -957,6 +957,34 @@ class Map(unittest.TestCase):
         self.assertTrue(all(i not in nslevel.ENTITY_MAIN_IDS and i <= nslevel.ENTITY_IDS_MAX
                             for i in ids if i != nslevel.entity_id(nslevel.Templates(level).crash)))
 
+    def links(self, zone):
+        """(subtype, id, init flags b and c) of each box in a zone, in order"""
+        return [(nslevel.entity_type(e)[1], nslevel.entity_id(e)) + struct.unpack_from("<hh", e, nslevel.ENTITY_INIT_FLAGS + 2)
+                for e in self.entities(zone) if nslevel.entity_type(e)[0] == nslevel.BOX_TYPE]
+
+    def test_a_switch_makes_the_levels_outline_boxes_solid(self):
+        # on n. sanity beach, the ! box's third init flag is the id of the
+        # first outline box, and each outline box's is the next one's (0 for
+        # the last); the first is also marked 12, the rest 4
+        objects = [nslevel.levelobjects.LevelObject("box", (1, 2, 0.5), subtype=13),
+                   nslevel.levelobjects.LevelObject("box", (1, 3, 0.5), subtype=2),
+                   nslevel.levelobjects.LevelObject("box", (-1, 2, 0.5), subtype=13, stack=2),
+                   nslevel.levelobjects.LevelObject("box", (-1, 3, 0.5), subtype=7)]
+        level, entries, zone = self.make(scale=256, objects=objects)
+        boxes = self.links(zone)
+        outlines = [b for b in boxes if b[0] == 13]
+        [switch] = [b for b in boxes if b[0] == 7]
+        self.assertEqual(3, len(outlines))
+        self.assertEqual(outlines[0][1], switch[3])
+        self.assertEqual([o[1] for o in outlines[1:]] + [0], [o[3] for o in outlines])
+        self.assertEqual([12, 4, 4], [o[2] for o in outlines])
+
+    def test_a_switch_without_outline_boxes_links_to_none(self):
+        objects = [nslevel.levelobjects.LevelObject("box", (-1, 3, 0.5), subtype=7)]
+        level, entries, zone = self.make(scale=256, objects=objects)
+        [switch] = self.links(zone)
+        self.assertEqual(0, switch[3])
+
     def test_the_level_header_has_how_many_boxes_can_be_broken(self):
         # the level end screen (GamOC) only knows the totals of the game's own
         # levels; the game gives it this one for a custom level (src/level.c)
