@@ -73,7 +73,7 @@ Objects go in an `objects.json` in the level source's folder, next to the `.obj`
 ]
 ```
 
-That's part of `level_src/tide_ruins/objects.json`, which also has a row of one box of each type across the route just after the start.
+That's part of `level_src/tide_ruins/objects.json`.
 
 (`tide_ruins` also has a `spawn` object in its `.obj`, from before `objects.json`, at the same place. The `spawn` in `objects.json` is the one used.)
 
@@ -102,11 +102,11 @@ A box's `type` is which of the game's boxes it is. A custom level can have the b
 | `question` | a wooden crate with a ? | 10 |
 | `outline` | only the crate's edges, until a `switch` makes it solid | 13 |
 
-`subtype` is the game's own number for it, which a box can have instead of `type`. Other boxes, such as TNT, aren't on the beach, and the other subtypes either crash the game (0, 1, 11, 12 and 15) or aren't boxes (14), so a custom level can't have them yet. `tide_ruins` has one of each, in the order above from left to right, in a row just after the start.
+`subtype` is the game's own number for it, which a box can have instead of `type`. Other boxes, such as TNT, aren't on the beach, and the other subtypes either crash the game (0, 1, 11, 12 and 15) or aren't boxes (14), so a custom level can't have them yet.
 
-`stack` (1 by default) is how many boxes high it is. The game stacks a box on another when it's 400 units (1 m at the default scale) above it, at the same place, and comes straight after it in the level, which is how a stack is built.
+`stack` (1 by default) is how many boxes high it is. The game stacks a box on another when it's 400 units (1 m at the default scale) above it, at the same place, and comes straight after it in the level, which is how a stack is built. So a box of another type can go on top of one with `raise` 1, straight after it in `objects.json`. With another `raise`, a box floats, such as above an `arrow` box.
 
-A level can have one `spawn` and one `end`, and neither is needed, and any number of boxes, up to about 300 objects in all (the game has 304 places to keep track of objects, by their ids). "On the ground below it" means the highest floor below `at`, or less than 0.3 m (at the default scale) above it, so `at` can be on the floor itself. If there's no floor there, the build stops and says so.
+A level can have one `spawn` and one `end`, and neither is needed, and any number of boxes, up to about 300 objects in all (the game has 304 places to keep track of objects, by their ids). "On the ground below it" means the highest floor below `at`, or less than 0.3 m (at the default scale) above it, so `at` can be on the floor itself. If there's no floor there, the build stops and says so. A `pit…` isn't floor, so an object can't go over water, even raised.
 
 `objects.json` is read every time the level is built, so after changing it, run step 6 again. If it isn't valid (not JSON, an unknown `kind` or setting, a second `spawn` or `end`, `at` that isn't three numbers, `raise` that isn't a number, a box `type` or `subtype` the beach doesn't have, or both or neither of them, or a `stack` that isn't a whole number of at least 1), the build stops with a message saying which object is wrong.
 

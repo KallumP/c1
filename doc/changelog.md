@@ -12,8 +12,8 @@
 - a level source's folder can hold a `level.cfg` setting its `turn` and `scale`, so `build_level.py` builds it the same way every time without flags (`--turn` and `--scale` still override it)
 - custom levels draw further ahead: the game lists up to 4095 of their polygons at once (its own levels keep 1460), and walls facing away from the camera, which it never sees, are left out
 - `level_src/tide_ruins`, a level source included to try custom levels with
-- a level source's folder can hold an `objects.json` placing objects by their position in Blender: a `spawn` (where Crash starts) and an `end` (N. Sanity Beach's warp pad, which ends the level). `tide_ruins` ends on its gold platform
-- `objects.json` can place boxes: copies of N. Sanity Beach's, by type (`basic`, `arrow`, `checkpoint`, `iron`, `slatted`, `switch`, `life`, `aku_aku`, `question`, `outline`), singly or stacked. `tide_ruins` has a row of one of each, and more along its route
+- a level source's folder can hold an `objects.json` placing objects by their position in Blender: a `spawn` (where Crash starts) and an `end` (N. Sanity Beach's warp pad, which ends the level)
+- `objects.json` can place boxes: copies of N. Sanity Beach's, by type (`basic`, `arrow`, `checkpoint`, `iron`, `slatted`, `switch`, `life`, `aku_aku`, `question`, `outline`), singly or stacked
 
 ### Fixed
 
