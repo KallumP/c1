@@ -38,7 +38,7 @@ NSD_PTB_COUNT = 256
 NSD_COMPRESSED_PAGE_COUNT = 64
 NSD_EXEC_COUNT = 64
 NSD_HEADER = "<iIIiIIIi"  # page_count .. compressed_page_count
-LDAT_HEADER = "<IIIiI"    # magic, lid, zone_spawn, path_idx_spawn, unk_10
+LDAT_HEADER = "<IIIiI"    # magic, lid, zone_spawn, path_idx_spawn, box_total
 LDAT_IMAGE_SIZE = 0xF5F8
 
 
@@ -64,12 +64,12 @@ def str_to_eid(name):
 
 class Ldat:
     """the level header at the end of the nsd"""
-    def __init__(self, magic, lid, zone_spawn, path_idx_spawn, unk_10, exec_map, fov, image):
+    def __init__(self, magic, lid, zone_spawn, path_idx_spawn, box_total, exec_map, fov, image):
         self.magic = magic
         self.lid = lid
         self.zone_spawn = zone_spawn
         self.path_idx_spawn = path_idx_spawn
-        self.unk_10 = unk_10
+        self.box_total = box_total  # 0 in the game's own levels; a custom level's boxes to break
         self.exec_map = exec_map
         self.fov = fov
         self.image = image
@@ -257,7 +257,7 @@ def nsd_bytes(nsd, pages):
         data += struct.pack("<II", *pte)
     ldat = nsd.ldat
     data += struct.pack(LDAT_HEADER, ldat.magic, ldat.lid, ldat.zone_spawn,
-                        ldat.path_idx_spawn, ldat.unk_10)
+                        ldat.path_idx_spawn, ldat.box_total)
     data += struct.pack("<%dI" % NSD_EXEC_COUNT, *ldat.exec_map)
     data += struct.pack("<I", ldat.fov) + ldat.image.ljust(LDAT_IMAGE_SIZE, b"\0")
     return data
@@ -668,6 +668,7 @@ ENTITY_MAIN_IDS = range(1, 5)  # ids that make the main object (crash): GoolObje
 WARP_PAD = (32, 1)  # WarpC: the warp pad that ends a level, as on n. sanity beach
 BOX_TYPE = 34       # BoxsC: boxes, by subtype
 BOX_HEIGHT = 400    # a box on top of another is this much higher (GoolObjectSpawn in src/gool.c)
+UNBREAKABLE_BOXES = (levelobjects.BOX_TYPES["iron"], levelobjects.BOX_TYPES["switch"])  # not in the total
 
 
 def entity_type(item):
@@ -1072,7 +1073,9 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
                                   entities[i]))
             n += count
         try:
-            return assemble_level(level, t, size, zones, step, spawn_zone, tpag_eids, pages)
+            out = assemble_level(level, t, size, zones, step, spawn_zone, tpag_eids, pages)
+            out.nsd.ldat.box_total = sum(o.stack for o in boxes if o.subtype not in UNBREAKABLE_BOXES)
+            return out
         except EntryTooBig as e:
             if e.entry.type != 4 or step >= MAP_PIECE:  # only the sort lists shrink
                 raise
