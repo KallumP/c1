@@ -641,12 +641,25 @@ class SortList(unittest.TestCase):
                          slst_list(items[0])[1])
 
     def test_keeps_the_nearest_polygons_the_game_can_list(self):
-        # the game's lists hold at most 1460 polygons (SlstInit in src/slst.c);
-        # the farthest (smallest z, as the camera looks along -z) are left out
-        items = nslevel.slst_items([[0] * 1000, [500] * 1000], [1000], step=200, near=50)
+        # custom levels' lists hold at most 4095 polygons (SlstPolyIdCount in
+        # src/slst.h); the farthest (smallest z, as the camera looks along -z) are left out
+        items = nslevel.slst_items([[0] * 3000, [500] * 3000], [1000], step=200, near=50)
         ids = slst_list(items[0])[1]
-        self.assertEqual(1460, len(ids))
-        self.assertEqual(1000, sum(1 for i in ids if i >> 12 == 1))  # all of the nearer world
+        self.assertEqual(4095, len(ids))
+        self.assertEqual(3000, sum(1 for i in ids if i >> 12 == 1))  # all of the nearer world
+
+    def test_the_tool_lists_as_many_polygons_as_the_game_holds(self):
+        with open(os.path.join(TOOLS, "..", "src", "slst.h")) as f:
+            line = next(l for l in f if l.startswith("#define SLST_CUSTOM_POLY_IDS"))
+        self.assertEqual(nslevel.POLY_IDS_MAX, int(line.split()[2]))
+
+    def test_a_change_at_the_end_of_a_full_list_fits_its_node(self):
+        # a remove node holds the first place + 1 in 12 bits, and the run's length above them
+        full = list(range(nslevel.POLY_IDS_MAX))
+        _, words = slst_list(nslevel.slst_delta(full, full[:-1]))
+        node = words[2]  # the first remove node, after split and swaps
+        self.assertEqual(len(full), node & 0xFFF)  # the last place + 1, whole
+        self.assertEqual(0, node >> 12)  # a run of one
 
     def test_a_zones_list_takes_in_the_next_zones_meshes(self):
         # the next zone is further along -z, so its meshes are offset by -16384

@@ -8,7 +8,8 @@ UTEST(slst, the_games_levels_keep_their_sort_list_size) {
 }
 
 UTEST(slst, custom_levels_list_as_many_polygons_as_a_delta_can_index) {
-  /* a delta node holds a list index in 12 bits (SlstUpdate) */
-  ASSERT_EQ(4096, SlstPolyIdCount(LID_TEST));
+  /* a remove node holds a list index + 1 in 12 bits (SlstUpdate), so the
+     last place it can reach is 4094 */
+  ASSERT_EQ(4095, SlstPolyIdCount(LID_TEST));
   ASSERT_EQ(SLST_CUSTOM_POLY_IDS, SlstPolyIdCount(LID_TEST));
 }
