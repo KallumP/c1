@@ -885,6 +885,40 @@ class Map(unittest.TestCase):
             self.make(scale=256, objects=[end])
         self.assertIn("end", str(e.exception))
 
+    def test_the_warp_pads_base_is_in_the_beachs_terrain_under_it(self):
+        base = nslevel.warp_pad_base(nslevel.read_level(STREAMS, 9))
+        self.assertGreater(len(base.polys), 20)
+        xs, ys, zs = zip(*((x, y, z) for x, y, z, _ in base.verts))
+        # relative to the pad: around it, and from its top down
+        self.assertLessEqual(max(map(abs, xs + zs)), 700)
+        self.assertLessEqual(max(ys), 16)
+        self.assertGreaterEqual(min(ys), -600)
+        self.assertTrue(all(len(base.texinfos[tinf]) == 8 for *_, tinf in base.polys))  # 2 words each
+        self.assertIn(base.page, {p.eid for p in nslevel.read_level(STREAMS, 9).pages})
+
+    def test_an_end_object_has_the_warp_pads_base_under_it(self):
+        end = nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5))
+        level, entries, zone = self.make(scale=256, objects=[end])
+        base = nslevel.warp_pad_base(nslevel.read_level(STREAMS, 9))
+        [(_, (px, py, pz))] = self.warp_pads(entries)
+        on_page = []
+        for w in range(struct.unpack_from("<I", zone.items[0], 0)[0]):
+            world = entries[struct.unpack_from("<I", zone.items[0], 4 + w * nslevel.ZONE_WORLD_SIZE)[0]]
+            fields = struct.unpack_from(nslevel.WGEO_HEADER, world.items[0], 0)
+            tpags = struct.unpack_from("<8I", world.items[0], 32)
+            verts = [decode_vertex(world.items[2][8 * i:8 * i + 8]) for i in range(fields[4])]
+            for i in range(fields[3]):
+                a, b, c, tinf, tpag = decode_polygon(world.items[1][8 * i:8 * i + 8])
+                if tpags[tpag] == base.page:
+                    self.assertLess(tinf + 1, fields[5])  # within the mesh's texinfos
+                    on_page += [verts[a], verts[b], verts[c]]
+        self.assertEqual(len(base.polys), len(on_page) // 3)
+        xs, ys, zs = zip(*(v[:3] for v in on_page))
+        self.assertAlmostEqual(px, (min(xs) + max(xs)) / 2, delta=64)
+        self.assertAlmostEqual(pz, (min(zs) + max(zs)) / 2, delta=64)
+        self.assertAlmostEqual(py, max(ys), delta=16)  # its top on the floor, where the pad stands
+        self.assertIn(base.page, entries)
+
     def test_world_meshes_are_its_faces(self):
         level, entries, zone = self.make()
         header = zone.items[0]
