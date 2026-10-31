@@ -772,6 +772,9 @@ static void SwTransformAndShadeWorlds(
     }
     prim->texid = texid;
     prim->flags = info.semi_trans;
+    if (!world->header->is_backdrop
+      && GLLevelTriHasDepth(r_verts[0].z, r_verts[1].z, r_verts[2].z, params->screen_proj))
+      prim->flags |= GL_PRIM_LEVEL; /* pc: can write depth (custom levels) */
     z_sum = prim->verts[0].z+prim->verts[1].z+prim->verts[2].z;
     z_idx = far - (z_sum/32);
     z_idx = limit(z_idx, 0, 0x7FF);
