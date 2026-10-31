@@ -361,7 +361,9 @@ def world_meshes(mesh, piece, ground, side, tile=None, textured=(), regions_max=
     faces facing up and side on the rest. faces of the textured materials
     get (TileRegion, None) instead, their tile repeating every tile units.
     faces facing down aren't drawn, since the camera looks down on the
-    level and they would hide it.
+    level and they would hide it, and nor are walls facing away from it
+    (along -z), since it always looks that way and never sees them; they
+    would only take up places in the sort lists (collision still has them).
 
     a mesh's tile regions become texinfos in its header (8 bytes each, like
     a vertex), so they count towards fitting it in a page, and a mesh has at
@@ -395,6 +397,8 @@ def world_meshes(mesh, piece, ground, side, tile=None, textured=(), regions_max=
     for tri in mesh.tris:
         n = normal(mesh, tri)
         if n is None or n[1] < -FACING or is_spawn(tri):
+            continue
+        if n[1] <= FACING and n[2] < -FACING:  # a wall facing away from the camera
             continue
         texture = ground if n[1] > FACING else side
         colour = shade(n)

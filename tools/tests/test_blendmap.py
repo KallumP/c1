@@ -368,6 +368,15 @@ class WorldMeshes(unittest.TestCase):
         ceiling = quad_mesh([(0, 1024, 0), (256, 1024, 0), (256, 1024, 256), (0, 1024, 256)])
         self.assertEqual([], worlds(ceiling))
 
+    def test_polygons_facing_away_from_the_camera_are_not_drawn(self):
+        # the camera always looks along -z, so it never sees a face pointing
+        # that way, and listing it would only crowd out ones it can see
+        corners = [(0, 0, 256), (256, 0, 256), (256, 256, 256), (0, 256, 256)]
+        a, b = quad_mesh(corners), quad_mesh(corners[::-1])
+        away, towards = (a, b) if blendmap.normal(a, a.tris[0])[2] < 0 else (b, a)
+        self.assertEqual([], worlds(away))
+        self.assertNotEqual([], worlds(towards))
+
     def test_up_facing_polygons_are_lit_brighter_than_walls(self):
         wall = quad_mesh([(512, 0, 0), (512, 256, 0), (512, 256, 256), (512, 0, 256)])
         [(verts, polys)] = worlds(merged(floor(0, 0, 256, 256, y=0), wall))
