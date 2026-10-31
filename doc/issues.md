@@ -3,7 +3,6 @@
 ## General
 
 - colors are slightly different from psx (map differently?)
-- a few sfx are very loud and distorted (ex. warp sound, also when entering a bonus round)
 - some death sequences are cut short (not rechecked since the fix for the instant level end, which had the same symptom)
 - main death sequence camera behavior is incorrect
 - title sequence background images become too bright in some instances

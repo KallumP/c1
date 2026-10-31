@@ -18,6 +18,7 @@
 
 ### Fixed
 
+- sound loud, distorted and staticky after a volume fade (e.g. the warp sound, entering a bonus round): the fade set the master volume to its 0 to 0x3FFF value instead of 0 to 0x7F, so everything was amplified up to 129 times and clipped. ported from upstream (wurlyfox/c1 `810eac2`)
 - terrain flashing across the screen when the camera passes close to it (e.g. walking forward in N. Sanity Beach): a polygon with a corner beside or behind the camera was projected mirrored and drawn stretched over the view. terrain is now projected with the gte's limits and polygons too big for the ps1's gpu (over 1023 x 511) aren't drawn, as on the ps1
 - a `switch` box in a custom level didn't make its `outline` boxes solid: the switch finds them by a chain of ids in their entities, which still pointed at n. sanity beach's boxes. the build now chains the level's own outline boxes to its switches
 - objects in custom levels were drawn past where the terrain stops, floating in the sky: a zone's objects are all loaded, but the terrain only reaches as far as its sort lists' polygons go. objects further away than the farthest terrain drawn are no longer drawn
