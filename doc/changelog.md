@@ -18,6 +18,15 @@
 
 ### Fixed
 
+- bug fixes ported from upstream (wurlyfox/c1, most of them from mateusfavarin/c1):
+  - GOOL multiply, divide and modulo are signed; changing state clears the exit handler; the x scale flip cases in GoolOpChangeAnim/GoolOpChangeAnimFrame are the right way round; GoolObjectOrientOnPath's signed distance; GoolFindNearestObject's conditions; GoolObjectColors case 4 reads the collider's header; GoolZoneObjectTerminate's condition and zone check
+  - TNT boxes don't fall through the floor (an object's floor_y is signed)
+  - Pinstripe's bullets hit Crash (the solid surface quadrant flags, and ZoneFindNode's point in bound test)
+  - the camera's position, rotation and scale are kept together, as the code reads them as one block; its speed is the global one and is limited as in the original; cur_progress is signed; CamUpdate mode 7 finds its neighbour path; the death sequence camera
+  - no infinite loop in ZoneReboundVector; no undefined behaviour in ReplotWalls; Toxic Waste's ceiling is solid; respawning in a hog level doesn't recreate Crash; TitleLoadState uses the title's state
+  - NSProbeSafe finds the last page table entry; NSLookup doesn't read past the page table
+  - AudioVoiceFree only frees sound effect voices; AudioVoiceCreate and GfxLoadWorlds handle an entry that can't be found; the MIDI buffer is big enough for the demos
+  - a missing animation isn't drawn, an operand that refers to nothing reads 0, and functions that fell off their end return a value
 - sound loud, distorted and staticky after a volume fade (e.g. the warp sound, entering a bonus round): the fade set the master volume to its 0 to 0x3FFF value instead of 0 to 0x7F, so everything was amplified up to 129 times and clipped. ported from upstream (wurlyfox/c1 `810eac2`)
 - terrain flashing across the screen when the camera passes close to it (e.g. walking forward in N. Sanity Beach): a polygon with a corner beside or behind the camera was projected mirrored and drawn stretched over the view. terrain is now projected with the gte's limits and polygons too big for the ps1's gpu (over 1023 x 511) aren't drawn, as on the ps1
 - a `switch` box in a custom level didn't make its `outline` boxes solid: the switch finds them by a chain of ids in their entities, which still pointed at n. sanity beach's boxes. the build now chains the level's own outline boxes to its switches
