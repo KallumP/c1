@@ -1215,6 +1215,7 @@ void GoolObjectTransform(gool_object *obj) {
   switch (anim->type) {
   case GOOL_ANIM_TYPE_VTX:
     en = NSLookup(&anim->v.eid);
+    if (ISERRORCODE(en)) { return; } /* pc */
     if (en->type != 20) {
       svtx = NSLookup(&anim->v.eid);
       GfxTransformSvtx((svtx_frame*)svtx->items[frame_idx], ot, obj);
@@ -1953,10 +1954,13 @@ static inline void GoolOpReactSolidSurfaces(gool_object*,uint32_t);
 #define G_OPB(ins) ((ins      ) & 0xFFF)
 #define G_OP(ins) G_OPB(ins)
 
+/* pc: an operand that refers to nothing (such as a link to no object) reads 0 */
+#define G_DEREF(x) ({ uint32_t *p = x; ((p) ? *(p) : 0); })
+
 #define G_TRANS_GOPA(obj,ins,a) \
-a = *(GoolTranslateInGop(obj,G_OPA(ins)))
+a = G_DEREF(GoolTranslateInGop(obj,G_OPA(ins)))
 #define G_TRANS_GOPB(obj,ins,b) \
-b = *(GoolTranslateInGop(obj,G_OPB(ins)))
+b = G_DEREF(GoolTranslateInGop(obj,G_OPB(ins)))
 #define G_TRANS_GOPA_IN(obj,ins,a) \
 a = GoolTranslateInGop(obj,G_OPA(ins))
 #define G_TRANS_GOPB_IN(obj,ins,b) \
