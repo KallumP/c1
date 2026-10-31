@@ -1,10 +1,10 @@
 # Custom levels
 
-A map modelled in Blender can be built into a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. An `objects.json` beside the map can set where he starts, put a warp pad where the level ends, and place boxes (see [Objects](#objects)); there are no other objects yet (eg: enemies or fruit). What a level is built from is its *level source*, a folder in `level_src/`; the built level goes to `build/levels/`, next to the game. One level source is included to try it with, `level_src/tide_ruins` (see [level_src/README.md](../level_src/README.md) for instructions to play it); the sources you add are ignored by git.
+A map modelled in Blender can be built into a level the game boots straight into: its faces become the level's geometry and collision, and Crash starts on it. An `objects.json` beside the map can set where he starts, put a warp pad where the level ends, and place boxes (see [Objects](#objects)); there are no other objects yet (eg: enemies or fruit). What a level is built from is its *level source*, a folder in `level_src/`; the built level goes to `build/levels/`, next to the game. Some level sources are included to try it with, (see [level_src/README.md](../level_src/README.md) for instructions to play them); new level sources you add are ignored by git.
 
 ## From Blender to the game
 
-The examples below use the included level source, `level_src/tide_ruins`. It's ready to use, so to try it, do step 1 and then start at step 6.
+The examples below use one of the included level sources, `level_src/tide_ruins`. It's ready to use, so to try it, do step 1 and then start at step 6.
 
 1. **Get set up (once).** You need the game built (see [Building](building.md)), its files in `streams/` (see [Running](running.md)), Python 3, and [Pillow](https://pypi.org/project/pillow/) for textures (`pip install pillow`). Without Pillow, a map with no images still works.
 2. **Get the map ready in Blender** (see [Modelling](#modelling) below): the route running towards +Y, faces pointing the right way, and optionally a `spawn` object and `pit` objects.
@@ -52,7 +52,7 @@ The examples below use the included level source, `level_src/tide_ruins`. It's r
    ```
 8. **Run the game** (`build/c1.exe`). It starts in your level. Crash runs with the camera behind him, looking along the route. If the level named in `boot_level` doesn't exist, the game says so in the console and starts normally. Remove `boot_level` to start at the title screen again.
 
-Levels are built from your copy of the game, so they go in `build/`, which is ignored by git (and emptied by `make clean`; build them again afterwards). `level_src/` is ignored too, apart from the included `tide_ruins` source and `level_src/README.md`.
+Levels are built from your copy of the game, so they go in `build/`, which is ignored by git (and emptied by `make clean`). `level_src/` is ignored too, apart from the included level sources and `level_src/README.md`.
 
 To change the level, edit the map in Blender, export over the old files, and run step 6 again. `settings.cfg` doesn't need changing, and you don't need to rebuild the game.
 
