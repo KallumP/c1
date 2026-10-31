@@ -497,7 +497,7 @@ int GoolFindNearestObject(gool_object *obj, gool_nearest_query *query) {
   category = header->category >> 8;
   if (!((1 << category) & query->categories)) { return 0; }
   dist = ApxDist(&obj->trans, &query->obj->trans);
-  if (dist >= query->dist) { return 0; } /* return if farther than current min dist */
+  if ((int32_t)dist >= query->dist) { return 0; } /* return if farther than current min dist */
   if (query->event == 0xFF) { /* null event? */
     query->nearest_obj = obj; /* set as new nearest obj */
     query->dist = dist; /* set as new min dist */
@@ -1466,6 +1466,7 @@ static inline int GoolObjectColorByZone(gool_object *obj) {
   header = (zone_header*)zone->items[0];
   colors = obj == crash ? &header->player_colors : &header->object_colors;
   obj->colors.intensity = colors->intensity;
+  return 0;
 }
 
 //----- (8001EB28) --------------------------------------------------------
@@ -1609,6 +1610,7 @@ int GoolObjectBound(gool_object *obj) {
     else
       obj->collider = 0;
   }
+  return 0;
 }
 
 static inline int32_t GoolObjectControlDir(gool_object *obj, int scale) {
@@ -1765,6 +1767,7 @@ int GoolObjectPhysics(gool_object *obj) {
       !OutOfRange(obj, &obj->trans, &crash->trans, 0x7D000, 0xAF000, 0x7D000))
       GoolObjectBound(obj); /* compute and record object rect */
   }
+  return 0;
 }
 
 //----- (8001FB20) --------------------------------------------------------
@@ -3479,6 +3482,7 @@ int GoolTransform(vec *in, vec *trans, ang *rot, vec *scale, vec *out) {
   s_out.y += trans->y;
   s_out.z += trans->z;
   *out = s_out;
+  return 0;
 }
 
 //----- (800248A0) --------------------------------------------------------

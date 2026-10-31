@@ -732,6 +732,7 @@ inline static int GfxScreenProj(int fov) {
   case 60: return 460;
   case 90: return 288;
   }
+  return 0;
 }
 
 //----- (80017790) --------------------------------------------------------
