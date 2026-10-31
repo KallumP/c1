@@ -440,6 +440,26 @@ class Entities(unittest.TestCase):
     def test_entity_type_and_subtype(self):
         self.assertEqual((34, 6), nslevel.entity_type(entity(34, 6, 1, [(0, 0, 0)])))
 
+    def test_entity_id(self):
+        self.assertEqual(77, nslevel.entity_id(entity(34, 6, 77, [(0, 0, 0)])))
+        self.assertEqual(78, nslevel.entity_id(nslevel.with_entity_id(entity(34, 6, 77, [(0, 0, 0)]), 78)))
+
+    def test_new_ids_skip_the_main_objects_and_ones_taken(self):
+        # spawns[] in src/gool.c is indexed by id; ids 1 to 4 make the main object (crash)
+        ids = nslevel.new_entity_ids(5, taken={9, 5})
+        self.assertEqual([6, 7, 8, 10, 11], ids)
+
+    def test_ids_stay_in_the_games_spawn_table(self):
+        with open(os.path.join(TOOLS, "..", "src", "gool.h")) as f:
+            line = next(l for l in f if l.startswith("#define GOOL_SPAWN_COUNT"))
+        self.assertEqual(int(line.split()[2]) - 1, nslevel.ENTITY_IDS_MAX)
+
+    def test_there_are_only_so_many_ids(self):
+        self.assertEqual(nslevel.ENTITY_IDS_MAX, max(nslevel.new_entity_ids(nslevel.ENTITY_IDS_MAX - 4, taken=set())))
+        with self.assertRaises(ValueError) as e:
+            nslevel.new_entity_ids(nslevel.ENTITY_IDS_MAX - 3, taken=set())
+        self.assertIn("objects", str(e.exception))
+
 
 def decode_vertex(data):
     """(x, y, z, r, g, b) the way SwTransformWorlds reads a wgeo vertex"""
