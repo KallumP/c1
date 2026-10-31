@@ -29,7 +29,6 @@ int32_t dcam_trans_z = 0;         /* 800565D8; gp[0x77] */
 
 extern ns_struct ns;
 extern level_state savestate;
-extern vec cam_trans;
 extern int frames_elapsed;
 
 typedef struct {
@@ -54,7 +53,6 @@ extern uint32_t cur_progress;
 
 extern pad pads[2];
 extern gool_object *crash;
-extern ang cam_rot;
 
 //----- (80029F6C) --------------------------------------------------------
 static void CamAdjustProgress(int32_t speed, cam_info *cam) {
