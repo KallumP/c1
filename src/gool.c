@@ -121,7 +121,7 @@ gool_handle handles[8];            /* 80060DB8 */
 gool_handle free_objects;          /* 80060DF8 */
 gool_object *cur_obj;              /* 80060E00 */
 uint32_t frames_elapsed;           /* 80060E04 */
-gool_bound object_bounds[28];      /* 80060E08 */
+gool_bound object_bounds[GOOL_BOUND_COUNT]; /* 80060E08 */
 int object_bound_count;            /* 80061888 */
 gool_globals globals;              /* 8006188C */
 

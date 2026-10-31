@@ -17,6 +17,7 @@
 
 ### Fixed
 
+- crash in a level with more than 28 solid objects (boxes, Crash, the warp pad) loaded at once: the game's per-frame list of object bounds had 28 places and no check, so the 29th overwrote what came after it. it now has a place for every object
 - landing on the warp pad at the end of a level skipped Crash's 'win level' animation and went straight to the level end screen
 - fixed the gem briefly showing small in the top left of the level end screen before flying in, after a level with every box broken
 

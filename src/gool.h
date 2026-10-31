@@ -126,6 +126,7 @@
 
 /* constants */
 #define GOOL_OBJECT_COUNT           96
+#define GOOL_BOUND_COUNT            (GOOL_OBJECT_COUNT+1) /* orig 28; one per object and the player */
 #define GOOL_LEVEL_SPAWN_COUNT      3592
 #define GOOL_SPAWN_COUNT            304
 

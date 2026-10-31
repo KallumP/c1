@@ -95,7 +95,7 @@ zone_query cur_zone_query;       /* 8005CFEC */
 
 extern ns_struct ns;
 extern entry *cur_zone;
-extern gool_bound object_bounds[28];
+extern gool_bound object_bounds[GOOL_BOUND_COUNT];
 extern int object_bound_count;
 extern int frames_elapsed;
 
