@@ -10,6 +10,7 @@
 - `python tools/build_level.py level_src/<name>` builds a custom level from its level source, a map modelled in Blender and exported as `.obj` into a folder of its own: its geometry and Crash, with no other objects. faces get their material's image as a texture (from the `.mtl`). a map longer than one zone (16,384 units) is split into a chain of zones along its route
 - a follow camera for custom levels (`cam_mode` 9, which the map tool uses): it slides sideways after Crash as well as along its path, so he stays in view on paths beside each other, and keeps the same height above the floor he's on, so he stays in view on higher and lower floors
 - a level source's folder can hold a `level.cfg` setting its `turn` and `scale`, so `build_level.py` builds it the same way every time without flags (`--turn` and `--scale` still override it)
+- custom levels draw further ahead: the game lists up to 4095 of their polygons at once (its own levels keep 1460), and walls facing away from the camera, which it never sees, are left out
 - `level_src/tide_ruins`, a level source included to try custom levels with
 - a level source's folder can hold an `objects.json` placing objects by their position in Blender: a `spawn` (where Crash starts) and an `end` (N. Sanity Beach's warp pad, which ends the level). `tide_ruins` ends on its gold platform
 
