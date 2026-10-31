@@ -646,6 +646,7 @@ def zone_slst_items(listed, cam_zs, step):
 
 ENTITY_TYPE = 18
 ENTITY_POINTS = 20
+WARP_PAD = (32, 1)  # WarpC: the warp pad that ends a level, as on n. sanity beach
 
 
 def entity_type(item):
@@ -870,7 +871,7 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
     """a level from a map exported from blender as .obj (its text): its
     faces as the world meshes and collision, crash, and objects
     (levelobjects.LevelObject: a spawn object puts crash on the ground below
-    it); built from level (a real level such as N. Sanity Beach) for crash
+    it, an end object the warp pad); built from level (a real level such as N. Sanity Beach) for crash
     and the textures. faces of materials with an image in
     images ({material: PIL image}) get it, the rest the beach's textures"""
     t = Templates(level)
@@ -899,6 +900,14 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
     crash = bytearray(t.crash)
     struct.pack_into("<3h", crash, ENTITY_POINTS, start[0] // 4, (start[1] + 100) // 4,
                      (start[2] - spans[spawn_zone][0]) // 4)
+    entities = [[] for _ in spans]
+    entities[spawn_zone].append(bytes(crash))  # crash first, where the level spawns
+    if "end" in placed:
+        x, y, z = blendmap.ground_below(cells, placed["end"], MAP_CELL, "the end object")
+        end_zone = blendmap.zone_index(spans, z)
+        pad = bytearray(t.entities[WARP_PAD])
+        struct.pack_into("<3h", pad, ENTITY_POINTS, x // 4, y // 4, (z - spans[end_zone][0]) // 4)
+        entities[end_zone].append(bytes(pad))
     step = MAP_PATH_STEP
     while True:
         paths = blendmap.zone_paths(blendmap.camera_path(cells, fit.size, MAP_CELL, start, step), spans)
@@ -908,7 +917,7 @@ def make_map(level, text, scale=MAP_SCALE, turn=0, images=None, objects=()):
             zones.append(ZonePlan(span[0] - spans[0][0], cell_blocks(blendmap.zone_cells(cells, span, MAP_CELL),
                                                                      MAP_CELL),
                                   flat[n:n + count], texinfos[n:n + count], paths[i],
-                                  [bytes(crash)] if i == spawn_zone else []))
+                                  entities[i]))
             n += count
         try:
             return assemble_level(level, t, size, zones, step, spawn_zone, tpag_eids, pages)
