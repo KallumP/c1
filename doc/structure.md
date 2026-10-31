@@ -106,7 +106,7 @@ Project structure is listed below, including descriptions for each file.
 │   ├── levelobjects.py      # reads a level source's objects.json: where crash starts and the level ends
 │   ├── tpage.py             # texture pages: images as 16 colour tiles, and texture infos for parts of them
 │   └── tests                # the tools' tests (python -m unittest discover -s tools/tests)
-├── level_src                # level sources: maps modelled in blender, a folder each, to build levels from (ignored by git, apart from the included tide_ruins)
+├── level_src                # level sources: maps modelled in blender, a folder each, to build levels from (ignored by git, apart from the included ones listed in level_src/README.md)
 ├── controls.example.cfg     # example key bindings (copy to controls.cfg to change the controls)
 ├── settings.example.cfg     # example settings (copy to settings.cfg to change the settings)
 ├── Makefile                 # project makefile

@@ -5,6 +5,7 @@
 #include "gfx.h"
 #include "misc.h"
 #include "gool.h"
+#include "pc/reach.h"
 #include "level.h"
 #include "slst.h"
 #include "solid.h"
@@ -64,7 +65,7 @@ extern level_state savestate;
 #ifdef CFLAGS_DRAW_EXTENSIONS
 extern zone_query cur_zone_query;
 extern uint32_t *wall_bitmap;
-extern gool_bound object_bounds[96];
+extern gool_bound object_bounds[GOOL_BOUND_COUNT];
 extern int object_bound_count;
 int draw_octrees = 0;
 int draw_wallmap = 0;
@@ -211,6 +212,7 @@ void CoreLoop(lid_t lid) {
     GfxUpdateMatrices();
     ot = context.ot;
     header = (zone_header*)cur_zone->items[0];
+    terrain_reach = REACH_UNKNOWN; /* pc: until the terrain is drawn, below */
     if ((cur_display_flags & GOOL_FLAG_DISPLAY_WORLDS) && header->world_count && !wgeom_disabled) {
       if (header->flags & ZONE_FLAG_DARK2)
         GfxTransformWorldsDark2(ot);

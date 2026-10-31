@@ -90,7 +90,7 @@ typedef struct {
   lid_t lid;
   eid_t zone_spawn;
   int path_idx_spawn;
-  uint32_t unk_10;
+  uint32_t box_total; /* 0 in the game's own levels; a custom level's boxes to break (pc) */
   eid_t exec_map[NSD_EXEC_COUNT];
   uint32_t fov;
   uint8_t image_data[0xF5F8];
@@ -253,6 +253,8 @@ extern int NSAlphaNumIndex(char c);
 extern char *NSGetFilename(int type, uint32_t lid);
 extern char *NSGetFilename2(int type, uint32_t lid, char *path, char *subdir);
 extern void NSSetCustomLevel(const char *path);
+extern void NSKeepBoxTotal(uint32_t lid, nsd_ldat *ldat);
+extern int NSCustomBoxTotal();
 extern int NSAtoi(int type, char *str);
 extern char *NSGetFilenameStr(int type, char *str);
 

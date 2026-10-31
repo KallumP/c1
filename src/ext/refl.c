@@ -464,7 +464,7 @@ refl_type nsd_ldat_type = {
     REFL_FIELD(nsd_ldat, lid_t, lid),
     REFL_FIELD(nsd_ldat, eid_t, zone_spawn),
     REFL_FIELD(nsd_ldat, int, path_idx_spawn),
-    REFL_FIELD(nsd_ldat, uint32_t, unk_10),
+    REFL_FIELD(nsd_ldat, uint32_t, box_total),
     REFL_ARRAY_FIELD(nsd_ldat, eid_t, exec_map, NSD_EXEC_COUNT),
     REFL_FIELD(nsd_ldat, uint32_t, fov),
     REFL_ARRAY_FIELD(nsd_ldat, uint8_t, image_data, 0xF5F8),

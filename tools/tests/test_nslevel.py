@@ -440,6 +440,26 @@ class Entities(unittest.TestCase):
     def test_entity_type_and_subtype(self):
         self.assertEqual((34, 6), nslevel.entity_type(entity(34, 6, 1, [(0, 0, 0)])))
 
+    def test_entity_id(self):
+        self.assertEqual(77, nslevel.entity_id(entity(34, 6, 77, [(0, 0, 0)])))
+        self.assertEqual(78, nslevel.entity_id(nslevel.with_entity_id(entity(34, 6, 77, [(0, 0, 0)]), 78)))
+
+    def test_new_ids_skip_the_main_objects_and_ones_taken(self):
+        # spawns[] in src/gool.c is indexed by id; ids 1 to 4 make the main object (crash)
+        ids = nslevel.new_entity_ids(5, taken={9, 5})
+        self.assertEqual([6, 7, 8, 10, 11], ids)
+
+    def test_ids_stay_in_the_games_spawn_table(self):
+        with open(os.path.join(TOOLS, "..", "src", "gool.h")) as f:
+            line = next(l for l in f if l.startswith("#define GOOL_SPAWN_COUNT"))
+        self.assertEqual(int(line.split()[2]) - 1, nslevel.ENTITY_IDS_MAX)
+
+    def test_there_are_only_so_many_ids(self):
+        self.assertEqual(nslevel.ENTITY_IDS_MAX, max(nslevel.new_entity_ids(nslevel.ENTITY_IDS_MAX - 4, taken=set())))
+        with self.assertRaises(ValueError) as e:
+            nslevel.new_entity_ids(nslevel.ENTITY_IDS_MAX - 3, taken=set())
+        self.assertIn("objects", str(e.exception))
+
 
 def decode_vertex(data):
     """(x, y, z, r, g, b) the way SwTransformWorlds reads a wgeo vertex"""
@@ -897,6 +917,89 @@ class Map(unittest.TestCase):
     def test_without_an_end_object_theres_no_warp_pad(self):
         level, entries, zone = self.make(scale=256)
         self.assertEqual([], self.warp_pads(entries))
+
+    def boxes(self, zone):
+        """(subtype, id, position) of each box in a zone, in order"""
+        return [(nslevel.entity_type(e)[1], nslevel.entity_id(e),
+                 tuple(c * 4 for c in struct.unpack_from("<3h", e, nslevel.ENTITY_POINTS)))
+                for e in self.entities(zone) if nslevel.entity_type(e)[0] == nslevel.BOX_TYPE]
+
+    def test_a_box_goes_on_the_ground_below_it(self):
+        # blender (1, 2, 0.5) is the .obj's (1, 0.5, -2)
+        box = nslevel.levelobjects.LevelObject("box", (1, 2, 0.5), subtype=6)
+        level, entries, zone = self.make(scale=256, objects=[box])
+        [(subtype, _, (x, y, z))] = self.boxes(zone)
+        self.assertEqual(6, subtype)
+        self.assertAlmostEqual(128 + 5 * 256, x, delta=16)
+        self.assertAlmostEqual(128 + 6 * 256, z, delta=16)
+        self.assertEqual(128, y)
+
+    def test_a_stack_is_boxes_one_on_another_one_after_another(self):
+        # GoolObjectSpawn in src/gool.c stacks a box on the box spawned just
+        # before it when it's at the same x and z and 100 (in units of 4) higher
+        box = nslevel.levelobjects.LevelObject("box", (1, 2, 0.5), subtype=2, stack=3)
+        level, entries, zone = self.make(scale=256, objects=[box])
+        stack = self.boxes(zone)
+        self.assertEqual(3, len(stack))
+        for (_, _, below), (_, _, above) in zip(stack, stack[1:]):
+            self.assertEqual(below[0], above[0])
+            self.assertEqual(below[2], above[2])
+            self.assertEqual(below[1] + nslevel.BOX_HEIGHT, above[1])
+
+    def test_every_object_has_its_own_id(self):
+        objects = [nslevel.levelobjects.LevelObject("box", (1, 2, 0.5), subtype=2, stack=2),
+                   nslevel.levelobjects.LevelObject("box", (-1, 2, 0.5), subtype=13),
+                   nslevel.levelobjects.LevelObject("end", (-2, 4, 0.5))]
+        level, entries, zone = self.make(scale=256, objects=objects)
+        ids = [nslevel.entity_id(e) for z in entries.values() if z.type == 7 for e in self.entities(z)]
+        self.assertEqual(5, len(ids))  # crash, 3 boxes and the warp pad
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertTrue(all(i not in nslevel.ENTITY_MAIN_IDS and i <= nslevel.ENTITY_IDS_MAX
+                            for i in ids if i != nslevel.entity_id(nslevel.Templates(level).crash)))
+
+    def links(self, zone):
+        """(subtype, id, init flags b and c) of each box in a zone, in order"""
+        return [(nslevel.entity_type(e)[1], nslevel.entity_id(e)) + struct.unpack_from("<hh", e, nslevel.ENTITY_INIT_FLAGS + 2)
+                for e in self.entities(zone) if nslevel.entity_type(e)[0] == nslevel.BOX_TYPE]
+
+    def test_a_switch_makes_the_levels_outline_boxes_solid(self):
+        # on n. sanity beach, the ! box's third init flag is the id of the
+        # first outline box, and each outline box's is the next one's (0 for
+        # the last); the first is also marked 12, the rest 4
+        objects = [nslevel.levelobjects.LevelObject("box", (1, 2, 0.5), subtype=13),
+                   nslevel.levelobjects.LevelObject("box", (1, 3, 0.5), subtype=2),
+                   nslevel.levelobjects.LevelObject("box", (-1, 2, 0.5), subtype=13, stack=2),
+                   nslevel.levelobjects.LevelObject("box", (-1, 3, 0.5), subtype=7)]
+        level, entries, zone = self.make(scale=256, objects=objects)
+        boxes = self.links(zone)
+        outlines = [b for b in boxes if b[0] == 13]
+        [switch] = [b for b in boxes if b[0] == 7]
+        self.assertEqual(3, len(outlines))
+        self.assertEqual(outlines[0][1], switch[3])
+        self.assertEqual([o[1] for o in outlines[1:]] + [0], [o[3] for o in outlines])
+        self.assertEqual([12, 4, 4], [o[2] for o in outlines])
+
+    def test_a_switch_without_outline_boxes_links_to_none(self):
+        objects = [nslevel.levelobjects.LevelObject("box", (-1, 3, 0.5), subtype=7)]
+        level, entries, zone = self.make(scale=256, objects=objects)
+        [switch] = self.links(zone)
+        self.assertEqual(0, switch[3])
+
+    def test_the_level_header_has_how_many_boxes_can_be_broken(self):
+        # the level end screen (GamOC) only knows the totals of the game's own
+        # levels; the game gives it this one for a custom level (src/level.c)
+        objects = [nslevel.levelobjects.LevelObject("box", (1, 2, 0.5), subtype=2, stack=2),
+                   nslevel.levelobjects.LevelObject("box", (-1, 2, 0.5), subtype=13),
+                   nslevel.levelobjects.LevelObject("box", (1, 3, 0.5), subtype=5),   # iron
+                   nslevel.levelobjects.LevelObject("box", (-1, 3, 0.5), subtype=7)]  # switch
+        level, entries, zone = self.make(scale=256, objects=objects)
+        self.assertEqual(3, level.nsd.ldat.box_total)
+        back = nslevel.read_nsd(nslevel.nsd_bytes(level.nsd, level.pages))
+        self.assertEqual(3, back.ldat.box_total)
+
+    def test_a_level_without_boxes_has_none_to_break(self):
+        level, entries, zone = self.make(scale=256)
+        self.assertEqual(0, level.nsd.ldat.box_total)
 
     def test_an_end_object_needs_ground_below_it(self):
         end = nslevel.levelobjects.LevelObject("end", (-20, 4, 0.5))

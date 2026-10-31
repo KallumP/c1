@@ -1,0 +1,40 @@
+# materials of mossy_creek.obj (sand has no image, so it gets n. sanity beach's)
+
+newmtl cliff
+Kd 1.0 1.0 1.0
+map_Kd cliff.png
+
+newmtl dirt
+Kd 1.0 1.0 1.0
+map_Kd dirt.png
+
+newmtl grass
+Kd 1.0 1.0 1.0
+map_Kd grass.png
+
+newmtl leaf
+Kd 1.0 1.0 1.0
+map_Kd leaf.png
+
+newmtl moss
+Kd 1.0 1.0 1.0
+map_Kd moss.png
+
+newmtl rock
+Kd 1.0 1.0 1.0
+map_Kd rock.png
+
+newmtl sand
+Kd 1.0 1.0 1.0
+
+newmtl stone
+Kd 1.0 1.0 1.0
+map_Kd stone.png
+
+newmtl water
+Kd 1.0 1.0 1.0
+map_Kd water.png
+
+newmtl wood
+Kd 1.0 1.0 1.0
+map_Kd wood.png
