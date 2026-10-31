@@ -6,4 +6,4 @@ One level source is included in the repository: `tide_ruins/`, made for c1x. Bui
 
 | Source | Build it with | Origin |
 |---|---|---|
-| `tide_ruins/` | `python tools/build_level.py level_src/tide_ruins` | Made for c1x, with procedural textures. It has boxes, one of each subtype in a row just after the start, and ends at a warp pad on the gold platform at the far end. |
+| `tide_ruins/` | `python tools/build_level.py level_src/tide_ruins` | Made for c1x, with procedural textures. It has boxes, one of each type in a row just after the start, and ends at a warp pad on the gold platform at the far end. |
